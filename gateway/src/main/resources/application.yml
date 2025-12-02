@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - AddRequestHeader=X-Internal-Call, true
+      forwarded-headers:
+        enabled: true
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+          httpclient:
+            connect-timeout: 60000
+            response-timeout: 60s
+      globalcors:
+        corsConfigurations:
+          # CORS for REST API routes (exclude WebSocket)
+          '[/v1/**]':
+            allowedOrigins:
+              - http://localhost:5173                    # Development
+              - http://shopee-fake.id.vn                  # Production Domain
+              - http://www.shopee-fake.id.vn              # Production Domain (www)
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            exposedHeaders:
+              - Authorization
+            allowCredentials: true
+          # WebSocket routes are handled by notification-service WebSocketConfig
+          # No CORS here to avoid duplicate headers
