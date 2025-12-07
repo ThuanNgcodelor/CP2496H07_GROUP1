@@ -32,8 +32,18 @@ public class AddressServiceImpl implements AddressService {
                 .addressName(addressCreateRequest.getAddressName())
                 .recipientName(addressCreateRequest.getRecipientName())
                 .recipientPhone(addressCreateRequest.getRecipientPhone())
-                .province(addressCreateRequest.getProvince())
+                // GHN Fields
+                .provinceId(addressCreateRequest.getProvinceId())
+                .provinceName(addressCreateRequest.getProvinceName())
+                .districtId(addressCreateRequest.getDistrictId())
+                .districtName(addressCreateRequest.getDistrictName())
+                .wardCode(addressCreateRequest.getWardCode())
+                .wardName(addressCreateRequest.getWardName())
                 .streetAddress(addressCreateRequest.getStreetAddress())
+                .latitude(addressCreateRequest.getLatitude())
+                .longitude(addressCreateRequest.getLongitude())
+                // Backward compatibility
+                .province(addressCreateRequest.getProvince() != null ? addressCreateRequest.getProvince() : addressCreateRequest.getProvinceName())
                 .isDefault(isDefault)
                 .build();
 
@@ -65,8 +75,18 @@ public class AddressServiceImpl implements AddressService {
         address.setAddressName(request.getAddressName());
         address.setRecipientName(request.getRecipientName());
         address.setRecipientPhone(request.getRecipientPhone());
-        address.setProvince(request.getProvince());
+        // GHN Fields
+        address.setProvinceId(request.getProvinceId());
+        address.setProvinceName(request.getProvinceName());
+        address.setDistrictId(request.getDistrictId());
+        address.setDistrictName(request.getDistrictName());
+        address.setWardCode(request.getWardCode());
+        address.setWardName(request.getWardName());
         address.setStreetAddress(request.getStreetAddress());
+        address.setLatitude(request.getLatitude());
+        address.setLongitude(request.getLongitude());
+        // Backward compatibility
+        address.setProvince(request.getProvince() != null ? request.getProvince() : request.getProvinceName());
 
         // không động vào isDefault ở đây
         return addressRepository.save(address);

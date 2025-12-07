@@ -33,6 +33,8 @@ public class JwtAuthenticationFilter implements GatewayFilter {
                 "/v1/auth/login",
                 "/v1/auth/register",
                 "/v1/auth/forgotPassword",
+                "/v1/auth/verifyOtp",
+                "/v1/auth/updatePassword",
                 "/v1/auth/login/google",
                 "/v1/oauth2/callback",
                 "/v1/auth/user/getUserByEmail/",
