@@ -34,6 +34,38 @@ public class ShopOwnerServiceImpl implements ShopOwnerService {
             toUpdate.setAddress(request.getAddress());
         }
         
+        // Update GHN address fields
+        if (request.getProvinceId() != null) {
+            toUpdate.setProvinceId(request.getProvinceId());
+        }
+        if (request.getProvinceName() != null) {
+            toUpdate.setProvinceName(request.getProvinceName());
+        }
+        if (request.getDistrictId() != null) {
+            toUpdate.setDistrictId(request.getDistrictId());
+        }
+        if (request.getDistrictName() != null) {
+            toUpdate.setDistrictName(request.getDistrictName());
+        }
+        if (request.getWardCode() != null) {
+            toUpdate.setWardCode(request.getWardCode());
+        }
+        if (request.getWardName() != null) {
+            toUpdate.setWardName(request.getWardName());
+        }
+        if (request.getStreetAddress() != null) {
+            toUpdate.setStreetAddress(request.getStreetAddress());
+        }
+        if (request.getPhone() != null) {
+            toUpdate.setPhone(request.getPhone());
+        }
+        if (request.getLatitude() != null) {
+            toUpdate.setLatitude(request.getLatitude());
+        }
+        if (request.getLongitude() != null) {
+            toUpdate.setLongitude(request.getLongitude());
+        }
+        
         // Upload image if provided
         if(file != null && !file.isEmpty()) {
             String imageId = fileStorageClient.uploadImageToFIleSystem(file).getBody();

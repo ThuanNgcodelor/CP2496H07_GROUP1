@@ -21,6 +21,18 @@ public class UpdateShopOwnerRequest {
     
     @Size(max = 255, message = "Address must not exceed 255 characters")
     private String address;
+    
+    // GHN Address Fields
+    private Integer provinceId;
+    private String provinceName;
+    private Integer districtId;
+    private String districtName;
+    private String wardCode;
+    private String wardName;
+    private String streetAddress;
+    private String phone;
+    private Double latitude;
+    private Double longitude;
 
     private String userId;
 }

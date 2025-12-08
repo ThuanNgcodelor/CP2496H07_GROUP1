@@ -1,13 +1,20 @@
 package com.example.orderservice.service;
 
+import com.example.orderservice.client.GhnApiClient;
 import com.example.orderservice.client.StockServiceClient;
 import com.example.orderservice.client.UserServiceClient;
 import com.example.orderservice.dto.*;
 import com.example.orderservice.enums.OrderStatus;
 import com.example.orderservice.model.Order;
 import com.example.orderservice.model.OrderItem;
+import com.example.orderservice.model.ShippingOrder;
 import com.example.orderservice.repository.OrderRepository;
+import com.example.orderservice.repository.ShippingOrderRepository;
 import com.example.orderservice.request.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +71,9 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final StockServiceClient stockServiceClient;
     private final UserServiceClient userServiceClient;
+    private final GhnApiClient ghnApiClient;
+    private final ShippingOrderRepository shippingOrderRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final NewTopic orderTopic;
     private final NewTopic notificationTopic;
     private final KafkaTemplate<String, CheckOutKafkaRequest> kafkaTemplate;
@@ -198,6 +208,14 @@ public class OrderServiceImpl implements OrderService {
             notifyShopOwners(order);
         } catch (Exception e) {
             log.error("[CONSUMER] send notification failed: {}", e.getMessage(), e);
+        }
+
+        // 4) Create GHN shipping order
+        try {
+            createShippingOrder(order);
+        } catch (Exception e) {
+            log.error("[CONSUMER] Failed to create GHN shipping order: {}", e.getMessage(), e);
+            // Don't throw - order is already created, just log the error
         }
     }
     /////////////////////////////////////////////////////////////////////////////////////
@@ -441,6 +459,223 @@ public class OrderServiceImpl implements OrderService {
                 log.error("[CONSUMER] Failed to send notification to shop owner: shopId={}, error={}", 
                     shopOwnerId, e.getMessage());
             }
+        }
+    }
+
+    // ========== GHN SHIPPING ORDER METHODS ==========
+    
+    /**
+     * TẠO VẬN ĐƠN GHN
+     * Được gọi sau khi order được tạo thành công
+     */
+    private void createShippingOrder(Order order) {
+        try {
+            log.info("[GHN] ========== CREATING SHIPPING ORDER ==========");
+            log.info("[GHN] Order ID: {}", order.getId());
+            
+            // 1. Lấy địa chỉ khách hàng
+            AddressDto customerAddress = userServiceClient.getAddressById(order.getAddressId()).getBody();
+            if (customerAddress == null) {
+                log.error("[GHN] Customer address not found: {}", order.getAddressId());
+                return;
+            }
+            
+            log.info("[GHN] Customer: {}, Phone: {}", 
+                customerAddress.getRecipientName(), 
+                customerAddress.getRecipientPhone());
+            
+            // 2. Validate GHN fields
+            if (customerAddress.getDistrictId() == null || customerAddress.getWardCode() == null) {
+                log.warn("[GHN] ⚠️  Address missing GHN fields!");
+                log.warn("[GHN] District ID: {}, Ward Code: {}", 
+                    customerAddress.getDistrictId(), customerAddress.getWardCode());
+                log.warn("[GHN] SKIPPING GHN order creation - address needs update with GHN data");
+                return;
+            }
+            
+            // 3. Validate order items
+            if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+                log.error("[GHN] Order has no items!");
+                return;
+            }
+            
+            log.info("[GHN] Order has {} items", order.getOrderItems().size());
+            
+            // 4. Tính tổng weight (500g mỗi item - có thể điều chỉnh)
+            int totalWeight = order.getOrderItems().stream()
+                .mapToInt(item -> item.getQuantity() * 500)
+                .sum();
+            
+            log.info("[GHN] Total weight: {}g", totalWeight);
+            
+            // 5. Lấy shop owner address (FROM address)
+            // Lấy shop owner ID từ product đầu tiên
+            String shopOwnerId = null;
+            try {
+                if (!order.getOrderItems().isEmpty()) {
+                    ProductDto firstProduct = stockServiceClient.getProductById(
+                        order.getOrderItems().get(0).getProductId()
+                    ).getBody();
+                    if (firstProduct != null) {
+                        shopOwnerId = firstProduct.getUserId();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[GHN] Cannot get shop owner ID: {}", e.getMessage());
+            }
+            
+            // Lấy shop owner info để có FROM address
+            ShopOwnerDto shopOwner = null;
+            if (shopOwnerId != null && !shopOwnerId.isBlank()) {
+                try {
+                    ResponseEntity<ShopOwnerDto> shopOwnerResponse = userServiceClient.getShopOwnerByUserId(shopOwnerId);
+                    if (shopOwnerResponse != null && shopOwnerResponse.getBody() != null) {
+                        shopOwner = shopOwnerResponse.getBody();
+                        log.info("[GHN] Shop Owner: {}, Address: {}", shopOwner.getShopName(), shopOwner.getStreetAddress());
+                    }
+                } catch (Exception e) {
+                    log.warn("[GHN] Cannot get shop owner address: {}", e.getMessage());
+                }
+            }
+            
+            // Validate shop owner address
+            if (shopOwner == null || shopOwner.getDistrictId() == null || shopOwner.getWardCode() == null) {
+                log.warn("[GHN] ⚠️  Shop owner address missing GHN fields!");
+                log.warn("[GHN] Shop Owner ID: {}, District ID: {}, Ward Code: {}", 
+                    shopOwnerId, 
+                    shopOwner != null ? shopOwner.getDistrictId() : "null",
+                    shopOwner != null ? shopOwner.getWardCode() : "null");
+                log.warn("[GHN] SKIPPING GHN order creation - shop owner needs to configure GHN address in Settings");
+                return;
+            }
+            
+            // 6. Build items cho GHN
+            List<GhnItemDto> ghnItems = order.getOrderItems().stream()
+                .map(item -> {
+                    String productName = "Product";
+                    try {
+                        ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
+                        if (product != null) {
+                            productName = product.getName();
+                        }
+                    } catch (Exception e) {
+                        log.warn("[GHN] Cannot get product name for: {}", item.getProductId());
+                    }
+                    
+                    return GhnItemDto.builder()
+                        .name(productName)
+                        .quantity(item.getQuantity())
+                        .price((long) item.getUnitPrice())
+                        .build();
+                })
+                .collect(Collectors.toList());
+            
+            // 7. Build GHN request với FROM address từ shop owner
+            GhnCreateOrderRequest.GhnCreateOrderRequestBuilder requestBuilder = GhnCreateOrderRequest.builder()
+                .paymentTypeId(2) // 2 = Người nhận trả phí
+                .requiredNote("CHOXEMHANGKHONGTHU") // Cho xem hàng không cho thử
+                .toName(customerAddress.getRecipientName())
+                .toPhone(customerAddress.getRecipientPhone())
+                .toAddress(customerAddress.getStreetAddress())
+                .toWardCode(customerAddress.getWardCode())
+                .toDistrictId(customerAddress.getDistrictId())
+                .codAmount((long) order.getTotalPrice()) // Thu hộ COD
+                .weight(totalWeight)
+                .length(20) // cm - Hardcode, có thể lấy từ product sau
+                .width(15)
+                .height(10)
+                .serviceTypeId(2) // 2 = Standard (rẻ hơn), 5 = Express
+                .items(ghnItems);
+            
+            // Thêm FROM address từ shop owner
+            if (shopOwner != null) {
+                requestBuilder
+                    .fromName(shopOwner.getShopName() != null ? shopOwner.getShopName() : shopOwner.getOwnerName())
+                    .fromPhone(shopOwner.getPhone() != null ? shopOwner.getPhone() : "0123456789")
+                    .fromAddress(shopOwner.getStreetAddress())
+                    .fromWardCode(shopOwner.getWardCode())
+                    .fromDistrictId(shopOwner.getDistrictId());
+            }
+            
+            GhnCreateOrderRequest ghnRequest = requestBuilder.build();
+            
+            log.info("[GHN] Request Details:");
+            log.info("[GHN]   FROM - Shop: {}, District ID: {}, Ward Code: {}", 
+                shopOwner != null ? shopOwner.getShopName() : "N/A",
+                ghnRequest.getFromDistrictId(),
+                ghnRequest.getFromWardCode());
+            log.info("[GHN]   TO - Customer: {}, District ID: {}, Ward Code: {}", 
+                customerAddress.getRecipientName(),
+                ghnRequest.getToDistrictId(),
+                ghnRequest.getToWardCode());
+            log.info("[GHN]   COD Amount: {} VNĐ", ghnRequest.getCodAmount());
+            log.info("[GHN]   Weight: {}g", ghnRequest.getWeight());
+            
+            // 8. Call GHN API
+            log.info("[GHN] Calling GHN API...");
+            GhnCreateOrderResponse ghnResponse = ghnApiClient.createOrder(ghnRequest);
+            
+            if (ghnResponse == null || ghnResponse.getCode() != 200) {
+                log.error("[GHN] ❌ GHN API returned error!");
+                log.error("[GHN] Code: {}, Message: {}", 
+                    ghnResponse != null ? ghnResponse.getCode() : "null",
+                    ghnResponse != null ? ghnResponse.getMessage() : "null");
+                return;
+            }
+            
+            // 9. Save ShippingOrder
+            log.info("[GHN] Saving shipping order to database...");
+            
+            ShippingOrder shippingOrder = ShippingOrder.builder()
+                .orderId(order.getId())
+                .ghnOrderCode(ghnResponse.getData().getOrderCode())
+                .shippingFee(BigDecimal.valueOf(ghnResponse.getData().getTotalFee()))
+                .codAmount(BigDecimal.valueOf(order.getTotalPrice()))
+                .weight(totalWeight)
+                .status("PENDING")
+                .expectedDeliveryTime(parseDateTime(ghnResponse.getData().getExpectedDeliveryTime()))
+                .ghnResponse(toJson(ghnResponse))
+                .build();
+            
+            shippingOrderRepository.save(shippingOrder);
+            
+            log.info("[GHN] ✅ SUCCESS!");
+            log.info("[GHN] GHN Order Code: {}", ghnResponse.getData().getOrderCode());
+            log.info("[GHN] Shipping Fee: {} VNĐ", ghnResponse.getData().getTotalFee());
+            log.info("[GHN] Expected Delivery: {}", ghnResponse.getData().getExpectedDeliveryTime());
+            log.info("[GHN] ===============================================");
+            
+        } catch (Exception e) {
+            log.error("[GHN] ❌ Exception occurred: {}", e.getMessage(), e);
+            log.error("[GHN] Order creation continues, but shipping order failed");
+            // Không throw exception để không làm fail order creation
+        }
+    }
+    
+    /**
+     * Helper: Parse datetime từ GHN response
+     */
+    private LocalDateTime parseDateTime(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(dateTimeStr, DateTimeFormatter.ISO_DATE_TIME);
+        } catch (Exception e) {
+            log.warn("[GHN] Cannot parse datetime: {}", dateTimeStr);
+            return null;
+        }
+    }
+    
+    /**
+     * Helper: Convert object to JSON string
+     */
+    private String toJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            log.error("[GHN] Cannot serialize to JSON: {}", e.getMessage());
+            return "{}";
         }
     }
 }

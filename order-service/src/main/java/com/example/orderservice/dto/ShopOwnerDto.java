@@ -1,4 +1,4 @@
-package com.example.userservice.dto;
+package com.example.orderservice.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,3 +37,4 @@ public class ShopOwnerDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
+

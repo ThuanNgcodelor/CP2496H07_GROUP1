@@ -29,6 +29,38 @@ public class ShopOwner {
     
     @Column(name = "address")
     private String address;
+    
+    // GHN Address Fields - Tương tự Address entity
+    @Column(name = "province_id")
+    private Integer provinceId;
+    
+    @Column(name = "province_name")
+    private String provinceName;
+    
+    @Column(name = "district_id")
+    private Integer districtId;
+    
+    @Column(name = "district_name")
+    private String districtName;
+    
+    @Column(name = "ward_code", length = 20)
+    private String wardCode;
+    
+    @Column(name = "ward_name")
+    private String wardName;
+    
+    @Column(name = "street_address", columnDefinition = "TEXT")
+    private String streetAddress;
+    
+    @Column(name = "phone")
+    private String phone; // Số điện thoại shop
+    
+    // Coordinates for map display
+    @Column(name = "latitude")
+    private Double latitude;
+    
+    @Column(name = "longitude")
+    private Double longitude;
 
     @Builder.Default
     @Column(name = "verified")

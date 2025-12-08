@@ -1,6 +1,7 @@
 package com.example.orderservice.client;
 
 import com.example.orderservice.dto.AddressDto;
+import com.example.orderservice.dto.ShopOwnerDto;
 import com.example.orderservice.dto.UserDto;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
@@ -20,4 +21,7 @@ public interface UserServiceClient {
     
     @GetMapping("/address/getAddressById/{addressId}")
     ResponseEntity<AddressDto> getAddressById(@PathVariable String addressId);
+    
+    @GetMapping("/shop-owners/{userId}")
+    ResponseEntity<ShopOwnerDto> getShopOwnerByUserId(@PathVariable String userId);
 }

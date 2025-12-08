@@ -10,6 +10,7 @@ public class OrderDto {
     private String userId;
     private String addressId;
     private Double totalPrice;
+    private Double shippingFee; // Phí ship từ GHN
     private String orderStatus;
     private String notes;
     private String shippingAddress;
