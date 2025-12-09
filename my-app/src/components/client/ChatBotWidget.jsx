@@ -335,7 +335,7 @@ export default function ChatBotWidget() {
 
   const loadMessages = async (conversationId) => {
     try {
-      setLoading(true);
+    setLoading(true);
       const data = await getMessages(conversationId, 0, 50);
       // Reverse để hiển thị từ cũ đến mới
       setMessages(Array.isArray(data) ? data.reverse() : []);
@@ -621,7 +621,7 @@ export default function ChatBotWidget() {
                         ? shopNames[selectedChat.shopOwnerId]
                         : (selectedChat.opponent?.username || selectedChat.title || 'Shop')}
                     </div>
-                  </div>
+          </div>
 
                   {/* Product Card - Hiển thị khi có product và có name */}
                   {selectedChat.product && selectedChat.product.name && (

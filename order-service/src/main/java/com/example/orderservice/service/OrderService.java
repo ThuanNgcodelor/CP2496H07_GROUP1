@@ -25,4 +25,5 @@ public interface OrderService {
     AddressDto getAddressById(String addressId);
     // Frontend order creation
     void orderByKafka(FrontendOrderRequest orderRequest, HttpServletRequest request);
+    Order cancelOrder(String orderId);
 }

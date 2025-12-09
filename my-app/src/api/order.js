@@ -125,9 +125,9 @@ export async function updateOrderStatus(id) {
  * @param {string} orderId - ID của đơn hàng cần hủy
  * @returns {Promise} - Promise trả về kết quả hủy đơn hàng
  */
-export const cancelOrder = async (orderId) => {
+export const cancelOrder = async (orderId, reason = "") => {
     try {
-        const response = await api.put(`/cancel/${orderId}`);
+        const response = await api.put(`/cancel/${orderId}`, { reason });
         return response.data;
     } catch (error) {
         throw new Error(error.response?.data?.message || "Failed to cancel order");

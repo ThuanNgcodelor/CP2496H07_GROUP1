@@ -80,6 +80,20 @@ public class OrderServiceImpl implements OrderService {
     private final KafkaTemplate<String, SendNotificationRequest> kafkaTemplateSend;
     private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
 
+    @Override
+    public Order cancelOrder(String orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+            return order;
+        }
+        if (order.getOrderStatus() == OrderStatus.DELIVERED || order.getOrderStatus() == OrderStatus.SHIPPED) {
+            throw new RuntimeException("Cannot cancel an order that is already shipped or delivered");
+        }
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        return orderRepository.save(order);
+    }
+
 
     ///////////////////////////////////////////////////////////////////////////////////
     @Override
@@ -304,20 +318,6 @@ public class OrderServiceImpl implements OrderService {
         return userServiceClient.getAddressById(addressId).getBody();
     }
 
-
-    private String selectDefaultAddress(List<AddressDto> addresses) {
-        if (addresses == null || addresses.isEmpty()) {
-            throw new RuntimeException("No addresses found for user");
-        }
-
-        for (AddressDto address : addresses) {
-            if (Boolean.TRUE.equals(address.getIsDefault())) {
-                return address.getAddressId();
-            }
-        }
-
-        return addresses.get(0).getAddressId();
-    }
 
     // ====== Helpers Tạo order ======
     private Order initPendingOrder(String userId, String addressId) {

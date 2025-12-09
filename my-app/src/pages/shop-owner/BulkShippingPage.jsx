@@ -167,7 +167,24 @@ export default function BulkShippingPage() {
     }
   };
 
+  const STATUS_NUMERIC_MAP = {
+    0: 'PENDING',
+    1: 'PROCESSING',
+    2: 'SHIPPED',
+    3: 'DELIVERED',
+    4: 'CANCELLED',
+    5: 'COMPLETED',
+    6: 'RETURNED'
+  };
+
+  const normalizeStatus = (status) => {
+    if (status === null || status === undefined) return '';
+    if (typeof status === 'number') return STATUS_NUMERIC_MAP[status] || String(status);
+    return String(status).toUpperCase();
+  };
+
   const getStatusBadge = (status) => {
+    const normalizedStatus = normalizeStatus(status);
     const statusMap = {
       PENDING: { label: 'Pending', class: 'bg-warning' },
       PROCESSING: { label: 'Processing', class: 'bg-info' },
@@ -177,11 +194,11 @@ export default function BulkShippingPage() {
       COMPLETED: { label: 'Completed', class: 'bg-success' }
     };
     
-    const normalizedStatus = (status || '').toUpperCase();
     return statusMap[normalizedStatus] || { label: status || 'N/A', class: 'bg-secondary' };
   };
 
   const getStatusLabel = (status) => {
+    const normalized = normalizeStatus(status);
     const statusMap = {
       PENDING: 'Pending',
       PROCESSING: 'Processing',
@@ -190,16 +207,17 @@ export default function BulkShippingPage() {
       CANCELLED: 'Cancelled',
       COMPLETED: 'Completed'
     };
-    return statusMap[status?.toUpperCase()] || status || 'N/A';
+    return statusMap[normalized] || normalized || 'N/A';
   };
 
   const getNextStatus = (currentStatus) => {
+    const cur = normalizeStatus(currentStatus);
     const statusFlow = {
       PENDING: 'PROCESSING',
       PROCESSING: 'SHIPPED',
       SHIPPED: 'DELIVERED'
     };
-    return statusFlow[currentStatus?.toUpperCase()];
+    return statusFlow[cur];
   };
 
   const toggleRowExpansion = (orderId) => {
@@ -283,6 +301,7 @@ export default function BulkShippingPage() {
                 <option value="DELIVERED">Delivered</option>
                 <option value="CANCELLED">Cancelled</option>
                 <option value="COMPLETED">Completed</option>
+                <option value="RETURNED">Returned</option>
               </select>
             </div>
             {selectedOrders.size > 0 && (
@@ -298,6 +317,7 @@ export default function BulkShippingPage() {
                   <option value="SHIPPED">Shipped</option>
                   <option value="DELIVERED">Delivered</option>
                   <option value="CANCELLED">Cancelled</option>
+                  <option value="RETURNED">Returned</option>
                 </select>
                 <button 
                   className="btn btn-primary-shop"

@@ -37,6 +37,7 @@ export default function ProductDetailPage() {
   const [error, setError] = useState(null);
   const [posting, setPosting] = useState(false);
   const [detailTab, setDetailTab] = useState("spec");
+  const [reviewFilter, setReviewFilter] = useState("Tất cả");
 
   useEffect(() => {
     const load = async () => {
@@ -387,19 +388,6 @@ export default function ProductDetailPage() {
                     {product.name}
                   </h1>
 
-                  {/* Creation Date */}
-                {product.createdAt && (
-                    <div className="text-muted mb-3" style={{ fontSize: '0.875rem' }}>
-                      Created: {new Intl.DateTimeFormat('vi-VN', { 
-                        day: 'numeric', 
-                        month: 'short', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }).format(new Date(product.createdAt))}
-                    </div>
-                  )}
-
                    <div className="mb-3 d-flex align-items-center gap-3">
                     <div className="d-flex align-items-center gap-1">
                       <span style={{ color: '#ffc107', fontSize: '1rem' }}>★</span>
@@ -424,19 +412,7 @@ export default function ProductDetailPage() {
                   {/* Rating and Sales Info */}
                   
 
-                  {/* Stock and Status Badges */}
-                  <div className="mb-4 d-flex flex-wrap gap-2 align-items-center">
-                    {product.category?.name && (
-                      <span className="badge bg-secondary px-3 py-2" style={{ fontSize: '0.875rem' }}>
-                        {product.category.name}
-                      </span>
-                    )}
-                    <span className="text-muted" style={{ fontSize: '0.875rem' }}>
-                      Stock: <strong>{selectedSizeId 
-                        ? product.sizes?.find(s => s.id === selectedSizeId)?.stock || product.stock || 0
-                        : product.stock ?? 0}</strong>
-                    </span>
-                  </div>
+             
 
                   {/* Vouchers (Placeholder for future development) */}
                   <div className="mb-4">
@@ -466,26 +442,43 @@ export default function ProductDetailPage() {
                           const isSelected = selectedSizeId === size.id;
                           const isOutOfStock = (size.stock || 0) <= 0;
                           return (
-                        <button
-                          key={size.id}
-                          type="button"
-                              className={`btn ${isSelected ? 'btn-danger' : 'btn-outline-secondary'}`}
+                            <button
+                              key={size.id}
+                              type="button"
                               onClick={() => !isOutOfStock && setSelectedSizeId(size.id)}
                               disabled={isOutOfStock}
-                              style={{ 
-                                minWidth: '80px',
-                                padding: '8px 16px',
-                                fontSize: '0.875rem',
-                                borderWidth: isSelected ? '2px' : '1px',
+                              style={{
+                                minWidth: '64px',
+                                padding: '8px 10px',
+                                fontSize: '0.82rem',
+                                fontWeight: 600,
+                                border: isSelected ? '2px solid #ee4d2d' : '1px solid #ccc',
+                                color: isSelected ? '#fff' : '#222',
+                                background: isSelected ? '#ee4d2d' : '#fff',
+                                borderRadius: '8px',
                                 opacity: isOutOfStock ? 0.5 : 1,
-                                cursor: isOutOfStock ? 'not-allowed' : 'pointer'
+                                cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                boxShadow: isSelected ? '0 2px 6px rgba(238,77,45,0.25)' : 'none',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) {
+                                  e.currentTarget.style.borderColor = '#ee4d2d';
+                                  e.currentTarget.style.color = '#ee4d2d';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) {
+                                  e.currentTarget.style.borderColor = '#ccc';
+                                  e.currentTarget.style.color = '#222';
+                                }
                               }}
                             >
                               <div>{size.name}</div>
-                              <small style={{ fontSize: '0.75rem', display: 'block', marginTop: '2px' }}>
+                              <small style={{ fontSize: '0.7rem', display: 'block', marginTop: '2px', color: isSelected ? '#fff' : '#666' }}>
                                 {isOutOfStock ? 'Out of stock' : `Stock: ${size.stock}`}
-                          </small>
-                        </button>
+                              </small>
+                            </button>
                           );
                         })}
                     </div>
@@ -631,40 +624,33 @@ export default function ProductDetailPage() {
                   {/* Share Section */}
                   <div className="mt-4 pt-3 border-top">
                     <div className="d-flex align-items-center gap-3">
-                      <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Chia sẻ:</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Chia sẻ:</span>
                       <div className="d-flex gap-2">
-                        <button 
-                          type="button" 
-                          className="btn btn-sm btn-outline-primary"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          title="Share on Facebook"
-                        >
-                          <i className="fab fa-facebook-f"></i>
-                        </button>
-                        <button 
-                          type="button" 
-                          className="btn btn-sm btn-outline-info"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          title="Share on Twitter"
-                        >
-                          <i className="fab fa-twitter"></i>
-                        </button>
-                        <button 
-                          type="button" 
-                          className="btn btn-sm btn-outline-danger"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          title="Share on Pinterest"
-                        >
-                          <i className="fab fa-pinterest"></i>
-                        </button>
-                        <button 
-                          type="button" 
-                          className="btn btn-sm btn-outline-secondary"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          title="Copy link"
-                        >
-                          <i className="fa fa-link"></i>
-                        </button>
+                        {[
+                          { icon: 'fab fa-facebook-f', bg: '#e8f1ff', color: '#1877f2', title: 'Share on Facebook' },
+                          { icon: 'fab fa-twitter', bg: '#e6f7ff', color: '#1da1f2', title: 'Share on Twitter' },
+                          { icon: 'fab fa-pinterest', bg: '#ffecec', color: '#e60023', title: 'Share on Pinterest' },
+                          { icon: 'fa fa-link', bg: '#f2f2f2', color: '#555', title: 'Copy link' },
+                        ].map((btn, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            className="btn btn-sm"
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              padding: 0,
+                              background: btn.bg,
+                              color: btn.color,
+                              border: '1px solid rgba(0,0,0,0.05)',
+                              borderRadius: '8px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                            }}
+                            title={btn.title}
+                          >
+                            <i className={btn.icon}></i>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -780,11 +766,26 @@ export default function ProductDetailPage() {
                             <div className="text-muted">(120 đánh giá)</div>
                           </div>
                           <div className="d-flex flex-wrap gap-2">
-                            {["Tất cả", "5 Sao", "4 Sao", "3 Sao", "2 Sao", "1 Sao"].map((label, idx) => (
-                              <button key={idx} type="button" className="btn btn-outline-secondary btn-sm">
-                                {label}
-                              </button>
-                            ))}
+                            {["Tất cả", "5 Sao", "4 Sao", "3 Sao", "2 Sao", "1 Sao"].map((label, idx) => {
+                              const active = reviewFilter === label;
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setReviewFilter(label)}
+                                  className="btn btn-sm"
+                                  style={{
+                                    border: active ? '1px solid #ee4d2d' : '1px solid #ddd',
+                                    background: active ? '#ee4d2d' : '#fff',
+                                    color: active ? '#fff' : '#222',
+                                    fontWeight: active ? 600 : 500,
+                                    boxShadow: active ? '0 2px 6px rgba(238,77,45,0.2)' : 'none'
+                                  }}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
 

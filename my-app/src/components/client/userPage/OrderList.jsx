@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { openRatingMockModal } from "./RatingMockModal.jsx";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { getOrdersByUser, cancelOrder } from "../../../api/order.js";
 import { fetchImageById } from "../../../api/image.js";
@@ -10,10 +11,32 @@ const PAGE_SIZE = 5;
 const STATUS_CONFIG = {
   ALL: { label: "All", color: "#555", bg: "#f8f8f8" },
   PENDING: { label: "Pending", color: "#ee4d2d", bg: "#fff5f0" },
-  APPROVED: { label: "Shipping", color: "#2673dd", bg: "#e8f4ff" },
+  PROCESSING: { label: "Processing", color: "#2673dd", bg: "#e8f4ff" },
+  SHIPPED: { label: "Shipped", color: "#2673dd", bg: "#e8f4ff" },
+  DELIVERED: { label: "Delivered", color: "#26aa99", bg: "#e8f9f7" },
   COMPLETED: { label: "Completed", color: "#26aa99", bg: "#e8f9f7" },
   CANCELLED: { label: "Cancelled", color: "#999", bg: "#f5f5f5" },
-  REJECTED: { label: "Return/Refund", color: "#ee4d2d", bg: "#fff5f0" }
+  RETURNED: { label: "Return/Refund", color: "#ee4d2d", bg: "#fff5f0" }
+};
+
+const STATUS_NUMERIC_MAP = {
+  0: "PENDING",
+  1: "PROCESSING",
+  2: "SHIPPED",
+  3: "DELIVERED",
+  4: "CANCELLED",
+  5: "COMPLETED",
+  6: "RETURNED",
+};
+
+const normalizeStatus = (status) => {
+  if (status === null || status === undefined) return "";
+  if (typeof status === "number") {
+    return STATUS_NUMERIC_MAP[status] || String(status);
+  }
+  const str = String(status).toUpperCase();
+  if (STATUS_NUMERIC_MAP[str]) return STATUS_NUMERIC_MAP[str];
+  return str;
 };
 
 const formatVND = (n) => (Number(n) || 0).toLocaleString("vi-VN") + "đ";
@@ -176,7 +199,7 @@ export default function OrderList() {
 
     // Filter by status tab
     if (activeTab !== "ALL") {
-      result = result.filter(order => order.orderStatus === activeTab);
+      result = result.filter(order => normalizeStatus(order.orderStatus) === activeTab);
     }
 
     return result;
@@ -196,7 +219,8 @@ export default function OrderList() {
   const pageNumbers = getPageNumbers(page, totalPages);
 
   const getStatusBadge = (status) => {
-    const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
+    const normalized = normalizeStatus(status);
+    const config = STATUS_CONFIG[normalized] || STATUS_CONFIG.PENDING;
     return (
       <span
         style={{
@@ -226,10 +250,10 @@ export default function OrderList() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const handleCancelOrder = (orderId) => {
-    setConfirmModal({ open: true, orderId });
+    setConfirmModal({ open: true, orderId, reason: "" });
   };
 
-  const closeConfirm = () => setConfirmModal({ open: false, orderId: null });
+  const closeConfirm = () => setConfirmModal({ open: false, orderId: null, reason: "" });
 
   const confirmCancel = async () => {
     if (!confirmModal.orderId) return;
@@ -237,7 +261,8 @@ export default function OrderList() {
       setLoading(true);
       setError('');
       setSuccessMessage('');
-      await cancelOrder(confirmModal.orderId);
+      const reasonText = confirmModal.reason?.trim() || '';
+      await cancelOrder(confirmModal.orderId, reasonText);
       setSuccessMessage('Order cancelled successfully');
       const data = await getOrdersByUser();
       setOrders(Array.isArray(data) ? data : []);
@@ -287,7 +312,7 @@ export default function OrderList() {
                   whiteSpace: 'nowrap'
                 }}
               >
-                {STATUS_CONFIG[status].label}
+                {STATUS_CONFIG[status]?.label || status}
               </button>
             ))}
           </div>
@@ -409,7 +434,7 @@ export default function OrderList() {
                       </button>
                     </div>
                     <div className="d-flex align-items-center gap-2">
-                      {order.orderStatus === 'COMPLETED' && (
+                      {(normalizeStatus(order.orderStatus) === 'COMPLETED' || normalizeStatus(order.orderStatus) === 'DELIVERED') && (
                         <span style={{ fontSize: '12px', color: '#26aa99' }}>
                           <i className="fa fa-truck me-1"></i> Delivery successful
                         </span>
@@ -515,44 +540,117 @@ export default function OrderList() {
                       <i className="fa fa-calendar me-1"></i> {fmtDateTime(order.updateTimestamp)}
                     </div>
                     <div className="d-flex align-items-center gap-3">
-                      <div className="text-end">
-                        {order.shippingFee && order.shippingFee > 0 && (
-                          <>
-                            <div style={{ fontSize: '12px', color: '#999', marginBottom: '2px' }}>
-                              Subtotal: {formatVND(order.totalPrice)}
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>
-                              Shipping: {formatVND(order.shippingFee)}
-                            </div>
-                          </>
-                        )}
-                        <div style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>
-                          Total:
-                        </div>
+                      <div className="text-end" style={{ fontSize: '12px' }}>
                         <div style={{ fontSize: '18px', color: '#ee4d2d', fontWeight: 500 }}>
                           {formatVND((order.totalPrice || 0) + (order.shippingFee || 0))}
                         </div>
                       </div>
                       <div className="d-flex gap-2">
-                        {order.orderStatus === 'COMPLETED' && (
-                          <button
-                            className="btn"
-                            style={{
-                              background: '#ee4d2d',
-                              color: 'white',
-                              border: 'none',
-                              padding: '8px 20px',
-                              fontSize: '13px',
-                              borderRadius: '2px',
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#f05d40'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = '#ee4d2d'}
-                          >
-                            Buy Again
-                          </button>
+                        {normalizeStatus(order.orderStatus) === 'DELIVERED' && (
+                          <>
+                            <button
+                              className="btn"
+                              style={{
+                                background: '#ee4d2d',
+                                color: 'white',
+                                border: 'none',
+                                padding: '8px 20px',
+                                fontSize: '13px',
+                                borderRadius: '2px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#f05d40'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = '#ee4d2d'}
+                            >
+                              Buy Again
+                            </button>
+                            <button
+                              className="btn"
+                              style={{
+                                background: 'white',
+                                color: '#ee4d2d',
+                                border: '1px solid #ee4d2d',
+                                padding: '8px 16px',
+                                fontSize: '13px',
+                                borderRadius: '2px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#fff5f0'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              onClick={() => openRatingMockModal('view')}
+                            >
+                              View Rating (mock)
+                            </button>
+                            <button
+                              className="btn"
+                              style={{
+                                background: 'white',
+                                color: '#555',
+                                border: '1px solid #ddd',
+                                padding: '8px 16px',
+                                fontSize: '13px',
+                                borderRadius: '2px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#ee4d2d';
+                                e.currentTarget.style.color = '#ee4d2d';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = '#ddd';
+                                e.currentTarget.style.color = '#555';
+                              }}
+                              onClick={() => openRatingMockModal('rate')}
+                              /*
+                                  title: 'Đánh giá sản phẩm (mock)',
+                                  width: 720,
+                                  html: `
+                                    <div style="text-align:left;font-size:13px;color:#222;">
+                                      <div style="background:#fff7e6;border:1px solid #ffd591;padding:10px 12px;border-radius:4px;margin-bottom:12px;color:#b46900;font-size:12px;">
+                                        Chia sẻ cảm nhận của bạn về tất cả sản phẩm trong đơn hàng để nhận Shopee Xu (mock).
+                                      </div>
+                                      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
+                                        <div style="width:64px;height:64px;border:1px solid #f0f0f0;border-radius:4px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fafafa;">
+                                          <i class="fa fa-image" style="color:#ccc;font-size:24px;"></i>
+                                        </div>
+                                        <div style="flex:1;">
+                                          <div style="font-weight:600;margin-bottom:6px;">Tên sản phẩm (mock)</div>
+                                          <div style="color:#999;font-size:12px;margin-bottom:6px;">Mua từ: Mock Shop</div>
+                                          <div style="display:flex;gap:6px;color:#facc15;font-size:20px;margin-bottom:10px;">★★★★★</div>
+                                          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                                            ${['Chất lượng sản phẩm tuyệt vời', 'Đóng gói đẹp', 'Giao hàng nhanh', 'Shop phục vụ tốt', 'Rất đáng tiền'].map(t => `
+                                              <span style="border:1px solid #ddd;padding:6px 10px;border-radius:20px;font-size:12px;background:#f9f9f9;">${t}</span>
+                                            `).join('')}
+                                          </div>
+                                          <textarea style="width:100%;min-height:96px;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:13px;" placeholder="Hãy chia sẻ cảm nhận của bạn (mock)"></textarea>
+                                          <div style="display:flex;align-items-center;gap:8px;margin-top:10px;color:#999;font-size:12px;">
+                                            <div style="width:40px;height:40px;border:1px dashed #ddd;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+                                              <i class="fa fa-plus"></i>
+                                            </div>
+                                            <span>Thêm tối đa 5 hình & 1 video để nhận Shopee Xu (mock)</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  `,
+                                  confirmButtonText: 'Submit (mock)',
+                                  confirmButtonColor: '#ee4d2d',
+                                  showCancelButton: true,
+                                  cancelButtonText: 'Close',
+                                  focusConfirm: false
+                                });
+                              }}
+                              */
+                            >
+                              Rate Now (mock)
+                            </button>
+                          </>
                         )}
                         {order.orderStatus === 'PENDING' && (
                           <>
@@ -732,6 +830,21 @@ export default function OrderList() {
             <p style={{ margin: '0 0 20px 0', fontSize: 16, color: '#333', textAlign: 'center' }}>
             Are you sure you want to cancel this order?
             </p>
+            <textarea
+              placeholder="Reason (optional)"
+              value={confirmModal.reason || ''}
+              onChange={(e) => setConfirmModal(prev => ({ ...prev, reason: e.target.value }))}
+              style={{
+                width: '100%',
+                minHeight: 80,
+                marginBottom: 16,
+                padding: '10px 12px',
+                borderRadius: 4,
+                border: '1px solid #ddd',
+                fontSize: 13,
+                resize: 'vertical'
+              }}
+            />
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
               <button
                 type="button"

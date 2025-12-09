@@ -513,14 +513,16 @@ export function Cart() {
 
       Swal.close();
 
+      // Optional: keep receipt in state if needed elsewhere
       setOrderReceipt(result);
       setOrderSuccess(true);
-      setShowSuccessModal(true);
+      setShowSuccessModal(false); // skip success modal
 
       const data = await getCart();
       setCart(data);
       setSelected(new Set());
       toast("success", "Order created");
+      navigate("/information/orders");
       } catch (err) {
         console.error("Failed to create order:", err);
         Swal.close();

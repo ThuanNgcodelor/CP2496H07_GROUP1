@@ -13,12 +13,11 @@ import com.example.orderservice.dto.SizeDto;
 import com.example.orderservice.dto.UpdateOrderRequest;
 import com.example.orderservice.jwt.JwtUtil;
 import com.example.orderservice.model.Order;
-import com.example.orderservice.model.OrderItem;
-import com.example.orderservice.model.ShippingOrder;
 import com.example.orderservice.repository.ShippingOrderRepository;
 import com.example.orderservice.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -33,6 +32,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/v1/order")
 @RequiredArgsConstructor
+@Slf4j
 public class OrderController {
     private final OrderService orderService;
     private final ModelMapper modelMapper;
@@ -211,6 +211,28 @@ public class OrderController {
     ResponseEntity<AddressDto> getAddressById(@PathVariable String addressId) {
         AddressDto address = orderService.getAddressById(addressId);
         return ResponseEntity.ok(address);
+    }
+
+    @PutMapping("/cancel/{orderId}")
+    ResponseEntity<?> cancelOrder(@PathVariable String orderId, @RequestBody(required = false) Map<String, String> payload) {
+        try {
+            String reason = payload != null ? payload.getOrDefault("reason", null) : null;
+            Order cancelled = orderService.cancelOrder(orderId);
+            if (reason != null && !reason.isBlank()) {
+                log.info("Order {} cancelled. Reason: {}", orderId, reason);
+            }
+            return ResponseEntity.ok(Map.of(
+                    "message", "Order cancelled",
+                    "orderId", cancelled.getId(),
+                    "status", cancelled.getOrderStatus().name(),
+                    "reason", reason
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "error", "CANCEL_FAILED",
+                    "message", e.getMessage()
+            ));
+        }
     }
     
     @PostMapping("/calculate-shipping-fee")
