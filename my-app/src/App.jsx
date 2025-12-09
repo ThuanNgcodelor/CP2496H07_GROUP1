@@ -32,6 +32,7 @@ import BulkShippingPage from "./pages/shop-owner/BulkShippingPage.jsx";
 import AnalyticsPage from "./pages/shop-owner/AnalyticsPage.jsx";
 import SettingsPage from "./pages/shop-owner/SettingsPage.jsx";
 import NotificationPage from "./pages/shop-owner/NotificationPage.jsx";
+import ChatPage from "./pages/shop-owner/ChatPage.jsx";
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -99,6 +100,7 @@ export default function App() {
             <Route path="orders/bulk-shipping" element={<BulkShippingPage />} />
             <Route path="orders/shipping-settings" element={<SettingsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="chat" element={<ChatPage />} />
             <Route path="notifications" element={<NotificationPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="logout" element={<Logout />} />

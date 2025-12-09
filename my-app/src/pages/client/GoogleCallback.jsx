@@ -22,10 +22,6 @@ const GoogleCallback = () => {
     const code = urlParams.get("code");
 
     if (code) {
-      console.log("Google authorization code received:", code);
-        // ${API_BASE_URL}/v1/auth/login/google
-        // http://localhost:8080
-        // API_BASE_URL
       axios
         .post(`${LOCAL_BASE_URL}/v1/auth/login/google`, { code })
         .then((res) => {
@@ -64,7 +60,7 @@ const GoogleCallback = () => {
 
           // Error modal
           Swal.fire({
-            title: "Google login failed ❌",
+            title: "Google login failed",
             text: errorMessage,
             icon: "error",
             confirmButtonText: "Try again",

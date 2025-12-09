@@ -175,6 +175,18 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
           </Link>
         </div>
 
+        {/* Chat */}
+        <div className="sidebar-section">
+          <Link 
+            className={`sidebar-item ${isActive('/shop-owner/chat') ? 'active' : ''}`}
+            to="/shop-owner/chat"
+            onClick={handleLinkClick}
+          >
+            <i className="fas fa-comments"></i>
+            <span>Customer Messages</span>
+          </Link>
+        </div>
+
         {/* Notifications */}
         <div className="sidebar-section">
           <Link 

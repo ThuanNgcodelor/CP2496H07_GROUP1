@@ -13,8 +13,8 @@ import java.util.List;
 @Getter
 @Setter
 public class Size extends BaseEntity {
-    private String name; // e.g., "S", "M", "L", "XL"
-    private String description; // e.g., "Small"
+    private String name;
+    private String description;
     private int stock;
     private double priceModifier;
     

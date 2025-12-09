@@ -48,10 +48,6 @@ export default function Auth(){
                     navigate("/shop-owner");
                 } else if (roles.includes("ROLE_USER")) {
                     navigate("/information");
-                }else if ( roles.includes("ROLE_VET")){
-                    navigate("/vet")
-                }else if ( roles.includes("ROLE_SHELTER")){
-                    navigate("/shelter")
                 }
             }
         }
@@ -97,7 +93,7 @@ export default function Auth(){
             const role = getUserRole();
             const roles = Array.isArray(role) ? role : [role].filter(Boolean);
 
-            if(roles.includes("ROLE_ADMIN") || roles.includes("ROLE_DESIGNER")) {
+            if(roles.includes("ROLE_ADMIN") || roles.includes("ROLE_SHOP_OWNER")) {
                 navigate("/admin");
             } else if (roles.includes("ROLE_USER")) {
                 navigate("/information");

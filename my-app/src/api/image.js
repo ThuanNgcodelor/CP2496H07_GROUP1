@@ -77,3 +77,12 @@ export const uploadImage = async (file) => {
         throw new Error(error.response?.data?.message || "Failed to upload image");
     }
 };
+
+/**
+ * Lấy ảnh sản phẩm theo ID (alias cho fetchImageById để dễ hiểu)
+ * @param {string} imageId - ID của ảnh sản phẩm
+ * @returns {Promise<ArrayBuffer>} - Promise trả về dữ liệu ảnh dạng arraybuffer
+ */
+export const fetchProductImageById = (imageId) => {
+    return fetchImageById(imageId);
+};

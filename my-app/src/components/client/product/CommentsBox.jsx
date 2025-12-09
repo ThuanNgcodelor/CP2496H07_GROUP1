@@ -348,18 +348,38 @@ export default function CommentsBox({ productId, currentUser, product }) {
             </ul>
 
             {activeTab === "review" && (
-              <div className="d-none d-md-flex align-items-center gap-2">
-                <small className="text-muted">Show:</small>
-                <select
-                  className="form-select form-select-sm"
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                  style={{ width: 80 }}
-                >
-                  <option value={3}>3</option>
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                </select>
+              <div className="d-flex align-items-center gap-2">
+                {product?.userId && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('open-chat-with-product', {
+                        detail: {
+                          shopOwnerId: product.userId,
+                          productId: product.id
+                        }
+                      }));
+                    }}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    <i className="fas fa-comments me-1"></i>
+                    Chat với shop
+                  </button>
+                )}
+                <div className="d-none d-md-flex align-items-center gap-2 ms-auto">
+                  <small className="text-muted">Show:</small>
+                  <select
+                    className="form-select form-select-sm"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    style={{ width: 80 }}
+                  >
+                    <option value={3}>3</option>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>

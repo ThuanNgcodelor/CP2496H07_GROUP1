@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Header from "../../components/client/Header.jsx";
 import CommentsBox from "../../components/client/product/CommentsBox.jsx";
 import ShopInfoBar from "../../components/client/product/ShopInfoBar.jsx";
+import ChatBotWidget from "../../components/client/ChatBotWidget.jsx";
 import { fetchProductById, fetchProductImageById, fetchAddToCart } from "../../api/product.js";
 import { getCart, getShopOwnerByUserId } from "../../api/user.js";
 import { useCart } from "../../contexts/CartContext.jsx";
@@ -680,6 +681,15 @@ export default function ProductDetailPage() {
                   <ShopInfoBar 
                     shopOwner={shopOwner}
                     onViewShop={() => navigate(`/shop/${product.userId}`)}
+                    onChat={() => {
+                      // Dispatch event để mở chat với shop owner về sản phẩm này
+                      window.dispatchEvent(new CustomEvent('open-chat-with-product', {
+                        detail: {
+                          shopOwnerId: product.userId,
+                          productId: product.id
+                        }
+                      }));
+                    }}
                   />
                 </div>
               </div>
@@ -693,6 +703,9 @@ export default function ProductDetailPage() {
           )}
         </div>
       </main>
+
+      {/* Chat Widget */}
+      <ChatBotWidget />
 
       {/* Lightbox Modal */}
       {lightboxOpen && imageUrls.length > 0 && (
