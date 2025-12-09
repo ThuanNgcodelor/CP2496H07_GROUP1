@@ -4,7 +4,6 @@ import com.example.stockservice.enums.ProductStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Entity(name = "products")
@@ -15,9 +14,12 @@ import java.util.List;
 @Setter
 public class Product extends BaseEntity {
     private String name;
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String description;
     private double price;
     private double originalPrice;
+    @Builder.Default
     private double discountPercent = 0;
     @Enumerated(EnumType.STRING)
     private ProductStatus status;

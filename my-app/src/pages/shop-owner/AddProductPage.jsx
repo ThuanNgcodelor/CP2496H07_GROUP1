@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { addProduct, getProductById, updateProduct } from '../../api/shopOwner';
 import categoryApi from '../../api/categoryApi';
 import '../../components/shop-owner/ShopOwnerLayout.css';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 export default function AddProductPage() {
   const navigate = useNavigate();
@@ -33,6 +35,27 @@ export default function AddProductPage() {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [initialLoading, setInitialLoading] = useState(false);
+
+  const quillModules = useMemo(() => ({
+    toolbar: [
+      [{ header: [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      [{ color: [] }, { background: [] }],
+      [{ align: [] }],
+      ['link', 'image'],
+      ['clean'],
+    ],
+  }), []);
+
+  const quillFormats = useMemo(() => [
+    'header',
+    'bold', 'italic', 'underline', 'strike',
+    'list', 'bullet',
+    'color', 'background',
+    'align',
+    'link', 'image'
+  ], []);
 
   // Load categories
   useEffect(() => {
@@ -110,6 +133,19 @@ export default function AddProductPage() {
       setErrors(prev => ({
         ...prev,
         [name]: ''
+      }));
+    }
+  };
+
+  const handleDescriptionChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      description: value
+    }));
+    if (errors.description) {
+      setErrors(prev => ({
+        ...prev,
+        description: ''
       }));
     }
   };
@@ -334,16 +370,24 @@ export default function AddProductPage() {
                 </div>
 
                 <div className="mb-3">
-                  <label className="form-label">Product description <span style={{color: 'red'}}>*</span></label>
-                  <textarea
-                    className={`form-control ${errors.description ? 'is-invalid' : ''}`}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    rows="5"
-                    placeholder="Enter detailed product description"
-                  />
-                  {errors.description && <div className="invalid-feedback">{errors.description}</div>}
+                  <label className="form-label">
+                    Product description (supports multi-line / image URLs) <span style={{color: 'red'}}>*</span>
+                  </label>
+                  <div className={`${errors.description ? 'is-invalid' : ''}`}>
+                    <ReactQuill
+                      theme="snow"
+                      value={formData.description}
+                      onChange={handleDescriptionChange}
+                      modules={quillModules}
+                      formats={quillFormats}
+                      placeholder="Nhập mô tả chi tiết, có thể chèn link/ảnh. Ví dụ: chất liệu, hướng dẫn bảo quản, bảng size, link hình minh họa..."
+                      style={{ background: '#fff' }}
+                    />
+                  </div>
+                  <small className="text-muted d-block mt-2">
+                    Có thể dán link ảnh hoặc nội dung nhiều dòng; nội dung được lưu dạng HTML.
+                  </small>
+                  {errors.description && <div className="text-danger mt-1">{errors.description}</div>}
                 </div>
 
                 <div className="row">

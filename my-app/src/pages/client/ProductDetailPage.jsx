@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../../components/client/Header.jsx";
-import CommentsBox from "../../components/client/product/CommentsBox.jsx";
 import ShopInfoBar from "../../components/client/product/ShopInfoBar.jsx";
 import ChatBotWidget from "../../components/client/ChatBotWidget.jsx";
 import { fetchProductById, fetchProductImageById, fetchAddToCart } from "../../api/product.js";
@@ -37,6 +36,7 @@ export default function ProductDetailPage() {
   const createdUrlsRef = useRef([]);
   const [error, setError] = useState(null);
   const [posting, setPosting] = useState(false);
+  const [detailTab, setDetailTab] = useState("spec");
 
   useEffect(() => {
     const load = async () => {
@@ -694,9 +694,152 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
+              {/* Mock Description & Reviews (static sample) */}
               <div className="row mt-4">
                 <div className="col-12">
-                  <CommentsBox productId={product.id} product={product} />
+                  <div className="bg-white border rounded-3 p-3" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                    <div className="d-flex gap-3 border-bottom mb-3">
+                      <button
+                        type="button"
+                        className={`btn ${detailTab === "spec" ? "btn-light border" : "btn-link text-decoration-none text-dark"}`}
+                        onClick={() => setDetailTab("spec")}
+                        style={{ borderBottom: detailTab === "spec" ? "2px solid #0d6efd" : "2px solid transparent", borderRadius: 0 }}
+                      >
+                        Specification
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${detailTab === "reviews" ? "btn-light border" : "btn-link text-decoration-none text-dark"}`}
+                        onClick={() => setDetailTab("reviews")}
+                        style={{ borderBottom: detailTab === "reviews" ? "2px solid #0d6efd" : "2px solid transparent", borderRadius: 0 }}
+                      >
+                        Reviews
+                      </button>
+                    </div>
+
+                    {detailTab === "spec" && (
+                      <div className="d-flex flex-column gap-3">
+                        <div>
+                          <h5 className="fw-semibold">Thông tin sản phẩm</h5>
+                          <table className="table table-sm">
+                            <tbody>
+                              <tr><th scope="row">Tên sản phẩm</th><td>{product.name}</td></tr>
+                              <tr><th scope="row">SKU</th><td>{product.id}</td></tr>
+                              <tr><th scope="row">Chất liệu</th><td>Vải cotton / modal</td></tr>
+                              <tr><th scope="row">Xuất xứ</th><td>Việt Nam</td></tr>
+                              <tr><th scope="row">Bảo quản</th><td>Giặt máy nhẹ, không tẩy, ủi nhiệt độ thấp</td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div>
+                          <h5 className="fw-semibold">Hướng dẫn chọn size</h5>
+                          <div className="table-responsive">
+                            <table className="table table-bordered table-striped text-center align-middle">
+                              <thead className="table-light">
+                                <tr>
+                                  <th>Size</th>
+                                  <th>Ngực (cm)</th>
+                                  <th>Eo (cm)</th>
+                                  <th>Dài áo (cm)</th>
+                                  <th>Nặng (kg)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr><td>S</td><td>84-88</td><td>68-72</td><td>65</td><td>45-52</td></tr>
+                                <tr><td>M</td><td>88-92</td><td>72-76</td><td>67</td><td>52-58</td></tr>
+                                <tr><td>L</td><td>92-96</td><td>76-80</td><td>69</td><td>58-65</td></tr>
+                                <tr><td>XL</td><td>96-100</td><td>80-84</td><td>71</td><td>65-72</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <small className="text-muted">* Số đo mang tính tham khảo, có thể chênh lệch 1-2cm.</small>
+                        </div>
+
+                        <div>
+                          <h5 className="fw-semibold">Mô tả sản phẩm</h5>
+                          <ul className="mb-2">
+                            <li>Chất vải thoáng mát, co giãn nhẹ.</li>
+                            <li>Form cơ bản, dễ phối đồ hàng ngày.</li>
+                            <li>Đường may gọn gàng, bền màu khi giặt máy.</li>
+                          </ul>
+                          <p className="mb-0 text-muted" style={{ whiteSpace: 'pre-line' }}>
+                            Lưu ý: Không dùng thuốc tẩy, không giặt nước nóng. Nên lộn trái khi phơi để giữ màu tốt hơn.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {detailTab === "reviews" && (
+                      <div className="d-flex flex-column gap-3">
+                        {/* Summary */}
+                        <div className="d-flex flex-wrap align-items-center gap-4">
+                          <div>
+                            <div className="display-6 fw-bold text-danger">4.9</div>
+                            <div className="text-warning" style={{ letterSpacing: '1px' }}>★★★★★</div>
+                            <div className="text-muted">(120 đánh giá)</div>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {["Tất cả", "5 Sao", "4 Sao", "3 Sao", "2 Sao", "1 Sao"].map((label, idx) => (
+                              <button key={idx} type="button" className="btn btn-outline-secondary btn-sm">
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Review list (mock) */}
+                        <div className="d-flex flex-column gap-3">
+                          {[
+                            {
+                              user: "pham****",
+                              date: "2 ngày trước",
+                              stars: 5,
+                              content: "Chất vải mát, lên form đẹp. Mình cao 1m65 mặc size M vừa vặn.",
+                              images: [imgFallback, imgFallback, imgFallback]
+                            },
+                            {
+                              user: "hoa****",
+                              date: "1 tuần trước",
+                              stars: 4,
+                              content: "Màu hơi khác hình một chút nhưng vẫn ổn, giao nhanh.",
+                              images: [imgFallback]
+                            },
+                            {
+                              user: "linh****",
+                              date: "3 tuần trước",
+                              stars: 5,
+                              content: "Đã giặt thử không bị ra màu, sẽ ủng hộ tiếp.",
+                              images: []
+                            }
+                          ].map((rv, idx) => (
+                            <div key={idx} className="border rounded-3 p-3">
+                              <div className="d-flex align-items-center gap-2 mb-1">
+                                <div className="fw-semibold">{rv.user}</div>
+                                <div className="text-warning" style={{ letterSpacing: '1px' }}>
+                                  {"★★★★★".slice(0, rv.stars)}
+                                </div>
+                                <small className="text-muted">{rv.date}</small>
+                              </div>
+                              <div className="mb-2">{rv.content}</div>
+                              {rv.images.length > 0 && (
+                                <div className="d-flex gap-2 flex-wrap">
+                                  {rv.images.map((img, i) => (
+                                    <img
+                                      key={i}
+                                      src={img}
+                                      alt="review"
+                                      style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #eee' }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </>
