@@ -1,8 +1,11 @@
 package com.example.orderservice.service;
 
 import com.example.orderservice.client.GhnApiClient;
+import com.example.orderservice.client.PaymentServiceClient;
 import com.example.orderservice.client.StockServiceClient;
 import com.example.orderservice.client.UserServiceClient;
+import com.example.orderservice.dto.AddRefundRequestDto;
+import com.example.orderservice.dto.PaymentDto;
 import com.example.orderservice.dto.*;
 import com.example.orderservice.dto.PaymentEvent;
 import com.example.orderservice.enums.OrderStatus;
@@ -193,6 +196,7 @@ public class OrderServiceImpl implements OrderService {
     private final StockServiceClient stockServiceClient;
     private final UserServiceClient userServiceClient;
     private final GhnApiClient ghnApiClient;
+    private final PaymentServiceClient paymentServiceClient;
     private final ShippingOrderRepository shippingOrderRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final NewTopic orderTopic;
@@ -245,20 +249,107 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findByOrderItemsProductIdIn(productIds);
     }
 
+    @Transactional
     public Order cancelOrder(String orderId, String reason) {
-        return orderRepository.findById(orderId).map(order -> {
-            order.setOrderStatus(OrderStatus.CANCELLED);
-            order.setCancelReason(reason);
-            orderRepository.save(order);
-            // Re-add stock (Commented out as productService is not injected)
-            /*
-             * for (OrderItem item : order.getOrderItems()) {
-             * // productService.addProductQuantity(item.getProductId(),
-             * item.getQuantity());
-             * }
-             */
-            return order;
-        }).orElse(null);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+
+        // Chỉ cho phép hủy nếu PENDING
+        if (order.getOrderStatus() != OrderStatus.PENDING) {
+            throw new RuntimeException("Cannot cancel order with status: " + order.getOrderStatus());
+        }
+
+        // Nếu là VNPay và đã PAID → Refund vào wallet của client
+        if ("VNPAY".equalsIgnoreCase(order.getPaymentMethod())) {
+            try {
+                ResponseEntity<PaymentDto> paymentResponse = paymentServiceClient.getPaymentByOrderId(orderId);
+                if (paymentResponse != null && paymentResponse.getBody() != null) {
+                    PaymentDto payment = paymentResponse.getBody();
+                    if ("PAID".equals(payment.getStatus())) {
+                        // Tính tổng tiền cần refund (totalPrice + shippingFee)
+                        BigDecimal totalRefundAmount = BigDecimal.valueOf(order.getTotalPrice());
+                        if (order.getShippingFee() != null) {
+                            totalRefundAmount = totalRefundAmount.add(order.getShippingFee());
+                        }
+                        
+                        // Validate userId exists
+                        if (order.getUserId() == null || order.getUserId().trim().isEmpty()) {
+                            log.error("[CANCEL] Cannot refund: userId is missing for order {}", orderId);
+                            throw new RuntimeException("UserId is missing for order: " + orderId);
+                        }
+                        
+                        // Refund vào wallet của client
+                        AddRefundRequestDto refundRequest = AddRefundRequestDto.builder()
+                                .userId(order.getUserId())
+                                .orderId(orderId)
+                                .paymentId(payment.getId())
+                                .amount(totalRefundAmount)
+                                .reason(reason != null ? reason : "Order cancelled by user")
+                                .build();
+
+                        log.info("[CANCEL] Calling wallet service to add refund: orderId={}, userId={}, amount={}", 
+                                orderId, order.getUserId(), totalRefundAmount);
+
+                        ResponseEntity<Map<String, Object>> walletResponse = userServiceClient.addRefundToWallet(refundRequest);
+                        if (walletResponse != null && walletResponse.getBody() != null) {
+                            Map<String, Object> walletResult = walletResponse.getBody();
+                            Boolean success = (Boolean) walletResult.get("success");
+                            if (Boolean.TRUE.equals(success)) {
+                                log.info("[CANCEL] Refund added to wallet successfully: orderId={}, userId={}, amount={}, balance={}", 
+                                        orderId, order.getUserId(), totalRefundAmount, walletResult.get("balanceAvailable"));
+                            } else {
+                                String errorMsg = (String) walletResult.get("message");
+                                log.error("[CANCEL] Failed to add refund to wallet for order {}: {}", orderId, errorMsg);
+                                throw new RuntimeException("Failed to add refund to wallet: " + errorMsg);
+                            }
+                        } else {
+                            log.error("[CANCEL] Wallet service returned null response for order {}", orderId);
+                            throw new RuntimeException("Wallet service returned null response");
+                        }
+                    } else {
+                        log.info("[CANCEL] Payment not PAID, skipping refund: orderId={}, paymentStatus={}", orderId, payment.getStatus());
+                    }
+                } else {
+                    log.warn("[CANCEL] Payment response is null for order {}, skipping refund", orderId);
+                }
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+                // Payment không tồn tại - có thể là COD hoặc payment chưa được tạo
+                log.warn("[CANCEL] Payment not found for order {} (may be COD or payment not created yet), skipping refund", orderId);
+                // Vẫn cho phép cancel order nếu payment không tồn tại
+            } catch (RuntimeException e) {
+                // Kiểm tra nếu là "Resource not found" error từ Feign
+                if (e.getMessage() != null && e.getMessage().contains("Resource not found")) {
+                    log.warn("[CANCEL] Payment not found for order {} (Resource not found), skipping refund", orderId);
+                    // Vẫn cho phép cancel order
+                } else {
+                    // Các lỗi khác (như refund fail) thì throw exception
+                    log.error("[CANCEL] Failed to refund to wallet for order {}: {}", orderId, e.getMessage(), e);
+                    throw new RuntimeException("Failed to refund to wallet: " + e.getMessage(), e);
+                }
+            } catch (Exception e) {
+                // Kiểm tra nếu là "Resource not found" error
+                String errorMsg = e.getMessage();
+                if (errorMsg != null && (errorMsg.contains("Resource not found") || errorMsg.contains("404"))) {
+                    log.warn("[CANCEL] Payment not found for order {} (404/Resource not found), skipping refund", orderId);
+                    // Vẫn cho phép cancel order nếu payment không tồn tại
+                } else {
+                    log.error("[CANCEL] Failed to refund to wallet for order {}: {}", orderId, e.getMessage(), e);
+                    throw new RuntimeException("Failed to refund to wallet: " + e.getMessage(), e);
+                }
+            }
+        }
+
+        // Rollback stock và set cancelReason
+        // rollbackOrderStock() sẽ set status = CANCELLED, nhưng chúng ta cần set cancelReason
+        order.setCancelReason(reason);
+        orderRepository.save(order);
+        
+        // Rollback stock (method này sẽ set status = CANCELLED)
+        rollbackOrderStock(orderId);
+        
+        // Reload order để lấy status mới nhất (đã được set bởi rollbackOrderStock)
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found after rollback: " + orderId));
     }
 
 
@@ -337,8 +428,8 @@ public class OrderServiceImpl implements OrderService {
         if (order.getOrderItems() != null && !order.getOrderItems().isEmpty()) {
             for (OrderItem item : order.getOrderItems()) {
                 try {
-                    com.example.orderservice.request.IncreaseStockRequest rollbackRequest = 
-                            new com.example.orderservice.request.IncreaseStockRequest(
+                    IncreaseStockRequest rollbackRequest =
+                            new IncreaseStockRequest(
                                     item.getSizeId(), 
                                     item.getQuantity()
                             );
@@ -615,10 +706,30 @@ public class OrderServiceImpl implements OrderService {
             
             log.info("[GHN] Order has {} items", order.getOrderItems().size());
             
-            // 4. Tính tổng weight (500g mỗi item - có thể điều chỉnh)
-            int totalWeight = order.getOrderItems().stream()
-                .mapToInt(item -> item.getQuantity() * 500)
-                .sum();
+            // 4. Tính tổng weight từ order items (lấy weight từ Size)
+            int totalWeight = 0;
+            for (OrderItem item : order.getOrderItems()) {
+                try {
+                    // Get size information to get weight
+                    ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient.getSizeById(item.getSizeId());
+                    if (sizeResponse != null && sizeResponse.getBody() != null) {
+                        com.example.orderservice.dto.SizeDto size = sizeResponse.getBody();
+                        int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight() : 500; // Default 500g if not set
+                        totalWeight += item.getQuantity() * itemWeight;
+                        log.debug("[GHN] Item: productId={}, sizeId={}, quantity={}, weight={}g, total={}g", 
+                                item.getProductId(), item.getSizeId(), item.getQuantity(), itemWeight, item.getQuantity() * itemWeight);
+                    } else {
+                        // Fallback to 500g if size not found
+                        log.warn("[GHN] Size not found for sizeId: {}, using default 500g", item.getSizeId());
+                        totalWeight += item.getQuantity() * 500;
+                    }
+                } catch (Exception e) {
+                    // Fallback to 500g if error
+                    log.warn("[GHN] Failed to get size weight for sizeId: {}, using default 500g. Error: {}", 
+                            item.getSizeId(), e.getMessage());
+                    totalWeight += item.getQuantity() * 500;
+                }
+            }
             
             log.info("[GHN] Total weight: {}g", totalWeight);
             
@@ -839,7 +950,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems) {
+    public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems, BigDecimal shippingFee) {
         // Validate address
         AddressDto address = userServiceClient.getAddressById(addressId).getBody();
         if (address == null) {
@@ -880,6 +991,7 @@ public class OrderServiceImpl implements OrderService {
                 .addressId(addressId)
                 .orderStatus(OrderStatus.PENDING) // Payment successful, but order pending shop confirmation
                 .totalPrice(0.0)
+                .shippingFee(shippingFee != null ? shippingFee : BigDecimal.ZERO) // Lưu shipping fee đã thanh toán trong payment
                 .paymentMethod("VNPAY") // Orders created from payment are VNPay
                 .build();
         order = orderRepository.save(order);
@@ -1040,7 +1152,7 @@ public class OrderServiceImpl implements OrderService {
                         && event.getOrderDataJson() != null && !event.getOrderDataJson().trim().isEmpty()) {
                     // Order doesn't exist yet - create it from orderData
                     try {
-                        // Parse orderDataJson to get selectedItems
+                        // Parse orderDataJson to get selectedItems and shippingFee
                         Map<String, Object> orderDataMap = objectMapper.readValue(event.getOrderDataJson(), Map.class);
                         List<Map<String, Object>> selectedItemsList = (List<Map<String, Object>>) orderDataMap.get("selectedItems");
 
@@ -1048,6 +1160,25 @@ public class OrderServiceImpl implements OrderService {
                             log.error("[PAYMENT-CONSUMER] No selectedItems in orderData for payment: {}", event.getTxnRef());
                             return;
                         }
+
+                        // Get shippingFee from orderData (may be null for old orders)
+                        BigDecimal shippingFee = null;
+                        if (orderDataMap.containsKey("shippingFee")) {
+                            Object shippingFeeObj = orderDataMap.get("shippingFee");
+                            if (shippingFeeObj != null) {
+                                if (shippingFeeObj instanceof Number) {
+                                    shippingFee = BigDecimal.valueOf(((Number) shippingFeeObj).doubleValue());
+                                } else if (shippingFeeObj instanceof String) {
+                                    try {
+                                        shippingFee = new BigDecimal((String) shippingFeeObj);
+                                    } catch (NumberFormatException e) {
+                                        log.warn("[PAYMENT-CONSUMER] Invalid shippingFee format: {}", shippingFeeObj);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        log.info("[PAYMENT-CONSUMER] Shipping fee from orderData: {}", shippingFee);
 
                         // Convert to SelectedItemDto list
                         List<SelectedItemDto> selectedItems = selectedItemsList.stream()
@@ -1061,12 +1192,33 @@ public class OrderServiceImpl implements OrderService {
                                 .collect(java.util.stream.Collectors.toList());
 
                         // Create order with PENDING status (payment successful, waiting for shop confirmation)
-                        Order order = createOrderFromPayment(event.getUserId(), event.getAddressId(), selectedItems);
+                        Order order = createOrderFromPayment(event.getUserId(), event.getAddressId(), selectedItems, shippingFee);
                         
                         // Set payment method from event (VNPAY, CARD, etc.) if available
                         if (event.getMethod() != null && !event.getMethod().trim().isEmpty()) {
                             order.setPaymentMethod(event.getMethod().toUpperCase());
                             orderRepository.save(order);
+                        }
+                        
+                        // Update payment with orderId so we can find it later when canceling
+                        if (event.getPaymentId() != null && !event.getPaymentId().trim().isEmpty()) {
+                            try {
+                                ResponseEntity<Map<String, Object>> updateResponse = paymentServiceClient.updatePaymentOrderId(
+                                        event.getPaymentId(), order.getId());
+                                if (updateResponse != null && updateResponse.getBody() != null) {
+                                    Boolean success = (Boolean) updateResponse.getBody().get("success");
+                                    if (Boolean.TRUE.equals(success)) {
+                                        log.info("[PAYMENT-CONSUMER] Updated payment {} with orderId: {}", 
+                                                event.getPaymentId(), order.getId());
+                                    } else {
+                                        log.warn("[PAYMENT-CONSUMER] Failed to update payment {} with orderId: {}", 
+                                                event.getPaymentId(), order.getId());
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.error("[PAYMENT-CONSUMER] Failed to update payment with orderId: {}", e.getMessage(), e);
+                                // Don't fail order creation, just log error
+                            }
                         }
                         
                         log.info("[PAYMENT-CONSUMER] Created order {} with PENDING status and payment method {} from payment event: {}", 

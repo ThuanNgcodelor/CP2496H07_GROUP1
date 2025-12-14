@@ -534,6 +534,7 @@ export function Cart() {
             orderDataJson: JSON.stringify({
               userId: userId,
               addressId: selectedAddressId,
+              shippingFee: shippingFee || 0, // Thêm shipping fee vào order data
               selectedItems: selectedItems.map((it) => ({
                 productId: it.productId || it.id,
                 sizeId: it.sizeId,

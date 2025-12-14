@@ -502,6 +502,26 @@ export default function ProductDetailPage() {
                                             </div>
                                         )}
 
+                                        {/* Weight Display (if size selected) */}
+                                        {selectedSizeId && (() => {
+                                            const selectedSize = product.sizes?.find(s => s.id === selectedSizeId);
+                                            const totalWeight = selectedSize?.weight ? selectedSize.weight * qty : null;
+                                            return totalWeight ? (
+                                                <div className="mb-3" style={{ padding: '12px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+                                                            {t('product.weight', 'Weight')}: <strong>{totalWeight.toLocaleString('vi-VN')}g</strong>
+                                                            {selectedSize.weight && qty > 1 && (
+                                                                <span className="text-muted" style={{ fontSize: '0.85rem', marginLeft: '4px' }}>
+                                                                    ({selectedSize.weight}g × {qty})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : null;
+                                        })()}
+
                                         {/* Spacer to push buttons to bottom */}
                                         <div style={{ flexGrow: 1 }}></div>
 

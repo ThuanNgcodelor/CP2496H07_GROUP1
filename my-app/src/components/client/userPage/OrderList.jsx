@@ -335,13 +335,26 @@ export default function OrderList() {
             setError('');
             setSuccessMessage('');
             const reasonText = confirmModal.reason?.trim() || '';
+            
+            // Find order to check payment method
+            const orderToCancel = orders.find(o => o.id === confirmModal.orderId);
+            const isVnpay = orderToCancel?.paymentMethod === 'VNPAY' || orderToCancel?.paymentMethod === 'vnpay';
+            
             await cancelOrder(confirmModal.orderId, reasonText);
-            setSuccessMessage(t('orders.cancelSuccess'));
+            
+            // Show appropriate success message based on payment method
+            if (isVnpay) {
+                setSuccessMessage(t('orders.cancelSuccessWithRefund') || 'Đơn hàng đã được hủy. Tiền đã được hoàn vào ví của bạn. Bạn có thể rút tiền về tài khoản ngân hàng bất cứ lúc nào.');
+            } else {
+                setSuccessMessage(t('orders.cancelSuccess'));
+            }
+            
             const data = await getOrdersByUser();
             setOrders(Array.isArray(data) ? data : []);
-            setTimeout(() => setSuccessMessage(''), 3000);
+            setTimeout(() => setSuccessMessage(''), 5000); // Show longer for refund message
         } catch (e) {
-            setError(e.message || t('orders.cancelError'));
+            const errorMsg = e.response?.data?.message || e.message || t('orders.cancelError');
+            setError(errorMsg);
             console.error(e);
         } finally {
             setLoading(false);

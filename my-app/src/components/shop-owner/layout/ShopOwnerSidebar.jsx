@@ -7,7 +7,8 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
     const location = useLocation();
     const [expandedSections, setExpandedSections] = useState({
         orders: false,
-        products: false
+        products: false,
+        finance: false
     });
 
     // Auto-expand section if current route belongs to it (but not the main route)
@@ -27,6 +28,14 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
             setExpandedSections(prev => ({
                 ...prev,
                 products: true
+            }));
+        }
+
+        // Check if current route is in finance section
+        if (path.startsWith('/shop-owner/wallet') || path.startsWith('/shop-owner/subscription')) {
+            setExpandedSections(prev => ({
+                ...prev,
+                finance: true
             }));
         }
     }, [location.pathname]);
@@ -190,6 +199,37 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
                         <i className="fas fa-bell"></i>
                         <span>{t('shopOwner.sidebar.notifications')}</span>
                     </Link>
+                </div>
+
+                {/* Finance Section */}
+                <div className="sidebar-section">
+                    <div
+                        className="sidebar-section-header"
+                        onClick={() => toggleSection('finance')}
+                    >
+                        <span>{t('shopOwner.sidebar.finance')}</span>
+                        <i className={`fas fa-chevron-${expandedSections.finance ? 'up' : 'down'}`}></i>
+                    </div>
+                    {expandedSections.finance && (
+                        <div className="sidebar-menu-items">
+                            <Link
+                                className={`sidebar-item ${isActive('/shop-owner/wallet') ? 'active' : ''}`}
+                                to="/shop-owner/wallet"
+                                onClick={handleLinkClick}
+                            >
+                                <i className="fas fa-wallet"></i>
+                                <span>{t('shopOwner.sidebar.wallet')}</span>
+                            </Link>
+                            <Link
+                                className={`sidebar-item ${isActive('/shop-owner/subscription') ? 'active' : ''}`}
+                                to="/shop-owner/subscription"
+                                onClick={handleLinkClick}
+                            >
+                                <i className="fas fa-crown"></i>
+                                <span>{t('shopOwner.sidebar.subscription')}</span>
+                            </Link>
+                        </div>
+                    )}
                 </div>
 
                 {/* Settings */}

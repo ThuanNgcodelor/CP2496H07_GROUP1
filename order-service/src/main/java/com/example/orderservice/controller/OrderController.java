@@ -121,16 +121,21 @@ public class OrderController {
             dto.setOrderItems(enrichedItems);
         }
         
-        // Fetch shipping fee from ShippingOrder
-        try {
-            shippingOrderRepository.findByOrderId(order.getId())
-                .ifPresent(shippingOrder -> {
-                    if (shippingOrder.getShippingFee() != null) {
-                        dto.setShippingFee(shippingOrder.getShippingFee().doubleValue());
-                    }
-                });
-        } catch (Exception e) {
-            System.err.println("Failed to fetch shipping fee for orderId: " + order.getId() + " - " + e.getMessage());
+        // Fetch shipping fee: ưu tiên từ Order.shippingFee (VNPay đã thanh toán), nếu không có thì lấy từ ShippingOrder (COD)
+        if (order.getShippingFee() != null) {
+            dto.setShippingFee(order.getShippingFee().doubleValue());
+        } else {
+            // Fallback: lấy từ ShippingOrder cho COD orders
+            try {
+                shippingOrderRepository.findByOrderId(order.getId())
+                    .ifPresent(shippingOrder -> {
+                        if (shippingOrder.getShippingFee() != null) {
+                            dto.setShippingFee(shippingOrder.getShippingFee().doubleValue());
+                        }
+                    });
+            } catch (Exception e) {
+                System.err.println("Failed to fetch shipping fee for orderId: " + order.getId() + " - " + e.getMessage());
+            }
         }
 
         return dto;
@@ -299,8 +304,35 @@ public class OrderController {
                 ));
             }
             
-            // 5. Calculate weight (default 500g per item if not provided)
-            int weight = request.getWeight() != null ? request.getWeight() : (request.getQuantity() != null ? request.getQuantity() * 500 : 1000);
+            // 5. Calculate weight from selectedItems (preferred) or fallback to weight/quantity
+            int weight = 1000; // Default 1000g
+            if (request.getSelectedItems() != null && !request.getSelectedItems().isEmpty()) {
+                // Calculate weight from selectedItems
+                weight = 0;
+                for (com.example.orderservice.dto.SelectedItemDto item : request.getSelectedItems()) {
+                    try {
+                        // Get size information to get weight
+                        ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient.getSizeById(item.getSizeId());
+                        if (sizeResponse != null && sizeResponse.getBody() != null) {
+                            com.example.orderservice.dto.SizeDto size = sizeResponse.getBody();
+                            int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight() : 500; // Default 500g if not set
+                            weight += item.getQuantity() * itemWeight;
+                        } else {
+                            // Fallback to 500g if size not found
+                            weight += item.getQuantity() * 500;
+                        }
+                    } catch (Exception e) {
+                        // Fallback to 500g if error
+                        weight += item.getQuantity() * 500;
+                    }
+                }
+            } else if (request.getWeight() != null) {
+                // Use provided weight (backward compatibility)
+                weight = request.getWeight();
+            } else if (request.getQuantity() != null) {
+                // Calculate from quantity (backward compatibility)
+                weight = request.getQuantity() * 500;
+            }
             
             // 6. Build GHN fee calculation request
             com.example.orderservice.dto.GhnCalculateFeeRequest ghnRequest = com.example.orderservice.dto.GhnCalculateFeeRequest.builder()
@@ -622,6 +654,23 @@ public class OrderController {
                 ));
             }
 
+            // Get shippingFee from orderData (may be null for old orders)
+            java.math.BigDecimal shippingFee = null;
+            if (orderData.containsKey("shippingFee")) {
+                Object shippingFeeObj = orderData.get("shippingFee");
+                if (shippingFeeObj != null) {
+                    if (shippingFeeObj instanceof Number) {
+                        shippingFee = java.math.BigDecimal.valueOf(((Number) shippingFeeObj).doubleValue());
+                    } else if (shippingFeeObj instanceof String) {
+                        try {
+                            shippingFee = new java.math.BigDecimal((String) shippingFeeObj);
+                        } catch (NumberFormatException e) {
+                            // Ignore invalid format
+                        }
+                    }
+                }
+            }
+
             // Convert Map to SelectedItemDto
             List<SelectedItemDto> selectedItems = selectedItemsRaw.stream()
                     .map(item -> {
@@ -634,7 +683,7 @@ public class OrderController {
                     })
                     .collect(java.util.stream.Collectors.toList());
 
-            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems);
+            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems, shippingFee);
             
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Order created successfully from payment",

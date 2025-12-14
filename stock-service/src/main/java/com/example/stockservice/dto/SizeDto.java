@@ -11,4 +11,5 @@ public class SizeDto {
     private String description;
     private int stock;
     private double priceModifier;
+    private Integer weight; // Trọng lượng tính bằng gram (g)
 }

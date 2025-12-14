@@ -230,16 +230,20 @@ export const updateOrderStatusForShopOwner = async (orderId, status) => {
  */
 export const calculateShippingFee = async (addressId, selectedItems) => {
     try {
-        const totalQuantity = selectedItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-        const totalWeight = totalQuantity * 500;
-        
         const firstProductId = selectedItems.length > 0 ? (selectedItems[0].productId || selectedItems[0].id) : null;
+        
+        // Map selectedItems to format expected by backend
+        const selectedItemsData = selectedItems.map(item => ({
+            productId: item.productId || item.id,
+            sizeId: item.sizeId,
+            quantity: item.quantity || 0,
+            unitPrice: item.unitPrice || item.price || 0
+        }));
         
         const requestData = {
             addressId: addressId,
-            weight: totalWeight,
-            quantity: totalQuantity,
-            productId: firstProductId
+            selectedItems: selectedItemsData, // Send selectedItems to calculate weight from actual product sizes
+            productId: firstProductId // For backward compatibility
         };
         
         const response = await api.post("/calculate-shipping-fee", requestData);

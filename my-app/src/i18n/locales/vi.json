@@ -148,6 +148,7 @@
     "tryAgain": "Vui lòng thử lại."
   },
   "product": {
+    "weight": "Trọng lượng",
     "noProductsYet": "Chưa có sản phẩm",
     "pleaseBuy": "Vui lòng mua sản phẩm.",
     "specifications": {
@@ -325,6 +326,7 @@
     "vnpay": "VNPay",
     "cancelConfirm": "Bạn có chắc chắn muốn hủy đơn hàng này?",
     "cancelSuccess": "Đã hủy đơn hàng thành công",
+    "cancelSuccessWithRefund": "Đã hủy đơn hàng thành công. Tiền đã được hoàn vào ví của bạn. Bạn có thể rút tiền về tài khoản ngân hàng bất cứ lúc nào.",
     "cancelError": "Hủy đơn hàng thất bại",
     "reviewSuccess": "Đã gửi đánh giá thành công!",
     "reviewError": "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại."
@@ -590,6 +592,9 @@
       "salesAnalytics": "Phân tích bán hàng",
       "customerMessages": "Tin nhắn khách hàng",
       "notifications": "Thông báo",
+      "finance": "Tài chính",
+      "wallet": "Số dư tài khoản",
+      "subscription": "Đăng ký gói",
       "settings": "Cài đặt"
     },
     "dashboard": {
@@ -639,6 +644,8 @@
       "descriptionPlaceholder2": "Ví dụ: Bộ nhớ 128GB",
       "stock": "Kho",
       "priceModifier": "Điều chỉnh giá (₫)",
+      "weight": "Trọng lượng (g)",
+      "weightHint": "Tính bằng gram (g), mặc định 500g",
       "addVariant": "Thêm biến thể",
       "specifications": "Thông số kỹ thuật (Thuộc tính tùy chỉnh)",
       "specificationsHint": "Thêm thuộc tính tùy chỉnh như \"Chất liệu\", \"Xuất xứ\", \"Thương hiệu\", v.v.",
@@ -866,6 +873,99 @@
       "fillRequired": "Vui lòng điền đầy đủ thông tin bắt buộc",
       "selectImageFile": "Vui lòng chọn file ảnh",
       "imageSizeLimit": "Kích thước ảnh phải nhỏ hơn 5MB"
+    },
+    "wallet": {
+      "title": "Doanh Thu",
+      "subtitle": "Quản lý số dư và doanh thu của cửa hàng",
+      "promo": {
+        "title": "Bạn đang tìm kiếm cách để tăng doanh số? Hãy thử dùng Quảng cáo Shopee!",
+        "description": "Trung bình, Quảng cáo Shopee đang giúp những người bán sử dụng quảng cáo thu về 65% về số đơn đặt hàng. Bắt đầu ngay hôm nay để tăng mức độ tiếp xúc và bán hàng, và giúp Shop của bạn phát triển hơn nữa!",
+        "createAd": "Tạo quảng cáo"
+      },
+      "overview": {
+        "title": "Tổng Quan",
+        "note": "Các số dưới đây chưa bao gồm điều chỉnh. Vui lòng tải xuống Báo cáo thu nhập để kiểm tra chi tiết các điều chỉnh liên quan.",
+        "unpaid": "Chưa thanh toán",
+        "paid": "Đã thanh toán",
+        "total": "Tổng cộng",
+        "thisWeek": "Tuần này",
+        "thisMonth": "Tháng này"
+      },
+      "incomeReport": {
+        "title": "Báo cáo thu nhập",
+        "viewMore": "Xem thêm",
+        "download": "Tải xuống"
+      },
+      "details": {
+        "title": "Chi Tiết",
+        "unpaid": "Chưa thanh toán",
+        "paid": "Đã thanh toán",
+        "searchPlaceholder": "Tìm kiếm đơn hàng",
+        "order": "Đơn hàng",
+        "estimatedPaymentDate": "Ngày thanh toán dự kiến",
+        "status": "Trạng thái",
+        "paymentMethod": "Phương thức thanh toán",
+        "unpaidAmount": "Số tiền chưa thanh toán",
+        "paidAmount": "Số tiền đã thanh toán",
+        "buyer": "Người mua",
+        "noEntries": "Không có dữ liệu"
+      }
+    },
+    "subscription": {
+      "title": "Đăng Ký Gói",
+      "subtitle": "Chọn gói subscription phù hợp để tăng doanh số",
+      "currentSubscription": "Gói hiện tại",
+      "activeUntil": "Hoạt động đến",
+      "autoRenew": "Tự động gia hạn",
+      "cancel": "Hủy đăng ký",
+      "cancelConfirm": "Bạn có chắc chắn muốn hủy đăng ký gói này?",
+      "cancelSuccess": "Hủy đăng ký thành công!",
+      "cancelError": "Hủy đăng ký thất bại",
+      "subscribe": "Đăng ký ngay",
+      "subscribeSuccess": "Đăng ký thành công!",
+      "subscribeError": "Đăng ký thất bại",
+      "currentPlan": "Gói hiện tại",
+      "monthly": "Hàng tháng",
+      "yearly": "Hàng năm",
+      "save": "Tiết kiệm",
+      "perMonth": "mỗi tháng",
+      "perYear": "mỗi năm",
+      "popular": "Phổ biến",
+      "features": "Tính năng",
+      "commission": "Phí hoa hồng",
+      "onOrderValue": "trên giá trị đơn hàng",
+      "maxCommission": "Tối đa",
+      "combinedBenefits": "Kết hợp lợi ích của cả 2 gói",
+      "yearlyDiscount": "Tiết kiệm khi đăng ký năm",
+      "freeshipXtra": {
+        "name": "Freeship Xtra",
+        "description": "Miễn phí vận chuyển cho khách hàng, tăng khả năng bán hàng",
+        "feature1": "Miễn phí ship cho tất cả đơn hàng",
+        "feature2": "Tăng tỷ lệ chuyển đổi đơn hàng",
+        "feature3": "Không giới hạn số tiền"
+      },
+      "voucherXtra": {
+        "name": "Voucher Xtra",
+        "description": "Tạo và quản lý voucher giảm giá cho cửa hàng",
+        "feature1": "Tạo voucher không giới hạn",
+        "feature2": "Quản lý voucher dễ dàng",
+        "feature3": "Tối đa 50,000đ/sản phẩm"
+      },
+      "both": {
+        "name": "Cả 2 Gói",
+        "description": "Kết hợp Freeship Xtra và Voucher Xtra để tối đa hóa doanh số",
+        "feature1": "Tất cả tính năng của Freeship Xtra",
+        "feature2": "Tất cả tính năng của Voucher Xtra",
+        "feature3": "Ưu đãi đặc biệt khi đăng ký cả 2"
+      },
+      "commissionInfo": {
+        "title": "Thông tin về phí hoa hồng",
+        "baseCommission": "Phí cơ bản (luôn áp dụng)",
+        "paymentFee": "Phí thanh toán",
+        "fixedFee": "Phí cố định",
+        "subscriptionFee": "Phí gói subscription",
+        "perProduct": "mỗi sản phẩm"
+      }
     }
   }
 }

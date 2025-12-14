@@ -34,6 +34,8 @@ import AnalyticsPage from "./pages/shop-owner/AnalyticsPage.jsx";
 import SettingsPage from "./pages/shop-owner/SettingsPage.jsx";
 import NotificationPage from "./pages/shop-owner/NotificationPage.jsx";
 import ChatPage from "./pages/shop-owner/ChatPage.jsx";
+import WalletPage from "./pages/shop-owner/WalletPage.jsx";
+import SubscriptionPage from "./pages/shop-owner/SubscriptionPage.jsx";
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -105,6 +107,8 @@ export default function App() {
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="chat" element={<ChatPage />} />
                 <Route path="notifications" element={<NotificationPage />} />
+                <Route path="wallet" element={<WalletPage />} />
+                <Route path="subscription" element={<SubscriptionPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="logout" element={<Logout />} />
             </Route>

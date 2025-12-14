@@ -17,6 +17,8 @@ public class Size extends BaseEntity {
     private String description;
     private int stock;
     private double priceModifier;
+    @Builder.Default
+    private Integer weight = 500; // Trọng lượng tính bằng gram (g), mặc định 500g
     
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)

@@ -11,6 +11,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +26,8 @@ public class Order extends BaseEntity {
     private String userId;
     private String addressId;
     private double totalPrice;
+    @Column(name = "shipping_fee", precision = 10, scale = 2)
+    private BigDecimal shippingFee; // Phí ship đã thanh toán trong payment (VNPay) hoặc sẽ thu khi nhận hàng (COD)
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
     @Column(name = "payment_method", length = 20)

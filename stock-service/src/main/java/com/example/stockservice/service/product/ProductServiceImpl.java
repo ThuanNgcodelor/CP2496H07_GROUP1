@@ -133,6 +133,7 @@ public class ProductServiceImpl implements ProductService {
                             .description(sizeRequest.getDescription())
                             .stock(sizeRequest.getStock())
                             .priceModifier(sizeRequest.getPriceModifier())
+                            .weight(sizeRequest.getWeight() != null ? sizeRequest.getWeight() : 500) // Default 500g if not provided
                             .product(savedProduct)
                             .build())
                     .collect(Collectors.toList());
@@ -238,6 +239,7 @@ public class ProductServiceImpl implements ProductService {
                                 .description(sizeRequest.getDescription())
                                 .stock(sizeRequest.getStock())
                                 .priceModifier(sizeRequest.getPriceModifier())
+                                .weight(sizeRequest.getWeight() != null ? sizeRequest.getWeight() : 500) // Default 500g if not provided
                                 .product(toUpdate)
                                 .build())
                         .collect(Collectors.toList());

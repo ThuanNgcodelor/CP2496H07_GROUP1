@@ -5,10 +5,11 @@
 Hệ thống quản lý ví và payout cho shop owners với các tính năng:
 
 - **Trigger**: Chỉ cộng tiền khi order status = COMPLETED (không phải PAID)
-- **Ví riêng**: Mỗi shop có balance riêng
+- **Ví riêng**: Mỗi shop có balance riêng (KHÔNG cần ví cho client)
 - **Commission phức tạp**: Tính theo gói subscription (Freeship Xtra, Voucher Xtra)
 - **Phí phải trả**: Lưu shipping fee và các phí khác, trả xong mới được rút
 - **VNPay chung**: Tất cả tiền về platform account, shop không cần liên kết VNPay
+- **Refund tự động**: Khi hủy order VNPay, tự động refund về tài khoản ngân hàng client (không cần ví client)
 
 ---
 
@@ -575,13 +576,100 @@ GET /v1/admin/ledger/report?startDate=2024-01-01&endDate=2024-01-31
 
 ---
 
+## 🔄 Flow Hủy Đơn Hàng với Refund
+
+### Tình Huống: Client hủy order VNPay đã PAID
+
+**Vấn đề:**
+- Client thanh toán VNPay 100k → Tiền đã bị trừ khỏi tài khoản ngân hàng
+- Payment status = PAID ✅
+- Order status = PENDING ⚠️
+- Client muốn hủy → Cần trả lại tiền
+
+**Giải pháp: KHÔNG CẦN ví cho client!**
+
+### Flow Refund:
+
+```mermaid
+flowchart TD
+    A[Client hủy order PENDING] --> B{Payment Method?}
+    B -->|COD| C[Chỉ rollback stock<br/>Không cần refund]
+    B -->|VNPAY| D{Payment Status?}
+    D -->|PENDING| C
+    D -->|PAID| E[Gọi VNPay Refund API]
+    E --> F[VNPay trả tiền về<br/>tài khoản ngân hàng client]
+    F --> G[Payment Status = REFUNDED]
+    G --> H[Rollback stock]
+    H --> I[Order Status = CANCELLED]
+    
+    style E fill:#ff9800
+    style F fill:#4caf50
+    style I fill:#f44336
+```
+
+### Logic Cancel Order:
+
+```java
+public Order cancelOrder(String orderId, String reason) {
+    Order order = orderRepository.findById(orderId)
+        .orElseThrow(() -> new RuntimeException("Order not found"));
+    
+    // Chỉ cho phép hủy nếu PENDING
+    if (order.getOrderStatus() != OrderStatus.PENDING) {
+        throw new RuntimeException("Cannot cancel order with status: " + order.getOrderStatus());
+    }
+    
+    // Nếu là VNPay và đã PAID → Refund
+    if ("VNPAY".equals(order.getPaymentMethod())) {
+        Payment payment = paymentServiceClient.getPaymentByOrderId(orderId);
+        if (payment != null && payment.getStatus() == PaymentStatus.PAID) {
+            // Gọi refund qua VNPay API
+            refundService.refundPayment(payment.getId(), order.getTotalPrice());
+        }
+    }
+    
+    // Rollback stock
+    rollbackOrderStock(orderId);
+    
+    // Update order status
+    order.setOrderStatus(OrderStatus.CANCELLED);
+    order.setCancelReason(reason);
+    return orderRepository.save(order);
+}
+```
+
+### VNPay Refund API:
+
+**Endpoint:** `https://sandbox.vnpayment.vn/merchant_webapi/merchant.html`
+
+**Parameters:**
+- `vnp_RequestId`: UUID unique
+- `vnp_Version`: "2.1.0"
+- `vnp_Command`: "refund"
+- `vnp_TmnCode`: Merchant code
+- `vnp_TransactionType`: "03" (refund)
+- `vnp_TxnRef`: Transaction reference từ payment
+- `vnp_Amount`: Số tiền refund (x100, vì VNPay dùng xu)
+- `vnp_TransactionDate`: Ngày giao dịch gốc (format: yyyyMMddHHmmss)
+- `vnp_CreateBy`: "admin" hoặc userId
+- `vnp_CreateDate`: Ngày tạo refund (format: yyyyMMddHHmmss)
+- `vnp_IpAddr`: IP address
+- `vnp_SecureHash`: Hash để verify
+
+**Response:**
+- `vnp_ResponseCode`: "00" = thành công
+- `vnp_TransactionStatus`: "00" = refund thành công
+- Tiền sẽ được trả về tài khoản ngân hàng của client (tự động, không cần ví)
+
+---
+
 ## 🚀 Implementation Roadmap
 
-### Phase 1: Database & Models ✅
-- [x] Tạo bảng `shop_subscriptions` trong user-service
-- [x] Tạo bảng `shop_ledger`, `shop_ledger_entry`, `payout_batch` trong order-service
-- [x] Tạo Entity models và DTOs
-- [x] Tạo Repositories
+### Phase 1: Database & Models
+- [ ] Tạo bảng `shop_subscriptions` trong user-service
+- [ ] Tạo bảng `shop_ledger`, `shop_ledger_entry`, `payout_batch` trong order-service
+- [ ] Tạo Entity models và DTOs
+- [ ] Tạo Repositories
 
 ### Phase 2: Commission Calculation Service
 - [ ] Tạo `CommissionCalculatorService`
@@ -610,6 +698,295 @@ GET /v1/admin/ledger/report?startDate=2024-01-01&endDate=2024-01-31
 - [ ] Lưu shipping fee vào `shop_ledger_entry.shipping_fee`
 - [ ] Trừ shipping fee khỏi balance khi tính toán
 - [ ] Chỉ cho phép rút khi đã trả hết shipping fee
+
+### Phase 7: Refund Mechanism (Ưu tiên cao)
+- [ ] Implement VNPay Refund API trong payment-service
+- [ ] Tạo `RefundTransaction` entity để lưu lịch sử refund
+- [ ] Update `cancelOrder()` trong order-service để gọi refund khi cần
+- [ ] Feign client để order-service gọi payment-service refund API
+- [ ] Test refund flow
+
+---
+
+## 📦 Chi Tiết Models
+
+### 1. ShopSubscription (User Service)
+
+**Package:** `com.example.userservice.model`
+
+**Entity:**
+```java
+@Entity
+@Table(name = "shop_subscriptions")
+public class ShopSubscription {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+    
+    @Column(name = "shop_owner_id", nullable = false)
+    private String shopOwnerId;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_type", nullable = false)
+    private SubscriptionType subscriptionType; // FREESHIP_XTRA, VOUCHER_XTRA, BOTH, NONE
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_duration", nullable = false)
+    private PlanDuration planDuration; // MONTHLY, YEARLY
+    
+    @Column(name = "start_date", nullable = false)
+    private LocalDateTime startDate;
+    
+    @Column(name = "end_date", nullable = false)
+    private LocalDateTime endDate;
+    
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+    
+    @Column(name = "auto_renew", nullable = false)
+    private Boolean autoRenew = false;
+    
+    @Column(name = "price", precision = 15, scale = 2)
+    private BigDecimal price = BigDecimal.ZERO;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status")
+    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+    
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+    
+    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
+    private String cancellationReason;
+    
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+    
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+}
+```
+
+**Enum:**
+```java
+public enum SubscriptionType {
+    FREESHIP_XTRA,
+    VOUCHER_XTRA,
+    BOTH,
+    NONE
+}
+
+public enum PlanDuration {
+    MONTHLY,
+    YEARLY
+}
+```
+
+### 2. ShopLedger (Order Service)
+
+**Package:** `com.example.orderservice.model`
+
+**Entity:**
+```java
+@Entity
+@Table(name = "shop_ledger")
+public class ShopLedger extends BaseEntity {
+    @Column(name = "shop_owner_id", unique = true, nullable = false)
+    private String shopOwnerId;
+    
+    @Column(name = "balance_available", precision = 15, scale = 2, nullable = false)
+    private BigDecimal balanceAvailable = BigDecimal.ZERO; // Số dư có thể rút
+    
+    @Column(name = "balance_pending", precision = 15, scale = 2, nullable = false)
+    private BigDecimal balancePending = BigDecimal.ZERO; // Số dư đang chờ (order chưa COMPLETED)
+    
+    @Column(name = "total_earnings", precision = 15, scale = 2, nullable = false)
+    private BigDecimal totalEarnings = BigDecimal.ZERO; // Tổng doanh thu
+    
+    @Column(name = "total_commission", precision = 15, scale = 2, nullable = false)
+    private BigDecimal totalCommission = BigDecimal.ZERO; // Tổng phí đã trừ
+    
+    @Column(name = "total_payouts", precision = 15, scale = 2, nullable = false)
+    private BigDecimal totalPayouts = BigDecimal.ZERO; // Tổng đã rút
+}
+```
+
+### 3. ShopLedgerEntry (Order Service)
+
+**Package:** `com.example.orderservice.model`
+
+**Entity:**
+```java
+@Entity
+@Table(name = "shop_ledger_entry")
+public class ShopLedgerEntry extends BaseEntity {
+    @Column(name = "shop_owner_id", nullable = false)
+    private String shopOwnerId;
+    
+    @Column(name = "order_id")
+    private String orderId; // nullable
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entry_type", nullable = false)
+    private LedgerEntryType entryType; // EARNING, PAYOUT, ADJUST, FEE_DEDUCTION
+    
+    @Column(name = "amount_gross", precision = 15, scale = 2)
+    private BigDecimal amountGross = BigDecimal.ZERO; // Tổng tiền order
+    
+    @Column(name = "commission_payment", precision = 15, scale = 2)
+    private BigDecimal commissionPayment = BigDecimal.ZERO; // Phí thanh toán (4%)
+    
+    @Column(name = "commission_fixed", precision = 15, scale = 2)
+    private BigDecimal commissionFixed = BigDecimal.ZERO; // Phí cố định (4%)
+    
+    @Column(name = "commission_freeship", precision = 15, scale = 2)
+    private BigDecimal commissionFreeship = BigDecimal.ZERO; // Phí Freeship Xtra (8%)
+    
+    @Column(name = "commission_voucher", precision = 15, scale = 2)
+    private BigDecimal commissionVoucher = BigDecimal.ZERO; // Phí Voucher Xtra (5%)
+    
+    @Column(name = "commission_total", precision = 15, scale = 2)
+    private BigDecimal commissionTotal = BigDecimal.ZERO; // Tổng commission
+    
+    @Column(name = "amount_net", precision = 15, scale = 2)
+    private BigDecimal amountNet = BigDecimal.ZERO; // Tiền shop nhận (gross - commission)
+    
+    @Column(name = "shipping_fee", precision = 15, scale = 2)
+    private BigDecimal shippingFee = BigDecimal.ZERO; // Phí ship phải trả
+    
+    @Column(name = "other_fees", precision = 15, scale = 2)
+    private BigDecimal otherFees = BigDecimal.ZERO; // Các phí khác
+    
+    @Column(name = "balance_before", precision = 15, scale = 2)
+    private BigDecimal balanceBefore = BigDecimal.ZERO; // Số dư trước
+    
+    @Column(name = "balance_after", precision = 15, scale = 2)
+    private BigDecimal balanceAfter = BigDecimal.ZERO; // Số dư sau
+    
+    @Column(name = "ref_txn", unique = true, nullable = false, length = 255)
+    private String refTxn; // Transaction reference (orderId + shopOwnerId)
+    
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+}
+```
+
+**Enum:**
+```java
+public enum LedgerEntryType {
+    EARNING,      // Cộng tiền từ order COMPLETED
+    PAYOUT,       // Rút tiền
+    ADJUST,       // Điều chỉnh (admin)
+    FEE_DEDUCTION // Trừ phí
+}
+```
+
+### 4. PayoutBatch (Order Service)
+
+**Package:** `com.example.orderservice.model`
+
+**Entity:**
+```java
+@Entity
+@Table(name = "payout_batch")
+public class PayoutBatch extends BaseEntity {
+    @Column(name = "shop_owner_id", nullable = false)
+    private String shopOwnerId;
+    
+    @Column(name = "amount", precision = 15, scale = 2, nullable = false)
+    private BigDecimal amount;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private PayoutStatus status = PayoutStatus.PENDING; // PENDING, PROCESSING, COMPLETED, FAILED
+    
+    @Column(name = "bank_account_number", length = 50, nullable = false)
+    private String bankAccountNumber;
+    
+    @Column(name = "bank_name", length = 100, nullable = false)
+    private String bankName;
+    
+    @Column(name = "account_holder_name", length = 255, nullable = false)
+    private String accountHolderName;
+    
+    @Column(name = "transaction_ref", unique = true, nullable = false, length = 255)
+    private String transactionRef; // Unique transaction reference
+    
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
+    
+    @Column(name = "failure_reason", columnDefinition = "TEXT")
+    private String failureReason;
+}
+```
+
+**Enum:**
+```java
+public enum PayoutStatus {
+    PENDING,    // Chờ xử lý
+    PROCESSING, // Đang xử lý
+    COMPLETED,  // Hoàn thành
+    FAILED      // Thất bại
+}
+```
+
+### 5. RefundTransaction (Payment Service) - MỚI
+
+**Package:** `com.example.paymentservice.model`
+
+**Entity:**
+```java
+@Entity
+@Table(name = "refund_transactions")
+public class RefundTransaction extends BaseEntity {
+    @Column(name = "payment_id", nullable = false)
+    private String paymentId; // FK to Payment
+    
+    @Column(name = "order_id")
+    private String orderId; // FK to Order
+    
+    @Column(name = "amount", precision = 15, scale = 2, nullable = false)
+    private BigDecimal amount; // Số tiền refund
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private RefundStatus status = RefundStatus.PENDING; // PENDING, PROCESSING, COMPLETED, FAILED
+    
+    @Column(name = "vnpay_request_id", length = 100)
+    private String vnpayRequestId; // vnp_RequestId từ VNPay
+    
+    @Column(name = "vnpay_response_code", length = 10)
+    private String vnpayResponseCode; // Response code từ VNPay
+    
+    @Column(name = "vnpay_transaction_status", length = 10)
+    private String vnpayTransactionStatus; // Transaction status từ VNPay
+    
+    @Column(name = "refund_reason", columnDefinition = "TEXT")
+    private String refundReason; // Lý do refund
+    
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
+    
+    @Column(name = "failure_reason", columnDefinition = "TEXT")
+    private String failureReason;
+    
+    @Lob
+    @Column(name = "vnpay_response", columnDefinition = "TEXT")
+    private String vnpayResponse; // Raw response từ VNPay
+}
+```
+
+**Enum:**
+```java
+public enum RefundStatus {
+    PENDING,    // Chờ xử lý
+    PROCESSING, // Đang xử lý
+    COMPLETED,  // Hoàn thành
+    FAILED      // Thất bại
+}
+```
 
 ---
 

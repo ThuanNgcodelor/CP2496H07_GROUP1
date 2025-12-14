@@ -27,7 +27,8 @@ export default function AddProductPage() {
                 name: '',
                 description: '',
                 stock: '',
-                priceModifier: ''
+                priceModifier: '',
+                weight: '500' // Default 500g
             }
         ],
         images: []
@@ -116,8 +117,9 @@ export default function AddProductPage() {
                         name: s.name || '',
                         description: s.description || '',
                         stock: s.stock != null ? String(s.stock) : '',
-                        priceModifier: s.priceModifier != null ? String(s.priceModifier) : ''
-                    })) : [{ name: '', description: '', stock: '', priceModifier: '' }],
+                        priceModifier: s.priceModifier != null ? String(s.priceModifier) : '',
+                        weight: s.weight != null ? String(s.weight) : '500'
+                    })) : [{ name: '', description: '', stock: '', priceModifier: '', weight: '500' }],
                     images: [],
                     attributes: data.attributes || {}
                 });
@@ -202,7 +204,8 @@ export default function AddProductPage() {
                     name: '',
                     description: '',
                     stock: '',
-                    priceModifier: ''
+                    priceModifier: '',
+                    weight: '500' // Default 500g
                 }
             ]
         }));
@@ -319,7 +322,8 @@ export default function AddProductPage() {
                 name: size.name,
                 description: size.description || '',
                 stock: parseInt(size.stock) || 0,
-                priceModifier: parseFloat(size.priceModifier) || 0
+                priceModifier: parseFloat(size.priceModifier) || 0,
+                weight: parseInt(size.weight) || 500 // Default 500g if not provided
             }));
 
             const attributesMap = {};
@@ -518,7 +522,7 @@ export default function AddProductPage() {
                                             </div>
                                         </div>
                                         <div className="row">
-                                            <div className="col-md-6">
+                                            <div className="col-md-4">
                                                 <div className="mb-3">
                                                     <label className="form-label">{t('shopOwner.addProduct.stock')} <span style={{ color: 'red' }}>*</span></label>
                                                     <input
@@ -531,7 +535,7 @@ export default function AddProductPage() {
                                                     />
                                                 </div>
                                             </div>
-                                            <div className="col-md-6">
+                                            <div className="col-md-4">
                                                 <div className="mb-3">
                                                     <label className="form-label">{t('shopOwner.addProduct.priceModifier')}</label>
                                                     <input
@@ -542,6 +546,21 @@ export default function AddProductPage() {
                                                         placeholder="0"
                                                         step="1000"
                                                     />
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4">
+                                                <div className="mb-3">
+                                                    <label className="form-label">{t('shopOwner.addProduct.weight')} <span style={{ color: 'red' }}>*</span></label>
+                                                    <input
+                                                        type="number"
+                                                        className="form-control"
+                                                        value={size.weight || '500'}
+                                                        onChange={(e) => handleSizeChange(index, 'weight', e.target.value)}
+                                                        placeholder="500"
+                                                        min="1"
+                                                        step="1"
+                                                    />
+                                                    <small className="text-muted">{t('shopOwner.addProduct.weightHint')}</small>
                                                 </div>
                                             </div>
                                         </div>
