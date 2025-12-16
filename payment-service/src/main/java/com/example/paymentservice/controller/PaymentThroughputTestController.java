@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * ✅ PAYMENT THROUGHPUT TEST CONTROLLER
+ * PAYMENT THROUGHPUT TEST CONTROLLER
  * 
  * Controller để test throughput của Payment Service
  * Gửi JSON request → Tự động tạo payment requests → Trả về kết quả

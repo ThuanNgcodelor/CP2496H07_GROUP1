@@ -1,111 +1,122 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import logoLight from '../../../assets/images/logo.png';
+import "../../../assets/admin/css/Sidebar.css"
 
 const Sidebar = () => {
-  const location = useLocation();
+    const location = useLocation();
+    const [isDesignOpen, setIsDesignOpen] = useState(false);
 
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
+    const isActive = (path) => {
+        return location.pathname === path;
+    };
 
-  const isCollapseActive = (paths) => {
-    return paths.some((path) => location.pathname.startsWith(path));
-  };
+    const isDropdownActive = (paths) => {
+        return paths.some((path) => location.pathname === path);
+    };
 
-  return (
-    <ul className="navbar-nav sidebar accordion" id="accordionSidebar">
-      <Link className="sidebar-brand d-flex align-items-center justify-content-center" to="/admin">
-        <img className="logo-main" src={logoLight} width="153" height="30" alt="Logo" />
-      </Link>
+    const toggleDesign = () => {
+        setIsDesignOpen(!isDesignOpen);
+    };
 
-      <hr className="sidebar-divider my-0" />
+    return (
+        <ul className="sidebar-ezmart">
+            {/* Brand */}
+            <Link className="sidebar-brand-ezmart" to="/admin">
+                <div className="brand-icon">
+                    <i className="fas fa-th"></i>
+                </div>
+                <span className="brand-text">EzMart</span>
+            </Link>
 
-      <li className="nav-item">
-        <Link
-          className={`nav-link ${isActive("/admin") ? "active" : ""}`}
-          to="/admin"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-tachometer-alt" style={{ color: '#1D3557' }}></i>
-          <span>Dashboard</span>
-        </Link>
-      </li>
+            {/* Dashboard */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className={`nav-link-ezmart ${isActive("/admin") ? "active" : ""}`}
+                    to="/admin"
+                >
+                    <i className="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </Link>
+            </li>
 
-      <hr className="sidebar-divider" />
+            {/* User */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className={`nav-link-ezmart ${isActive("/admin/tables/datatables") ? "active" : ""}`}
+                    to="/admin/tables/datatables"
+                >
+                    <i className="fas fa-users"></i>
+                    <span>User</span>
+                </Link>
+            </li>
 
-      <div className="sidebar-heading" style={{ color: '#1D3557' }}>Manager</div>
+            {/* Shop Owner */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className={`nav-link-ezmart ${isActive("/admin/shop-owners") ? "active" : ""}`}
+                    to="/admin/shop-owners"
+                >
+                    <i className="fas fa-store"></i>
+                    <span>Shop Owner</span>
+                </Link>
+            </li>
 
-      <li className={`nav-item ${isCollapseActive(["/admin/tables"]) ? "active" : ""}`}>
-        <Link
-          className={`nav-link collapsed ${isActive("/admin/orders") ? "active" : ""}`}
-          to="/admin/orders"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-box" style={{ color: '#1D3557' }}></i>
-          <span>Orders</span>
-        </Link>
-        <Link
-          className={`nav-link collapsed ${isActive("/admin/tables/datatables") ? "active" : ""}`}
-          to="/admin/tables/datatables"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-users" style={{ color: '#1D3557' }}></i>
-          <span>Users</span>
-        </Link>
-        <Link
-          className={`nav-link collapsed ${isActive("/admin/categories") ? "active" : ""}`}
-          to="/admin/categories"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-th-large" style={{ color: '#1D3557' }}></i>
-          <span>Categories</span>
-        </Link>
-        <Link
-          className={`nav-link collapsed ${isActive("/admin/role-request") ? "active" : ""}`}
-          to="/admin/role-request"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-clipboard-list" style={{ color: '#1D3557' }}></i>
-          <span>Role Requests</span>
-        </Link>
-        <Link
-          className={`nav-link collapsed ${isActive("/admin/products") ? "active" : ""}`}
-          to="/admin/products"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-cogs" style={{ color: '#1D3557' }}></i>
-          <span>Products</span>
-        </Link>
-      </li>
+            {/* Role Request */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className={`nav-link-ezmart ${isActive("/admin/role-request") ? "active" : ""}`}
+                    to="/admin/role-request"
+                >
+                    <i className="fas fa-clipboard-list"></i>
+                    <span>Role Request</span>
+                </Link>
+            </li>
 
-      <hr className="sidebar-divider" />
+            {/* Design - Dropdown */}
+            <li className="nav-item-dropdown">
+                <button
+                    className={`dropdown-toggle-ezmart ${isDropdownActive(["/admin/banner"]) ? "active" : ""} ${isDesignOpen ? "open" : ""}`}
+                    onClick={toggleDesign}
+                >
+                    <div className="left-content">
+                        <i className="fas fa-palette icon"></i>
+                        <span>Design</span>
+                    </div>
+                    <i className="fas fa-chevron-down arrow"></i>
+                </button>
+                <div className={`dropdown-menu-ezmart ${isDesignOpen ? "open" : ""}`}>
+                    <Link
+                        className={`dropdown-item-ezmart ${isActive("/admin/banner") ? "active" : ""}`}
+                        to="/admin/banner"
+                    >
+                        Banner
+                    </Link>
+                </div>
+            </li>
 
-      <div className="sidebar-heading" style={{ color: '#1D3557' }}>Utilities</div>
-      <li className="nav-item">
-        <Link
-          className="nav-link"
-          to="/admin/charts"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-chart-line" style={{ color: '#1D3557' }}></i>
-          <span>Charts</span>
-        </Link>
-      </li>
-      <li className="nav-item">
-        <Link
-          className="nav-link"
-          to="/admin/logout"
-          style={{ color: '#1D3557' }}
-        >
-          <i className="fas fa-fw fa-sign-out-alt" style={{ color: '#1D3557' }}></i>
-          <span>Logout</span>
-        </Link>
-      </li>
+            {/* Voucher */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className={`nav-link-ezmart ${isActive("/admin/voucher") ? "active" : ""}`}
+                    to="/admin/voucher"
+                >
+                    <i className="fas fa-ticket-alt"></i>
+                    <span>Voucher</span>
+                </Link>
+            </li>
 
-      <hr className="sidebar-divider" />
-    </ul>
-  );
+            {/* Logout */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className="nav-link-ezmart"
+                    to="/admin/logout"
+                >
+                    <i className="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </Link>
+            </li>
+        </ul>
+    );
 };
 
 export default Sidebar;

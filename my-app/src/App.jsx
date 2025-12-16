@@ -36,6 +36,9 @@ import NotificationPage from "./pages/shop-owner/NotificationPage.jsx";
 import ChatPage from "./pages/shop-owner/ChatPage.jsx";
 import WalletPage from "./pages/shop-owner/WalletPage.jsx";
 import SubscriptionPage from "./pages/shop-owner/SubscriptionPage.jsx";
+import VoucherManagementPage from "./pages/admin/VoucherManagementPage.jsx";
+import BannerManagementPage from "./pages/admin/BannerManagementPage.jsx";
+import ShopOwnerManagementPage from "./pages/admin/ShopOwnerManagementPage.jsx";
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -69,24 +72,35 @@ export default function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/shop/:userId" element={<ShopDetailPage />} />
+
+
+
           {/* Admin routes */}
-          <Route
-            path="/admin/*"
-            element={
-              <ProtectedRoute allowedRoles={["ROLE_ADMIN"]}>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<AdminDashboard />} />
-            <Route path="tables/datatables" element={<DataTablesPage />} />
-            <Route path="orders" element={<OrdersPage />} />
-            <Route path="categories" element={<CategoriesPage />} />
-            <Route path="role-request" element={<RolesPage />} />
-            <Route path="charts" element={<ChartAdmin />} />
-            <Route path="products" element={<ProductsPage />} />
-            <Route path="logout" element={<Logout />} />
-          </Route>
+            {/* Admin routes */}
+            <Route
+                path="/admin/*"
+                element={
+                    <ProtectedRoute allowedRoles={["ROLE_ADMIN"]}>
+                        <AdminLayout />
+                    </ProtectedRoute>
+                }
+            >
+                <Route index element={<AdminDashboard />} />
+                <Route path="tables/datatables" element={<DataTablesPage />} />
+                {/* <Route path="orders" element={<OrdersPage />} />
+                <Route path="categ  ories" element={<CategoriesPage />} /> */}
+                <Route path="role-request" element={<RolesPage />} />
+                {/* <Route path="charts" element={<ChartAdmin />} />
+                <Route path="products" element={<ProductsPage />} /> */}
+                <Route path="shop-owners" element={<ShopOwnerManagementPage />} />
+                <Route path="banner" element={<BannerManagementPage />} />
+                <Route path="voucher" element={<VoucherManagementPage />} />
+                <Route path="logout" element={<Logout />} />
+            </Route>
+
+
+
+
           {/* Shop Owner routes */}
             {/* Shop Owner routes */}
             <Route
