@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface ShopSubscriptionRepository extends JpaRepository<ShopSubscription, String> {
     Optional<ShopSubscription> findByShopOwnerIdAndIsActiveTrue(String shopOwnerId);
-    List<ShopSubscription> findByShopOwnerIdOrderByCreatedAtDesc(String shopOwnerId);
+    List<ShopSubscription> findByShopOwnerIdOrderByCreationTimestampDesc(String shopOwnerId);
     List<ShopSubscription> findByIsActiveTrueAndEndDateBefore(LocalDateTime date);
     List<ShopSubscription> findBySubscriptionTypeAndIsActiveTrue(SubscriptionType subscriptionType);
 }

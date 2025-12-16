@@ -1,5 +1,6 @@
 package com.example.orderservice.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
@@ -20,8 +21,10 @@ public abstract class BaseEntity implements Serializable {
     private String id;
 
     @CreationTimestamp
-    private LocalDateTime creationTimestamp;
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    private LocalDateTime updateTimestamp;
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 }

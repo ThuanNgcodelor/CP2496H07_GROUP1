@@ -17,7 +17,7 @@ public class OrderDto {
     private String recipientPhone;
     private String fullAddress;
     private String paymentMethod;
-    private LocalDateTime creationTimestamp;
+    private LocalDateTime createdAt;
     private LocalDateTime updateTimestamp;
     private List<OrderItemDto> orderItems;
 

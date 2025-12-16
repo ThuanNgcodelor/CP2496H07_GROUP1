@@ -94,8 +94,8 @@ Shop nhận: 840,000 VNĐ (đã trừ shipping fee gián tiếp qua commission)
 - Có giới hạn tối đa: 50,000 VNĐ/sản phẩm
 - Chỉ tính phí cho sản phẩm được áp dụng voucher
 - Nếu voucher giảm 100,000 VNĐ cho sản phẩm 1,000,000 VNĐ:
-  - Phí = 1,000,000 × 5% = 50,000 VNĐ (đạt max)
-  - Không tính thêm nếu vượt max
+    - Phí = 1,000,000 × 5% = 50,000 VNĐ (đạt max)
+    - Không tính thêm nếu vượt max
 
 **Ví dụ 1: Sản phẩm 500,000 VNĐ, voucher 10%**
 ```
@@ -153,32 +153,98 @@ Shop nhận: 810,000 VNĐ
 
 ## 🗄️ Database Schema
 
-### 1. shop_subscriptions (User Service)
+### 1. subscription_plans (User Service - Admin quản lý catalog)
 
-Lưu gói subscription của shop:
+Lưu danh mục gói, để UI không phải hardcode:
+
+```sql
+CREATE TABLE subscription_plans (
+    id VARCHAR(36) PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,                         -- FREESHIP_XTRA, VOUCHER_XTRA, BOTH...
+    name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    subscription_type ENUM('FREESHIP_XTRA', 'VOUCHER_XTRA', 'BOTH') NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    display_order INT DEFAULT 0,
+    color_hex VARCHAR(10) NULL,                              -- dùng cho UI nếu muốn
+    icon VARCHAR(100) NULL,
+    commission_payment_rate DECIMAL(5,4) DEFAULT 0.0400,     -- 4%
+    commission_fixed_rate DECIMAL(5,4) DEFAULT 0.0400,       -- 4%
+    commission_freeship_rate DECIMAL(5,4) DEFAULT 0.0800,    -- 8%
+    commission_voucher_rate DECIMAL(5,4) DEFAULT 0.0500,     -- 5%
+    voucher_max_per_item DECIMAL(15,2) DEFAULT 50000,
+    freeship_enabled BOOLEAN DEFAULT FALSE,
+    voucher_enabled BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### 2. subscription_plan_pricing (tùy chọn - giá theo kỳ)
+
+```sql
+CREATE TABLE subscription_plan_pricing (
+    id VARCHAR(36) PRIMARY KEY,
+    plan_id VARCHAR(36) NOT NULL,
+    plan_duration ENUM('MONTHLY', 'YEARLY') NOT NULL,
+    price DECIMAL(15,2) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id),
+    UNIQUE KEY uk_plan_duration (plan_id, plan_duration)
+);
+```
+
+### 3. subscription_plan_feature (tùy chọn - bullet hiển thị UI)
+
+```sql
+CREATE TABLE subscription_plan_feature (
+    id VARCHAR(36) PRIMARY KEY,
+    plan_id VARCHAR(36) NOT NULL,
+    feature_text VARCHAR(255) NOT NULL,
+    display_order INT DEFAULT 0,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id)
+);
+```
+
+### 4. shop_subscriptions (User Service - lưu lượt mua)
+
+Mỗi record là một lần đăng ký của shop; lưu snapshot để không bị đổi khi catalog thay đổi:
 
 ```sql
 CREATE TABLE shop_subscriptions (
     id VARCHAR(36) PRIMARY KEY,
     shop_owner_id VARCHAR(36) NOT NULL,
+    plan_id VARCHAR(36) NOT NULL,
+    plan_code VARCHAR(50) NOT NULL,
     subscription_type ENUM('FREESHIP_XTRA', 'VOUCHER_XTRA', 'BOTH', 'NONE') NOT NULL,
     plan_duration ENUM('MONTHLY', 'YEARLY') NOT NULL,
+    price_paid DECIMAL(15,2) DEFAULT 0,
     start_date TIMESTAMP NOT NULL,
     end_date TIMESTAMP NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     auto_renew BOOLEAN DEFAULT FALSE,
-    price DECIMAL(15,2) DEFAULT 0,
     payment_status ENUM('PAID', 'PENDING', 'EXPIRED') DEFAULT 'PENDING',
+    -- snapshot commission để tính phí đúng theo thời điểm mua
+    commission_payment_rate DECIMAL(5,4) DEFAULT 0.0400,
+    commission_fixed_rate DECIMAL(5,4) DEFAULT 0.0400,
+    commission_freeship_rate DECIMAL(5,4) DEFAULT 0.0800,
+    commission_voucher_rate DECIMAL(5,4) DEFAULT 0.0500,
+    voucher_max_per_item DECIMAL(15,2) DEFAULT 50000,
+    freeship_enabled BOOLEAN DEFAULT FALSE,
+    voucher_enabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     cancelled_at TIMESTAMP NULL,
     cancellation_reason TEXT NULL,
     FOREIGN KEY (shop_owner_id) REFERENCES shop_owners(user_id),
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id),
     INDEX idx_shop_owner_active (shop_owner_id, is_active)
 );
 ```
 
-### 2. shop_ledger (Order Service)
+### 5. shop_ledger (Order Service)
 
 Ví của mỗi shop:
 
@@ -197,7 +263,7 @@ CREATE TABLE shop_ledger (
 );
 ```
 
-### 3. shop_ledger_entry (Order Service)
+### 6. shop_ledger_entry (Order Service)
 
 Lịch sử giao dịch:
 
@@ -231,7 +297,7 @@ CREATE TABLE shop_ledger_entry (
 );
 ```
 
-### 4. payout_batch (Order Service)
+### 7. payout_batch (Order Service)
 
 Lịch sử rút tiền:
 
@@ -253,6 +319,84 @@ CREATE TABLE payout_batch (
     INDEX idx_shop_owner (shop_owner_id),
     INDEX idx_status (status),
     INDEX idx_created_at (created_at)
+);
+```
+
+### 8. Vouchers
+
+#### 8.1 shop_vouchers (voucher do shop tạo khi có gói Voucher Xtra)
+
+```sql
+CREATE TABLE shop_vouchers (
+    id VARCHAR(36) PRIMARY KEY,
+    shop_owner_id VARCHAR(36) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    discount_type ENUM('PERCENT', 'FIXED') NOT NULL,
+    discount_value DECIMAL(15,2) NOT NULL,
+    max_discount_amount DECIMAL(15,2) NULL,
+    min_order_value DECIMAL(15,2) NULL,
+    start_at TIMESTAMP NOT NULL,
+    end_at TIMESTAMP NOT NULL,
+    quantity_total INT DEFAULT 0,
+    quantity_used INT DEFAULT 0,
+    status ENUM('ACTIVE', 'INACTIVE', 'EXPIRED') DEFAULT 'ACTIVE',
+    applicable_scope ENUM('ALL_PRODUCTS', 'SELECTED_PRODUCTS', 'CATEGORIES') DEFAULT 'ALL_PRODUCTS',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_owner_id) REFERENCES shop_owners(user_id),
+    UNIQUE KEY uk_shop_code (shop_owner_id, code)
+);
+```
+
+#### 8.2 platform_vouchers (voucher chung toàn sàn)
+
+```sql
+CREATE TABLE platform_vouchers (
+    id VARCHAR(36) PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    discount_type ENUM('PERCENT', 'FIXED') NOT NULL,
+    discount_value DECIMAL(15,2) NOT NULL,
+    max_discount_amount DECIMAL(15,2) NULL,
+    min_order_value DECIMAL(15,2) NULL,
+    start_at TIMESTAMP NOT NULL,
+    end_at TIMESTAMP NOT NULL,
+    quantity_total INT DEFAULT 0,
+    quantity_used INT DEFAULT 0,
+    status ENUM('ACTIVE', 'INACTIVE', 'EXPIRED') DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+#### 8.3 voucher_applicability (tuỳ chọn, ánh xạ phạm vi)
+
+```sql
+CREATE TABLE voucher_applicability (
+    id VARCHAR(36) PRIMARY KEY,
+    voucher_id VARCHAR(36) NOT NULL, -- shop_vouchers.id hoặc platform_vouchers.id
+    voucher_type ENUM('SHOP', 'PLATFORM') NOT NULL,
+    product_id VARCHAR(36) NULL,
+    category_id VARCHAR(36) NULL,
+    UNIQUE KEY uk_scope (voucher_id, voucher_type, product_id, category_id)
+);
+```
+
+#### 8.4 voucher_usage (log áp dụng, idempotent)
+
+```sql
+CREATE TABLE voucher_usage (
+    id VARCHAR(36) PRIMARY KEY,
+    voucher_id VARCHAR(36) NOT NULL,
+    voucher_type ENUM('SHOP', 'PLATFORM') NOT NULL,
+    order_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    amount_discount DECIMAL(15,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_voucher_order (voucher_id, voucher_type, order_id)
 );
 ```
 
@@ -710,81 +854,209 @@ public Order cancelOrder(String orderId, String reason) {
 
 ## 📦 Chi Tiết Models
 
-### 1. ShopSubscription (User Service)
+### A. User Service
 
-**Package:** `com.example.userservice.model`
-
-**Entity:**
+#### 1) SubscriptionPlan (catalog gói)
 ```java
 @Entity
-@Table(name = "shop_subscriptions")
-public class ShopSubscription {
+@Table(name = "subscription_plans")
+public class SubscriptionPlan extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    
-    @Column(name = "shop_owner_id", nullable = false)
-    private String shopOwnerId;
-    
+
+    @Column(name = "code", unique = true, nullable = false, length = 50)
+    private String code; // FREESHIP_XTRA, VOUCHER_XTRA, BOTH...
+
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    @Column(name = "description")
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_type", nullable = false)
-    private SubscriptionType subscriptionType; // FREESHIP_XTRA, VOUCHER_XTRA, BOTH, NONE
-    
+    private SubscriptionType subscriptionType; // FREESHIP_XTRA, VOUCHER_XTRA, BOTH
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    @Column(name = "display_order")
+    private Integer displayOrder = 0;
+
+    @Column(name = "color_hex")
+    private String colorHex;
+
+    @Column(name = "icon")
+    private String icon;
+
+    // default commission settings
+    @Column(name = "commission_payment_rate", precision = 5, scale = 4)
+    private BigDecimal commissionPaymentRate; // 0.04
+
+    @Column(name = "commission_fixed_rate", precision = 5, scale = 4)
+    private BigDecimal commissionFixedRate; // 0.04
+
+    @Column(name = "commission_freeship_rate", precision = 5, scale = 4)
+    private BigDecimal commissionFreeshipRate; // 0.08
+
+    @Column(name = "commission_voucher_rate", precision = 5, scale = 4)
+    private BigDecimal commissionVoucherRate; // 0.05
+
+    @Column(name = "voucher_max_per_item", precision = 15, scale = 2)
+    private BigDecimal voucherMaxPerItem; // 50000
+
+    @Column(name = "freeship_enabled")
+    private Boolean freeshipEnabled = false;
+
+    @Column(name = "voucher_enabled")
+    private Boolean voucherEnabled = false;
+}
+```
+
+#### 2) SubscriptionPlanPricing (giá theo kỳ)
+```java
+@Entity
+@Table(name = "subscription_plan_pricing",
+       uniqueConstraints = @UniqueConstraint(name = "uk_plan_duration", columnNames = {"plan_id", "plan_duration"}))
+public class SubscriptionPlanPricing extends BaseEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plan_id", nullable = false)
+    private SubscriptionPlan plan;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_duration", nullable = false)
     private PlanDuration planDuration; // MONTHLY, YEARLY
-    
-    @Column(name = "start_date", nullable = false)
-    private LocalDateTime startDate;
-    
-    @Column(name = "end_date", nullable = false)
-    private LocalDateTime endDate;
-    
+
+    @Column(name = "price", precision = 15, scale = 2, nullable = false)
+    private BigDecimal price;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
-    
+}
+```
+
+#### 3) SubscriptionPlanFeature (bullet hiển thị)
+```java
+@Entity
+@Table(name = "subscription_plan_feature")
+public class SubscriptionPlanFeature extends BaseEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plan_id", nullable = false)
+    private SubscriptionPlan plan;
+
+    @Column(name = "feature_text", nullable = false)
+    private String featureText;
+
+    @Column(name = "display_order")
+    private Integer displayOrder = 0;
+}
+```
+
+#### 4) ShopSubscription (lượt mua, có snapshot)
+```java
+@Entity
+@Table(name = "shop_subscriptions", indexes = {
+    @Index(name = "idx_shop_owner_active", columnList = "shop_owner_id, is_active")
+})
+public class ShopSubscription extends BaseEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @Column(name = "shop_owner_id", nullable = false)
+    private String shopOwnerId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plan_id", nullable = false)
+    private SubscriptionPlan plan;
+
+    @Column(name = "plan_code", nullable = false, length = 50)
+    private String planCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_type", nullable = false)
+    private SubscriptionType subscriptionType; // FREESHIP_XTRA, VOUCHER_XTRA, BOTH, NONE
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_duration", nullable = false)
+    private PlanDuration planDuration; // MONTHLY, YEARLY
+
+    @Column(name = "price_paid", precision = 15, scale = 2)
+    private BigDecimal pricePaid = BigDecimal.ZERO;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDateTime startDate;
+
+    @Column(name = "end_date", nullable = false)
+    private LocalDateTime endDate;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @Column(name = "auto_renew", nullable = false)
     private Boolean autoRenew = false;
-    
-    @Column(name = "price", precision = 15, scale = 2)
-    private BigDecimal price = BigDecimal.ZERO;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status")
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
-    
+
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
-    
+
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
-    
+
+    // snapshot commission at purchase time
+    @Column(name = "commission_payment_rate", precision = 5, scale = 4)
+    private BigDecimal commissionPaymentRate; // 0.04
+
+    @Column(name = "commission_fixed_rate", precision = 5, scale = 4)
+    private BigDecimal commissionFixedRate; // 0.04
+
+    @Column(name = "commission_freeship_rate", precision = 5, scale = 4)
+    private BigDecimal commissionFreeshipRate; // 0.08
+
+    @Column(name = "commission_voucher_rate", precision = 5, scale = 4)
+    private BigDecimal commissionVoucherRate; // 0.05
+
+    @Column(name = "voucher_max_per_item", precision = 15, scale = 2)
+    private BigDecimal voucherMaxPerItem; // 50000
+
+    @Column(name = "freeship_enabled")
+    private Boolean freeshipEnabled = false;
+
+    @Column(name = "voucher_enabled")
+    private Boolean voucherEnabled = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
-    
+
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }
 ```
 
-**Enum:**
+#### Enum dùng chung (User Service)
 ```java
-public enum SubscriptionType {
-    FREESHIP_XTRA,
-    VOUCHER_XTRA,
-    BOTH,
-    NONE
-}
-
-public enum PlanDuration {
-    MONTHLY,
-    YEARLY
-}
+public enum SubscriptionType { FREESHIP_XTRA, VOUCHER_XTRA, BOTH, NONE }
+public enum PlanDuration { MONTHLY, YEARLY }
+public enum PaymentStatus { PAID, PENDING, EXPIRED }
 ```
 
-### 2. ShopLedger (Order Service)
+### B. Order Service
+
+#### 1) ShopLedger
 
 **Package:** `com.example.orderservice.model`
 
@@ -795,197 +1067,330 @@ public enum PlanDuration {
 public class ShopLedger extends BaseEntity {
     @Column(name = "shop_owner_id", unique = true, nullable = false)
     private String shopOwnerId;
-    
+
     @Column(name = "balance_available", precision = 15, scale = 2, nullable = false)
     private BigDecimal balanceAvailable = BigDecimal.ZERO; // Số dư có thể rút
-    
+
     @Column(name = "balance_pending", precision = 15, scale = 2, nullable = false)
     private BigDecimal balancePending = BigDecimal.ZERO; // Số dư đang chờ (order chưa COMPLETED)
-    
+
     @Column(name = "total_earnings", precision = 15, scale = 2, nullable = false)
     private BigDecimal totalEarnings = BigDecimal.ZERO; // Tổng doanh thu
-    
+
     @Column(name = "total_commission", precision = 15, scale = 2, nullable = false)
     private BigDecimal totalCommission = BigDecimal.ZERO; // Tổng phí đã trừ
-    
+
     @Column(name = "total_payouts", precision = 15, scale = 2, nullable = false)
     private BigDecimal totalPayouts = BigDecimal.ZERO; // Tổng đã rút
 }
 ```
 
-### 3. ShopLedgerEntry (Order Service)
-
-**Package:** `com.example.orderservice.model`
-
-**Entity:**
+#### 2) ShopLedgerEntry
 ```java
 @Entity
 @Table(name = "shop_ledger_entry")
 public class ShopLedgerEntry extends BaseEntity {
     @Column(name = "shop_owner_id", nullable = false)
     private String shopOwnerId;
-    
+
     @Column(name = "order_id")
     private String orderId; // nullable
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "entry_type", nullable = false)
     private LedgerEntryType entryType; // EARNING, PAYOUT, ADJUST, FEE_DEDUCTION
-    
+
     @Column(name = "amount_gross", precision = 15, scale = 2)
     private BigDecimal amountGross = BigDecimal.ZERO; // Tổng tiền order
-    
+
     @Column(name = "commission_payment", precision = 15, scale = 2)
     private BigDecimal commissionPayment = BigDecimal.ZERO; // Phí thanh toán (4%)
-    
+
     @Column(name = "commission_fixed", precision = 15, scale = 2)
     private BigDecimal commissionFixed = BigDecimal.ZERO; // Phí cố định (4%)
-    
+
     @Column(name = "commission_freeship", precision = 15, scale = 2)
     private BigDecimal commissionFreeship = BigDecimal.ZERO; // Phí Freeship Xtra (8%)
-    
+
     @Column(name = "commission_voucher", precision = 15, scale = 2)
     private BigDecimal commissionVoucher = BigDecimal.ZERO; // Phí Voucher Xtra (5%)
-    
+
     @Column(name = "commission_total", precision = 15, scale = 2)
     private BigDecimal commissionTotal = BigDecimal.ZERO; // Tổng commission
-    
+
     @Column(name = "amount_net", precision = 15, scale = 2)
     private BigDecimal amountNet = BigDecimal.ZERO; // Tiền shop nhận (gross - commission)
-    
+
     @Column(name = "shipping_fee", precision = 15, scale = 2)
     private BigDecimal shippingFee = BigDecimal.ZERO; // Phí ship phải trả
-    
+
     @Column(name = "other_fees", precision = 15, scale = 2)
     private BigDecimal otherFees = BigDecimal.ZERO; // Các phí khác
-    
+
     @Column(name = "balance_before", precision = 15, scale = 2)
     private BigDecimal balanceBefore = BigDecimal.ZERO; // Số dư trước
-    
+
     @Column(name = "balance_after", precision = 15, scale = 2)
     private BigDecimal balanceAfter = BigDecimal.ZERO; // Số dư sau
-    
+
     @Column(name = "ref_txn", unique = true, nullable = false, length = 255)
     private String refTxn; // Transaction reference (orderId + shopOwnerId)
-    
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 }
 ```
 
-**Enum:**
+#### Enum LedgerEntryType
 ```java
-public enum LedgerEntryType {
-    EARNING,      // Cộng tiền từ order COMPLETED
-    PAYOUT,       // Rút tiền
-    ADJUST,       // Điều chỉnh (admin)
-    FEE_DEDUCTION // Trừ phí
-}
+public enum LedgerEntryType { EARNING, PAYOUT, ADJUST, FEE_DEDUCTION }
 ```
 
-### 4. PayoutBatch (Order Service)
-
-**Package:** `com.example.orderservice.model`
-
-**Entity:**
+#### 3) PayoutBatch
 ```java
 @Entity
 @Table(name = "payout_batch")
 public class PayoutBatch extends BaseEntity {
     @Column(name = "shop_owner_id", nullable = false)
     private String shopOwnerId;
-    
+
     @Column(name = "amount", precision = 15, scale = 2, nullable = false)
     private BigDecimal amount;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private PayoutStatus status = PayoutStatus.PENDING; // PENDING, PROCESSING, COMPLETED, FAILED
-    
+
     @Column(name = "bank_account_number", length = 50, nullable = false)
     private String bankAccountNumber;
-    
+
     @Column(name = "bank_name", length = 100, nullable = false)
     private String bankName;
-    
+
     @Column(name = "account_holder_name", length = 255, nullable = false)
     private String accountHolderName;
-    
+
     @Column(name = "transaction_ref", unique = true, nullable = false, length = 255)
     private String transactionRef; // Unique transaction reference
-    
+
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
-    
+
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason;
 }
 ```
 
-**Enum:**
+#### Enum PayoutStatus
 ```java
-public enum PayoutStatus {
-    PENDING,    // Chờ xử lý
-    PROCESSING, // Đang xử lý
-    COMPLETED,  // Hoàn thành
-    FAILED      // Thất bại
+public enum PayoutStatus { PENDING, PROCESSING, COMPLETED, FAILED }
+```
+
+#### 4) Voucher models (Order Service hoặc module marketing)
+
+- Shop voucher (shop tự tạo, cần gói Voucher Xtra active):
+```java
+@Entity
+@Table(name = "shop_vouchers",
+       uniqueConstraints = @UniqueConstraint(name = "uk_shop_code", columnNames = {"shop_owner_id", "code"}))
+public class ShopVoucher extends BaseEntity {
+    @Column(name = "shop_owner_id", nullable = false)
+    private String shopOwnerId;
+
+    @Column(name = "code", nullable = false, length = 50)
+    private String code;
+
+    @Column(name = "title", nullable = false)
+    private String title;
+
+    @Column(name = "description")
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", nullable = false)
+    private DiscountType discountType; // PERCENT, FIXED
+
+    @Column(name = "discount_value", precision = 15, scale = 2, nullable = false)
+    private BigDecimal discountValue;
+
+    @Column(name = "max_discount_amount", precision = 15, scale = 2)
+    private BigDecimal maxDiscountAmount;
+
+    @Column(name = "min_order_value", precision = 15, scale = 2)
+    private BigDecimal minOrderValue;
+
+    @Column(name = "start_at", nullable = false)
+    private LocalDateTime startAt;
+
+    @Column(name = "end_at", nullable = false)
+    private LocalDateTime endAt;
+
+    @Column(name = "quantity_total")
+    private Integer quantityTotal = 0;
+
+    @Column(name = "quantity_used")
+    private Integer quantityUsed = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private VoucherStatus status = VoucherStatus.ACTIVE; // ACTIVE, INACTIVE, EXPIRED
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "applicable_scope", nullable = false)
+    private VoucherScope applicableScope = VoucherScope.ALL_PRODUCTS;
 }
 ```
 
-### 5. RefundTransaction (Payment Service) - MỚI
+- Platform voucher (voucher chung toàn sàn):
+```java
+@Entity
+@Table(name = "platform_vouchers",
+       uniqueConstraints = @UniqueConstraint(name = "uk_platform_code", columnNames = "code"))
+public class PlatformVoucher extends BaseEntity {
+    @Column(name = "code", nullable = false, length = 50)
+    private String code;
 
-**Package:** `com.example.paymentservice.model`
+    @Column(name = "title", nullable = false)
+    private String title;
 
-**Entity:**
+    @Column(name = "description")
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", nullable = false)
+    private DiscountType discountType; // PERCENT, FIXED
+
+    @Column(name = "discount_value", precision = 15, scale = 2, nullable = false)
+    private BigDecimal discountValue;
+
+    @Column(name = "max_discount_amount", precision = 15, scale = 2)
+    private BigDecimal maxDiscountAmount;
+
+    @Column(name = "min_order_value", precision = 15, scale = 2)
+    private BigDecimal minOrderValue;
+
+    @Column(name = "start_at", nullable = false)
+    private LocalDateTime startAt;
+
+    @Column(name = "end_at", nullable = false)
+    private LocalDateTime endAt;
+
+    @Column(name = "quantity_total")
+    private Integer quantityTotal = 0;
+
+    @Column(name = "quantity_used")
+    private Integer quantityUsed = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private VoucherStatus status = VoucherStatus.ACTIVE; // ACTIVE, INACTIVE, EXPIRED
+}
+```
+
+- VoucherApplicability (ánh xạ phạm vi)
+```java
+@Entity
+@Table(name = "voucher_applicability",
+       uniqueConstraints = @UniqueConstraint(name = "uk_scope", columnNames = {"voucher_id","voucher_type","product_id","category_id"}))
+public class VoucherApplicability extends BaseEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @Column(name = "voucher_id", nullable = false)
+    private String voucherId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "voucher_type", nullable = false)
+    private VoucherType voucherType; // SHOP, PLATFORM
+
+    @Column(name = "product_id")
+    private String productId;
+
+    @Column(name = "category_id")
+    private String categoryId;
+}
+```
+
+- VoucherUsage (log áp dụng, idempotent)
+```java
+@Entity
+@Table(name = "voucher_usage",
+       uniqueConstraints = @UniqueConstraint(name = "uk_voucher_order", columnNames = {"voucher_id","voucher_type","order_id"}))
+public class VoucherUsage extends BaseEntity {
+    @Column(name = "voucher_id", nullable = false)
+    private String voucherId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "voucher_type", nullable = false)
+    private VoucherType voucherType; // SHOP, PLATFORM
+
+    @Column(name = "order_id", nullable = false)
+    private String orderId;
+
+    @Column(name = "user_id", nullable = false)
+    private String userId;
+
+    @Column(name = "amount_discount", precision = 15, scale = 2, nullable = false)
+    private BigDecimal amountDiscount;
+}
+```
+
+#### Enums Voucher
+```java
+public enum DiscountType { PERCENT, FIXED }
+public enum VoucherStatus { ACTIVE, INACTIVE, EXPIRED }
+public enum VoucherScope { ALL_PRODUCTS, SELECTED_PRODUCTS, CATEGORIES }
+public enum VoucherType { SHOP, PLATFORM }
+```
+
+### C. Payment Service
+
+#### RefundTransaction (giữ nguyên)
 ```java
 @Entity
 @Table(name = "refund_transactions")
 public class RefundTransaction extends BaseEntity {
     @Column(name = "payment_id", nullable = false)
     private String paymentId; // FK to Payment
-    
+
     @Column(name = "order_id")
     private String orderId; // FK to Order
-    
+
     @Column(name = "amount", precision = 15, scale = 2, nullable = false)
     private BigDecimal amount; // Số tiền refund
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private RefundStatus status = RefundStatus.PENDING; // PENDING, PROCESSING, COMPLETED, FAILED
-    
+
     @Column(name = "vnpay_request_id", length = 100)
     private String vnpayRequestId; // vnp_RequestId từ VNPay
-    
+
     @Column(name = "vnpay_response_code", length = 10)
     private String vnpayResponseCode; // Response code từ VNPay
-    
+
     @Column(name = "vnpay_transaction_status", length = 10)
     private String vnpayTransactionStatus; // Transaction status từ VNPay
-    
+
     @Column(name = "refund_reason", columnDefinition = "TEXT")
     private String refundReason; // Lý do refund
-    
+
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
-    
+
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason;
-    
+
     @Lob
     @Column(name = "vnpay_response", columnDefinition = "TEXT")
     private String vnpayResponse; // Raw response từ VNPay
 }
 ```
 
-**Enum:**
+#### Enum RefundStatus
 ```java
-public enum RefundStatus {
-    PENDING,    // Chờ xử lý
-    PROCESSING, // Đang xử lý
-    COMPLETED,  // Hoàn thành
-    FAILED      // Thất bại
-}
+public enum RefundStatus { PENDING, PROCESSING, COMPLETED, FAILED }
 ```
 
 ---

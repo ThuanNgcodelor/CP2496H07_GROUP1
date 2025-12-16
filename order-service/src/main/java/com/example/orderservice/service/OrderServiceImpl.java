@@ -80,7 +80,7 @@ public class OrderServiceImpl implements OrderService {
         if (todayRevenue == null)
             todayRevenue = 0.0;
 
-        Long todayOrders = orderRepository.countByProductIdsAndCreationTimestampBetween(productIds, startOfToday,
+        Long todayOrders = orderRepository.countByProductIdsAndCreatedAtBetween(productIds, startOfToday,
                 endOfToday, excluded);
         if (todayOrders == null)
             todayOrders = 0L;
@@ -367,7 +367,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public List<Order> getUserOrders(String userId) {
-        return orderRepository.findByUserIdOrderByCreationTimestampDesc(userId);
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
     // CRUD Implementation
@@ -453,7 +453,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<Order> searchOrders(String userId, String status, String startDate, String endDate) {
         if (userId != null && !userId.isEmpty()) {
-            return orderRepository.findByUserIdOrderByCreationTimestampDesc (userId);
+            return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
         }
 
         if (status != null && !status.isEmpty()) {

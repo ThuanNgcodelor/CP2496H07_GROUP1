@@ -14,6 +14,6 @@ public class OrderItemDto {
     private Integer quantity;
     private Double unitPrice;
     private Double totalPrice;
-    private LocalDateTime creationTimestamp;
+    private LocalDateTime createdAt;
     private LocalDateTime updateTimestamp;
 }
