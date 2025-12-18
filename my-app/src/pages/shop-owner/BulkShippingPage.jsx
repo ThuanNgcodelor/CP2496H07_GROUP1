@@ -353,210 +353,220 @@ export default function BulkShippingPage() {
                 <div className="table-responsive" style={{ overflowX: 'auto' }}>
                     <table className="table table-hover">
                         <thead>
-                        <tr>
-                            <th style={{ width: '4%' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={selectedOrders.size === orders.length && orders.length > 0}
-                                    onChange={toggleSelectAll}
-                                />
-                            </th>
-                            <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.customer')}</th>
-                            <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.phone')}</th>
-                            <th style={{ width: '18%' }}>{t('shopOwner.manageOrder.address')}</th>
-                            <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.subtotal')}</th>
-                            <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.shipping')}</th>
-                            <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.total')}</th>
-                            <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.orderDate')}</th>
-                            <th style={{ width: '9%' }}>{t('common.status.title')}</th>
-                            <th style={{ width: '11%' }}>{t('shopOwner.manageOrder.actions')}</th>
-                        </tr>
+                            <tr>
+                                <th style={{ width: '4%' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedOrders.size === orders.length && orders.length > 0}
+                                        onChange={toggleSelectAll}
+                                    />
+                                </th>
+                                <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.customer')}</th>
+                                <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.phone')}</th>
+                                <th style={{ width: '18%' }}>{t('shopOwner.manageOrder.address')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.subtotal')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.shipping')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.total')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.orderDate')}</th>
+                                <th style={{ width: '9%' }}>{t('common.status.title')}</th>
+                                <th style={{ width: '11%' }}>{t('shopOwner.manageOrder.actions')}</th>
+                            </tr>
                         </thead>
                         <tbody>
-                        {orders.length === 0 ? (
-                            <tr>
-                                <td colSpan="10" className="text-center py-4">
+                            {orders.length === 0 ? (
+                                <tr>
                                     <td colSpan="10" className="text-center py-4">
-                                        <p className="text-muted">{t('shopOwner.manageOrder.noOrders')}</p>
+                                        <td colSpan="10" className="text-center py-4">
+                                            <p className="text-muted">{t('shopOwner.manageOrder.noOrders')}</p>
+                                        </td>
                                     </td>
-                                </td>
-                            </tr>
-                        ) : (
-                            orders.map((order, index) => {
-                                const statusInfo = getStatusBadge(order.orderStatus);
-                                const nextStatus = getNextStatus(order.orderStatus);
-                                const isExpanded = expandedRow === order.id;
-                                const isSelected = selectedOrders.has(order.id);
-                                const orderNumber = (currentPage - 1) * pageSize + index + 1;
+                                </tr>
+                            ) : (
+                                orders.map((order, index) => {
+                                    const statusInfo = getStatusBadge(order.orderStatus);
+                                    const nextStatus = getNextStatus(order.orderStatus);
+                                    const isExpanded = expandedRow === order.id;
+                                    const isSelected = selectedOrders.has(order.id);
+                                    const orderNumber = (currentPage - 1) * pageSize + index + 1;
 
-                                return (
-                                    <React.Fragment key={order.id}>
-                                        <tr data-order-id={order.id}>
-                                            <td>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSelected}
-                                                    onChange={() => toggleOrderSelection(order.id)}
-                                                />
-                                            </td>
-                                            <td>{usernames[order.userId] || order.userId || 'N/A'}</td>
-                                            <td>{order.recipientPhone || 'N/A'}</td>
-                                            <td className="text-truncate" style={{ maxWidth: '200px' }} title={order.fullAddress || order.shippingAddress || 'N/A'}>
-                                                {order.fullAddress || order.shippingAddress || 'N/A'}
-                                            </td>
-                                            <td>
-                                                <strong style={{ color: '#555' }}>
-                                                    {formatPrice(order.totalPrice)}
-                                                </strong>
-                                            </td>
-                                            <td>
-                          <span style={{ color: '#666', fontSize: '0.9rem' }}>
-                            {order.shippingFee ? formatPrice(order.shippingFee) : 'N/A'}
-                          </span>
-                                            </td>
-                                            <td>
-                                                <strong style={{ color: '#ee4d2d' }}>
-                                                    {formatPrice((order.totalPrice || 0) + (order.shippingFee || 0))}
-                                                </strong>
-                                            </td>
-                                            <td>{formatDate(order.creationTimestamp)}</td>
-                                            <td>
-                          <span className={`badge ${statusInfo.class}`}>
-                            {statusInfo.label}
-                          </span>
-                                            </td>
-                                            <td>
-                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                    <button
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        onClick={() => toggleRowExpansion(order.id)}
-                                                        title="View details"
-                                                    >
-                                                        <i className={`fas ${isExpanded ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                                                    </button>
-                                                    {nextStatus && (
+                                    // Calculate subtotal from items
+                                    const calculateSubtotal = (order) => {
+                                        if (order.orderItems && order.orderItems.length > 0) {
+                                            return order.orderItems.reduce((sum, item) => sum + (item.unitPrice || item.price || 0) * (item.quantity || 1), 0);
+                                        }
+                                        return order.totalPrice; // Fallback if no items
+                                    };
+                                    const subtotal = calculateSubtotal(order);
+                                    const shippingFee = order.shippingFee || 0;
+                                    const total = subtotal + shippingFee;
+                                    return (
+                                        <React.Fragment key={order.id}>
+                                            <tr data-order-id={order.id}>
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => toggleOrderSelection(order.id)}
+                                                    />
+                                                </td>
+                                                <td>{usernames[order.userId] || order.userId || 'N/A'}</td>
+                                                <td>{order.recipientPhone || 'N/A'}</td>
+                                                <td className="text-truncate" style={{ maxWidth: '200px' }} title={order.fullAddress || order.shippingAddress || 'N/A'}>
+                                                    {order.fullAddress || order.shippingAddress || 'N/A'}
+                                                </td>
+                                                <td>
+                                                    <strong style={{ color: '#555' }}>
+                                                        {formatPrice(subtotal)}
+                                                    </strong>
+                                                </td>
+                                                <td>
+                                                    <span style={{ color: '#666', fontSize: '0.9rem' }}>
+                                                        {formatPrice(shippingFee)}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <strong style={{ color: '#ee4d2d' }}>
+                                                        {formatPrice(total)}
+                                                    </strong>
+                                                </td>
+                                                <td>{formatDate(order.creationTimestamp)}</td>
+                                                <td>
+                                                    <span className={`badge ${statusInfo.class}`}>
+                                                        {statusInfo.label}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                                         <button
-                                                            className="btn btn-sm btn-outline-success"
-                                                            onClick={() => handleStatusUpdate(order.id, nextStatus)}
-                                                            title={`Update to ${getStatusLabel(nextStatus)}`}
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={() => toggleRowExpansion(order.id)}
+                                                            title="View details"
                                                         >
-                                                            <i className="fas fa-check"></i>
+                                                            <i className={`fas ${isExpanded ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                                                         </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {isExpanded && order.orderItems && order.orderItems.length > 0 && (
-                                            <tr>
-                                                <td colSpan="10" style={{ padding: '20px', background: '#f8f9fa' }}>
-                                                    <div className="order-details">
-                                                        <h5 className="mb-3">
-                                                            <i className="fas fa-info-circle text-primary"></i> {t('shopOwner.manageOrder.orderDetails')} - {order.id}
-                                                        </h5>
-
-                                                        <div className="row mb-3">
-                                                            <div className="col-md-6">
-                                                                <div className="info-box">
-                                                                    <label><i className="fas fa-user"></i> {t('shopOwner.manageOrder.customer')}:</label>
-                                                                    <div>{usernames[order.userId] || order.userId || 'N/A'}</div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="col-md-6">
-                                                                <div className="info-box">
-                                                                    <label><i className="fas fa-phone"></i> {t('shopOwner.manageOrder.phone')}:</label>
-                                                                    <div>{order.recipientPhone || 'N/A'}</div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="row mb-3">
-                                                            <div className="col-md-12">
-                                                                <div className="info-box">
-                                                                    <label><i className="fas fa-map-marker-alt"></i> {t('shopOwner.manageOrder.address')}:</label>
-                                                                    <div>{order.fullAddress || order.shippingAddress || 'N/A'}</div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="item-details mt-3">
-                                                            <h6 className="mb-3">
-                                                                <i className="fas fa-box-open"></i> {t('shopOwner.manageOrder.productsInOrder')}
-                                                            </h6>
-                                                            <div className="table-responsive">
-                                                                <table className="table table-sm table-bordered">
-                                                                    <thead className="table-light">
-                                                                    <tr>
-                                                                        <th>#</th>
-                                                                        <th>{t('shopOwner.analytics.product')}</th>
-                                                                        <th>{t('shopOwner.product.form.quantity')}</th>
-                                                                        <th>Size</th>
-                                                                        <th>{t('shopOwner.product.form.price')}</th>
-                                                                        <th>{t('shopOwner.manageOrder.subtotal')}</th>
-                                                                    </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                    {order.orderItems.map((item, itemIndex) => (
-                                                                        <tr key={itemIndex}>
-                                                                            <td>{itemIndex + 1}</td>
-                                                                            <td>{item.productName || `Product ${item.productId}`}</td>
-                                                                            <td>{item.quantity || 1}</td>
-                                                                            <td>{item.sizeName || 'N/A'}</td>
-                                                                            <td>{formatPrice(item.price || item.unitPrice || 0)}</td>
-                                                                            <td><strong>{formatPrice((item.price || item.unitPrice || 0) * (item.quantity || 1))}</strong></td>
-                                                                        </tr>
-                                                                    ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="row mt-3">
-                                                            <div className="col-md-6 offset-md-6">
-                                                                <div className="price-summary">
-                                                                    <div className="d-flex justify-content-between mb-2">
-                                                                        <span>Subtotal:</span>
-                                                                        <strong>{formatPrice(order.totalPrice)}</strong>
-                                                                    </div>
-                                                                    {order.shippingFee && order.shippingFee > 0 && (
-                                                                        <div className="d-flex justify-content-between mb-2">
-                                                                            <span>Shipping Fee (GHN):</span>
-                                                                            <strong style={{ color: '#ee4d2d' }}>{formatPrice(order.shippingFee)}</strong>
-                                                                        </div>
-                                                                    )}
-                                                                    <div className="d-flex justify-content-between pt-2 border-top total-amount">
-                                                                        <strong>Total:</strong>
-                                                                        <strong style={{ color: '#ee4d2d', fontSize: '18px' }}>
-                                                                            {formatPrice((order.totalPrice || 0) + (order.shippingFee || 0))}
-                                                                        </strong>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-3">
-                                                            <button className="btn btn-primary">
-                                                                <i className="fas fa-print"></i> {t('shopOwner.manageOrder.printOrder')}
+                                                        {nextStatus && (
+                                                            <button
+                                                                className="btn btn-sm btn-outline-success"
+                                                                onClick={() => handleStatusUpdate(order.id, nextStatus)}
+                                                                title={`Update to ${getStatusLabel(nextStatus)}`}
+                                                            >
+                                                                <i className="fas fa-check"></i>
                                                             </button>
-                                                            <button className="btn btn-success ms-2">
-                                                                <i className="fas fa-truck"></i> {t('shopOwner.manageOrder.createLabel')}
-                                                            </button>
-                                                            {nextStatus && (
-                                                                <button
-                                                                    className="btn btn-outline-success ms-2"
-                                                                    onClick={() => handleStatusUpdate(order.id, nextStatus)}
-                                                                >
-                                                                    <i className="fas fa-check"></i> {t('shopOwner.manageOrder.updateStatus')}
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })
-                        )}
+                                            {isExpanded && order.orderItems && order.orderItems.length > 0 && (
+                                                <tr>
+                                                    <td colSpan="10" style={{ padding: '20px', background: '#f8f9fa' }}>
+                                                        <div className="order-details">
+                                                            <h5 className="mb-3">
+                                                                <i className="fas fa-info-circle text-primary"></i> {t('shopOwner.manageOrder.orderDetails')} - {order.id}
+                                                            </h5>
+
+                                                            <div className="row mb-3">
+                                                                <div className="col-md-6">
+                                                                    <div className="info-box">
+                                                                        <label><i className="fas fa-user"></i> {t('shopOwner.manageOrder.customer')}:</label>
+                                                                        <div>{usernames[order.userId] || order.userId || 'N/A'}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="col-md-6">
+                                                                    <div className="info-box">
+                                                                        <label><i className="fas fa-phone"></i> {t('shopOwner.manageOrder.phone')}:</label>
+                                                                        <div>{order.recipientPhone || 'N/A'}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="row mb-3">
+                                                                <div className="col-md-12">
+                                                                    <div className="info-box">
+                                                                        <label><i className="fas fa-map-marker-alt"></i> {t('shopOwner.manageOrder.address')}:</label>
+                                                                        <div>{order.fullAddress || order.shippingAddress || 'N/A'}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="item-details mt-3">
+                                                                <h6 className="mb-3">
+                                                                    <i className="fas fa-box-open"></i> {t('shopOwner.manageOrder.productsInOrder')}
+                                                                </h6>
+                                                                <div className="table-responsive">
+                                                                    <table className="table table-sm table-bordered">
+                                                                        <thead className="table-light">
+                                                                            <tr>
+                                                                                <th>#</th>
+                                                                                <th>{t('shopOwner.analytics.product')}</th>
+                                                                                <th>{t('shopOwner.product.form.quantity')}</th>
+                                                                                <th>Size</th>
+                                                                                <th>{t('shopOwner.product.form.price')}</th>
+                                                                                <th>{t('shopOwner.manageOrder.subtotal')}</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {order.orderItems.map((item, itemIndex) => (
+                                                                                <tr key={itemIndex}>
+                                                                                    <td>{itemIndex + 1}</td>
+                                                                                    <td>{item.productName || `Product ${item.productId}`}</td>
+                                                                                    <td>{item.quantity || 1}</td>
+                                                                                    <td>{item.sizeName || 'N/A'}</td>
+                                                                                    <td>{formatPrice(item.price || item.unitPrice || 0)}</td>
+                                                                                    <td><strong>{formatPrice((item.price || item.unitPrice || 0) * (item.quantity || 1))}</strong></td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="row mt-3">
+                                                                <div className="col-md-6 offset-md-6">
+                                                                    <div className="price-summary">
+                                                                        <div className="d-flex justify-content-between mb-2">
+                                                                            <span>Subtotal:</span>
+                                                                            <strong>{formatPrice(order.totalPrice)}</strong>
+                                                                        </div>
+                                                                        {order.shippingFee && order.shippingFee > 0 && (
+                                                                            <div className="d-flex justify-content-between mb-2">
+                                                                                <span>Shipping Fee (GHN):</span>
+                                                                                <strong style={{ color: '#ee4d2d' }}>{formatPrice(order.shippingFee)}</strong>
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="d-flex justify-content-between pt-2 border-top total-amount">
+                                                                            <strong>Total:</strong>
+                                                                            <strong style={{ color: '#ee4d2d', fontSize: '18px' }}>
+                                                                                {formatPrice((order.totalPrice || 0) + (order.shippingFee || 0))}
+                                                                            </strong>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-3">
+                                                                <button className="btn btn-primary">
+                                                                    <i className="fas fa-print"></i> {t('shopOwner.manageOrder.printOrder')}
+                                                                </button>
+                                                                <button className="btn btn-success ms-2">
+                                                                    <i className="fas fa-truck"></i> {t('shopOwner.manageOrder.createLabel')}
+                                                                </button>
+                                                                {nextStatus && (
+                                                                    <button
+                                                                        className="btn btn-outline-success ms-2"
+                                                                        onClick={() => handleStatusUpdate(order.id, nextStatus)}
+                                                                    >
+                                                                        <i className="fas fa-check"></i> {t('shopOwner.manageOrder.updateStatus')}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })
+                            )}
                         </tbody>
                     </table>
                 </div>

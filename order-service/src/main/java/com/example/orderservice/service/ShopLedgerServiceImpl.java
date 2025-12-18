@@ -131,11 +131,11 @@ public class ShopLedgerServiceImpl implements ShopLedgerService {
         BigDecimal grossAmount = BigDecimal.valueOf(grossDouble);
 
         // 3. Constants
-        // Default to 4% Payment and 0% Fixed to match user expectation of "4% default"
+        // Default to match PAYOUT_LEDGER_SYSTEM.md
         BigDecimal ratePayment = sub != null && sub.getCommissionPaymentRate() != null ? sub.getCommissionPaymentRate()
                 : new BigDecimal("0.04"); // 4%
         BigDecimal rateFixed = sub != null && sub.getCommissionFixedRate() != null ? sub.getCommissionFixedRate()
-                : BigDecimal.ZERO; // 0% default (changed from 4%)
+                : new BigDecimal("0.04"); // 4% (Fixed fee)
         BigDecimal rateFreeship = sub != null && sub.getCommissionFreeshipRate() != null
                 ? sub.getCommissionFreeshipRate()
                 : new BigDecimal("0.08"); // 8%
@@ -155,7 +155,8 @@ public class ShopLedgerServiceImpl implements ShopLedgerService {
         }
 
         BigDecimal commVoucher = BigDecimal.ZERO;
-        if (type == SubscriptionType.VOUCHER_XTRA || type == SubscriptionType.BOTH) {
+        // Only charge Voucher Xtra fee if order actually has a voucher applied
+        if ((type == SubscriptionType.VOUCHER_XTRA || type == SubscriptionType.BOTH) && order.getVoucherId() != null) {
             for (OrderItem item : shopItems) {
                 BigDecimal itemVal = BigDecimal.valueOf(item.getTotalPrice());
                 BigDecimal fee = itemVal.multiply(rateVoucher);

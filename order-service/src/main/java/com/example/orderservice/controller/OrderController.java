@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OrderController {
     private final OrderService orderService;
+    private final com.example.orderservice.service.ShopLedgerService shopLedgerService;
     private final ModelMapper modelMapper;
     private final JwtUtil jwtUtil;
     private final StockServiceClient stockServiceClient;
@@ -37,30 +38,30 @@ public class OrderController {
 
     private OrderDto enrichOrderDto(Order order) {
         OrderDto dto = modelMapper.map(order, OrderDto.class);
-        
+
         // Set addressId from order
         if (order.getAddressId() != null && !order.getAddressId().isBlank()) {
             dto.setAddressId(order.getAddressId());
-            
+
             // Fetch and enrich address data
             try {
                 ResponseEntity<AddressDto> addressResponse = userServiceClient.getAddressById(order.getAddressId());
                 if (addressResponse != null && addressResponse.getBody() != null) {
                     AddressDto address = addressResponse.getBody();
-                    
+
                     // Set recipient phone
                     if (address.getRecipientPhone() != null && !address.getRecipientPhone().isBlank()) {
                         dto.setRecipientPhone(address.getRecipientPhone());
                     }
-                    
+
                     // Build full address string
                     StringBuilder fullAddressBuilder = new StringBuilder();
                     if (address.getStreetAddress() != null && !address.getStreetAddress().trim().isEmpty()) {
                         fullAddressBuilder.append(address.getStreetAddress());
                     }
                     // Use provinceName instead of deprecated getProvince()
-                    String province = address.getProvinceName() != null ? address.getProvinceName() : 
-                                     (address.getProvince() != null ? address.getProvince() : null);
+                    String province = address.getProvinceName() != null ? address.getProvinceName()
+                            : (address.getProvince() != null ? address.getProvince() : null);
                     if (province != null && !province.trim().isEmpty()) {
                         if (fullAddressBuilder.length() > 0) {
                             fullAddressBuilder.append(", ");
@@ -70,14 +71,16 @@ public class OrderController {
                     if (fullAddressBuilder.length() > 0) {
                         dto.setFullAddress(fullAddressBuilder.toString());
                     }
-                    
+
                     // If shippingAddress is not set yet, use fullAddress
-                    if ((dto.getShippingAddress() == null || dto.getShippingAddress().isBlank()) && dto.getFullAddress() != null) {
+                    if ((dto.getShippingAddress() == null || dto.getShippingAddress().isBlank())
+                            && dto.getFullAddress() != null) {
                         dto.setShippingAddress(dto.getFullAddress());
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Failed to fetch address for addressId: " + order.getAddressId() + " - " + e.getMessage());
+                System.err.println(
+                        "Failed to fetch address for addressId: " + order.getAddressId() + " - " + e.getMessage());
             }
         }
 
@@ -88,7 +91,8 @@ public class OrderController {
 
                         if (item.getProductId() != null && !item.getProductId().isBlank()) {
                             try {
-                                ResponseEntity<ProductDto> productResponse = stockServiceClient.getProductById(item.getProductId());
+                                ResponseEntity<ProductDto> productResponse = stockServiceClient
+                                        .getProductById(item.getProductId());
                                 if (productResponse != null && productResponse.getBody() != null) {
                                     ProductDto product = productResponse.getBody();
                                     if (product.getName() != null) {
@@ -96,7 +100,8 @@ public class OrderController {
                                     }
                                 }
                             } catch (Exception e) {
-                                System.err.println("Failed to fetch product name for productId: " + item.getProductId() + " - " + e.getMessage());
+                                System.err.println("Failed to fetch product name for productId: " + item.getProductId()
+                                        + " - " + e.getMessage());
                             }
                         }
 
@@ -111,7 +116,8 @@ public class OrderController {
                                 }
                             } catch (Exception e) {
                                 // Log error but don't fail the request
-                                System.err.println("Failed to fetch size name for sizeId: " + item.getSizeId() + " - " + e.getMessage());
+                                System.err.println("Failed to fetch size name for sizeId: " + item.getSizeId() + " - "
+                                        + e.getMessage());
                             }
                         }
 
@@ -120,21 +126,23 @@ public class OrderController {
                     .collect(Collectors.toList());
             dto.setOrderItems(enrichedItems);
         }
-        
-        // Fetch shipping fee: ưu tiên từ Order.shippingFee (VNPay đã thanh toán), nếu không có thì lấy từ ShippingOrder (COD)
+
+        // Fetch shipping fee: ưu tiên từ Order.shippingFee (VNPay đã thanh toán), nếu
+        // không có thì lấy từ ShippingOrder (COD)
         if (order.getShippingFee() != null) {
             dto.setShippingFee(order.getShippingFee().doubleValue());
         } else {
             // Fallback: lấy từ ShippingOrder cho COD orders
             try {
                 shippingOrderRepository.findByOrderId(order.getId())
-                    .ifPresent(shippingOrder -> {
-                        if (shippingOrder.getShippingFee() != null) {
-                            dto.setShippingFee(shippingOrder.getShippingFee().doubleValue());
-                        }
-                    });
+                        .ifPresent(shippingOrder -> {
+                            if (shippingOrder.getShippingFee() != null) {
+                                dto.setShippingFee(shippingOrder.getShippingFee().doubleValue());
+                            }
+                        });
             } catch (Exception e) {
-                System.err.println("Failed to fetch shipping fee for orderId: " + order.getId() + " - " + e.getMessage());
+                System.err
+                        .println("Failed to fetch shipping fee for orderId: " + order.getId() + " - " + e.getMessage());
             }
         }
 
@@ -163,40 +171,34 @@ public class OrderController {
             if ("VNPAY".equalsIgnoreCase(paymentMethod) || "CARD".equalsIgnoreCase(paymentMethod)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                         "error", "USE_PAYMENT_SERVICE",
-                        "message", "For VNPay/Card, please initiate via payment-service."
-                ));
+                        "message", "For VNPay/Card, please initiate via payment-service."));
             }
 
             // COD - use async Kafka
             orderService.orderByKafka(request, httpRequest);
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Order has been sent to Kafka.",
-                    "status", "PENDING"
-            ));
+                    "status", "PENDING"));
         } catch (RuntimeException e) {
             if (e.getMessage().contains("Insufficient stock")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                         "error", "INSUFFICIENT_STOCK",
                         "message", e.getMessage(),
-                        "details", extractStockDetails(e.getMessage())
-                ));
+                        "details", extractStockDetails(e.getMessage())));
             }
             if (e.getMessage().contains("Address not found")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                         "error", "ADDRESS_NOT_FOUND",
-                        "message", e.getMessage()
-                ));
+                        "message", e.getMessage()));
             }
             if (e.getMessage().contains("Cart not found") || e.getMessage().contains("empty")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                         "error", "CART_EMPTY",
-                        "message", e.getMessage()
-                ));
+                        "message", e.getMessage()));
             }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", "ORDER_FAILED",
-                    "message", e.getMessage()
-            ));
+                    "message", e.getMessage()));
         }
     }
 
@@ -225,10 +227,11 @@ public class OrderController {
     }
 
     @PutMapping("/cancel/{orderId}")
-    ResponseEntity<?> cancelOrder(@PathVariable String orderId, @RequestBody(required = false) Map<String, String> payload) {
+    ResponseEntity<?> cancelOrder(@PathVariable String orderId,
+            @RequestBody(required = false) Map<String, String> payload) {
         try {
             String reason = payload != null ? payload.getOrDefault("reason", null) : null;
-            Order cancelled = orderService.cancelOrder(orderId,reason);
+            Order cancelled = orderService.cancelOrder(orderId, reason);
             if (reason != null && !reason.isBlank()) {
                 log.info("Order {} cancelled. Reason: {}", orderId, reason);
             }
@@ -236,44 +239,44 @@ public class OrderController {
                     "message", "Order cancelled",
                     "orderId", cancelled.getId(),
                     "status", cancelled.getOrderStatus().name(),
-                    "reason", reason
-            ));
+                    "reason", reason));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                     "error", "CANCEL_FAILED",
-                    "message", e.getMessage()
-            ));
+                    "message", e.getMessage()));
         }
     }
-    
+
     @PostMapping("/calculate-shipping-fee")
-    ResponseEntity<?> calculateShippingFee(@RequestBody com.example.orderservice.dto.CalculateShippingFeeRequest request, HttpServletRequest httpRequest) {
+    ResponseEntity<?> calculateShippingFee(
+            @RequestBody com.example.orderservice.dto.CalculateShippingFeeRequest request,
+            HttpServletRequest httpRequest) {
         try {
             // 1. Get customer address
             AddressDto customerAddress = userServiceClient.getAddressById(request.getAddressId()).getBody();
             if (customerAddress == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                    "error", "ADDRESS_NOT_FOUND",
-                    "message", "Address not found"
-                ));
+                        "error", "ADDRESS_NOT_FOUND",
+                        "message", "Address not found"));
             }
-            
+
             // 2. Validate GHN fields
             if (customerAddress.getDistrictId() == null || customerAddress.getWardCode() == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                    "error", "ADDRESS_MISSING_GHN_FIELDS",
-                    "message", "Address missing GHN fields. Please update address with province, district, and ward."
-                ));
+                        "error", "ADDRESS_MISSING_GHN_FIELDS",
+                        "message",
+                        "Address missing GHN fields. Please update address with province, district, and ward."));
             }
-            
+
             // 3. Get shop owner address (FROM address)
             String shopOwnerId = request.getShopOwnerId();
-            
+
             // If shop owner ID not provided, try to get from first product
             if (shopOwnerId == null || shopOwnerId.isBlank()) {
                 if (request.getProductId() != null && !request.getProductId().isBlank()) {
                     try {
-                        ResponseEntity<ProductDto> productResponse = stockServiceClient.getProductById(request.getProductId());
+                        ResponseEntity<ProductDto> productResponse = stockServiceClient
+                                .getProductById(request.getProductId());
                         if (productResponse != null && productResponse.getBody() != null) {
                             shopOwnerId = productResponse.getBody().getUserId();
                         }
@@ -282,12 +285,13 @@ public class OrderController {
                     }
                 }
             }
-            
+
             // 4. Get shop owner address
             ShopOwnerDto shopOwner = null;
             if (shopOwnerId != null && !shopOwnerId.isBlank()) {
                 try {
-                    ResponseEntity<ShopOwnerDto> shopOwnerResponse = userServiceClient.getShopOwnerByUserId(shopOwnerId);
+                    ResponseEntity<ShopOwnerDto> shopOwnerResponse = userServiceClient
+                            .getShopOwnerByUserId(shopOwnerId);
                     if (shopOwnerResponse != null && shopOwnerResponse.getBody() != null) {
                         shopOwner = shopOwnerResponse.getBody();
                     }
@@ -295,16 +299,16 @@ public class OrderController {
                     System.err.println("Failed to get shop owner: " + e.getMessage());
                 }
             }
-            
+
             // If no shop owner, we can't calculate fee
             if (shopOwner == null || shopOwner.getDistrictId() == null || shopOwner.getWardCode() == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                    "error", "SHOP_OWNER_ADDRESS_NOT_CONFIGURED",
-                    "message", "Shop owner address not configured. Please configure shop address in Settings."
-                ));
+                        "error", "SHOP_OWNER_ADDRESS_NOT_CONFIGURED",
+                        "message", "Shop owner address not configured. Please configure shop address in Settings."));
             }
-            
-            // 5. Calculate weight from selectedItems (preferred) or fallback to weight/quantity
+
+            // 5. Calculate weight from selectedItems (preferred) or fallback to
+            // weight/quantity
             int weight = 1000; // Default 1000g
             if (request.getSelectedItems() != null && !request.getSelectedItems().isEmpty()) {
                 // Calculate weight from selectedItems
@@ -312,10 +316,12 @@ public class OrderController {
                 for (com.example.orderservice.dto.SelectedItemDto item : request.getSelectedItems()) {
                     try {
                         // Get size information to get weight
-                        ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient.getSizeById(item.getSizeId());
+                        ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient
+                                .getSizeById(item.getSizeId());
                         if (sizeResponse != null && sizeResponse.getBody() != null) {
                             com.example.orderservice.dto.SizeDto size = sizeResponse.getBody();
-                            int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight() : 500; // Default 500g if not set
+                            int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight()
+                                    : 500; // Default 500g if not set
                             weight += item.getQuantity() * itemWeight;
                         } else {
                             // Fallback to 500g if size not found
@@ -333,42 +339,41 @@ public class OrderController {
                 // Calculate from quantity (backward compatibility)
                 weight = request.getQuantity() * 500;
             }
-            
+
             // 6. Build GHN fee calculation request
             // GHN Service IDs: 53320 = Express, 53321 = Standard
-            com.example.orderservice.dto.GhnCalculateFeeRequest ghnRequest = com.example.orderservice.dto.GhnCalculateFeeRequest.builder()
-                .fromDistrictId(shopOwner.getDistrictId())
-                .fromWardCode(shopOwner.getWardCode())
-                .toDistrictId(customerAddress.getDistrictId())
-                .toWardCode(customerAddress.getWardCode())
-                .weight(weight)
-                .length(20) // cm
-                .width(15)
-                .height(10)
-                .serviceId(53321) // GHN Standard service ID (required)
-                .serviceTypeId(2) // Standard
-                .build();
-            
+            com.example.orderservice.dto.GhnCalculateFeeRequest ghnRequest = com.example.orderservice.dto.GhnCalculateFeeRequest
+                    .builder()
+                    .fromDistrictId(shopOwner.getDistrictId())
+                    .fromWardCode(shopOwner.getWardCode())
+                    .toDistrictId(customerAddress.getDistrictId())
+                    .toWardCode(customerAddress.getWardCode())
+                    .weight(weight)
+                    .length(20) // cm
+                    .width(15)
+                    .height(10)
+                    .serviceId(53321) // GHN Standard service ID (required)
+                    .serviceTypeId(2) // Standard
+                    .build();
+
             // 7. Call GHN API
             com.example.orderservice.dto.GhnCalculateFeeResponse ghnResponse = ghnApiClient.calculateFee(ghnRequest);
-            
+
             if (ghnResponse == null || ghnResponse.getCode() != 200) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                    "error", "GHN_API_ERROR",
-                    "message", ghnResponse != null ? ghnResponse.getMessage() : "Failed to calculate shipping fee"
-                ));
+                        "error", "GHN_API_ERROR",
+                        "message",
+                        ghnResponse != null ? ghnResponse.getMessage() : "Failed to calculate shipping fee"));
             }
-            
+
             return ResponseEntity.ok(Map.of(
-                "shippingFee", ghnResponse.getData().getTotal(),
-                "currency", "VND"
-            ));
-            
+                    "shippingFee", ghnResponse.getData().getTotal(),
+                    "currency", "VND"));
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "error", "CALCULATION_FAILED",
-                "message", e.getMessage()
-            ));
+                    "error", "CALCULATION_FAILED",
+                    "message", e.getMessage()));
         }
     }
 
@@ -415,7 +420,7 @@ public class OrderController {
             String shopOwnerId = jwtUtil.ExtractUserId(request);
             List<Order> orders = orderService.getOrdersByShopOwner(shopOwnerId, status);
 
-            //  với productName và sizeName
+            // với productName và sizeName
             List<OrderDto> orderDtos = enrichOrderDtos(orders);
 
             return ResponseEntity.ok(orderDtos);
@@ -463,7 +468,8 @@ public class OrderController {
     }
 
     // ========== Alternative Endpoints (không enrich - nhanh hơn) ==========
-    // Nếu cần performance và không cần productName/sizeName, có thể thêm endpoints này:
+    // Nếu cần performance và không cần productName/sizeName, có thể thêm endpoints
+    // này:
 
     /**
      * Get orders for shop owner (paginated) - WITHOUT enrichment (faster)
@@ -501,30 +507,40 @@ public class OrderController {
             @PathVariable String orderId,
             @RequestParam String status,
             HttpServletRequest request) {
-        
+
         try {
             String shopOwnerId = jwtUtil.ExtractUserId(request);
 
             Order order = orderService.getOrderById(orderId);
             List<String> productIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
-            
+
             if (productIds == null || productIds.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
             }
-            
+
             boolean belongsToShopOwner = order.getOrderItems().stream()
                     .anyMatch(item -> productIds.contains(item.getProductId()));
-            
+
             if (!belongsToShopOwner) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
             }
-            
+
             // Update order status
             Order updatedOrder = orderService.updateOrderStatus(orderId, status);
-            
+
+            // Trigger Ledger Update if DELIVERED
+            if ("DELIVERED".equalsIgnoreCase(status)) {
+                try {
+                    shopLedgerService.processOrderEarning(updatedOrder);
+                } catch (Exception e) {
+                    log.error("Failed to process ledger for order {}: {}", orderId, e.getMessage());
+                    // Don't fail the request, just log error
+                }
+            }
+
             // Return enriched DTO
             OrderDto dto = enrichOrderDto(updatedOrder);
-            
+
             return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
             if (e.getMessage().contains("not found")) {
@@ -542,31 +558,31 @@ public class OrderController {
             @PathVariable String orderId,
             @RequestBody UpdateOrderRequest request,
             HttpServletRequest httpRequest) {
-        
+
         try {
             String shopOwnerId = jwtUtil.ExtractUserId(httpRequest);
-            
+
             // Verify order belongs to shop owner
             Order order = orderService.getOrderById(orderId);
             List<String> productIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
-            
+
             if (productIds == null || productIds.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
             }
-            
+
             boolean belongsToShopOwner = order.getOrderItems().stream()
                     .anyMatch(item -> productIds.contains(item.getProductId()));
-            
+
             if (!belongsToShopOwner) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
             }
-            
+
             // Update order
             Order updatedOrder = orderService.updateOrder(orderId, request);
-            
+
             // Return enriched DTO
             OrderDto dto = enrichOrderDto(updatedOrder);
-            
+
             return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
             if (e.getMessage().contains("not found")) {
@@ -579,7 +595,8 @@ public class OrderController {
     /**
      * Internal endpoint for payment-service to update order status
      * Should be called when payment succeeds/fails
-     * Note: Payment success doesn't change order status to PAID - order stays PENDING for shop confirmation
+     * Note: Payment success doesn't change order status to PAID - order stays
+     * PENDING for shop confirmation
      */
     @PutMapping("/internal/update-payment-status/{orderId}")
     public ResponseEntity<?> updatePaymentStatus(
@@ -588,34 +605,32 @@ public class OrderController {
         try {
             // Verify internal call (can add header check if needed)
             if ("PAID".equalsIgnoreCase(paymentStatus)) {
-                // Payment successful, but order status should remain PENDING (waiting for shop confirmation)
+                // Payment successful, but order status should remain PENDING (waiting for shop
+                // confirmation)
                 // Payment status is tracked separately in Payment entity
                 Order order = orderService.getOrderById(orderId);
                 if (order == null) {
                     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Order not found"));
                 }
-                
+
                 // Only log payment success, don't change order status
                 // Order should remain PENDING for shop to confirm and process
                 return ResponseEntity.ok(Map.of(
                         "message", "Payment successful. Order status remains PENDING for shop confirmation",
                         "orderId", order.getId(),
                         "orderStatus", order.getOrderStatus().name(),
-                        "paymentStatus", "PAID"
-                ));
+                        "paymentStatus", "PAID"));
             } else if ("FAILED".equalsIgnoreCase(paymentStatus)) {
                 // Rollback stock and cancel order when payment fails
                 orderService.rollbackOrderStock(orderId);
                 return ResponseEntity.ok(Map.of(
                         "message", "Payment failed, order cancelled and stock rolled back",
-                        "orderId", orderId
-                ));
+                        "orderId", orderId));
             }
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid payment status"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
-                    "error", e.getMessage()
-            ));
+                    "error", e.getMessage()));
         }
     }
 
@@ -629,12 +644,10 @@ public class OrderController {
             orderService.rollbackOrderStock(orderId);
             return ResponseEntity.ok(Map.of(
                     "message", "Order rolled back successfully",
-                    "orderId", orderId
-            ));
+                    "orderId", orderId));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
-                    "error", e.getMessage()
-            ));
+                    "error", e.getMessage()));
         }
     }
 
@@ -649,11 +662,10 @@ public class OrderController {
             String addressId = (String) orderData.get("addressId");
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> selectedItemsRaw = (List<Map<String, Object>>) orderData.get("selectedItems");
-            
+
             if (userId == null || addressId == null || selectedItemsRaw == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                        "error", "Missing required fields: userId, addressId, selectedItems"
-                ));
+                        "error", "Missing required fields: userId, addressId, selectedItems"));
             }
 
             // Get shippingFee from orderData (may be null for old orders)
@@ -682,7 +694,7 @@ public class OrderController {
                     voucherDiscount = ((Number) voucherDiscountObj).doubleValue();
                 }
             }
-            
+
             // Convert Map to SelectedItemDto
             List<SelectedItemDto> selectedItems = selectedItemsRaw.stream()
                     .map(item -> {
@@ -695,27 +707,25 @@ public class OrderController {
                     })
                     .collect(java.util.stream.Collectors.toList());
 
-            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems, shippingFee, voucherId, voucherDiscount);
-            
+            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems, shippingFee, voucherId,
+                    voucherDiscount);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Order created successfully from payment",
                     "orderId", order.getId(),
-                    "status", order.getOrderStatus().name()
-            ));
+                    "status", order.getOrderStatus().name()));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                    "error", e.getMessage()
-            ));
+                    "error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "error", "Failed to create order: " + e.getMessage()
-            ));
+                    "error", "Failed to create order: " + e.getMessage()));
         }
     }
 
     @PostMapping("/cancel/{orderId}")
     public ResponseEntity<Order> cancelOrder(@PathVariable String orderId,
-                                             @RequestParam(required = false) String reason) {
+            @RequestParam(required = false) String reason) {
         Order order = orderService.cancelOrder(orderId, reason);
         if (order != null) {
             // Send notification to user
@@ -731,7 +741,7 @@ public class OrderController {
 
     @PostMapping("/return/{orderId}")
     public ResponseEntity<Order> returnOrder(@PathVariable String orderId,
-                                             @RequestParam(required = false) String reason) {
+            @RequestParam(required = false) String reason) {
         Order order = orderService.returnOrder(orderId, reason);
         if (order != null) {
             return ResponseEntity.ok(order);

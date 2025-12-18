@@ -176,8 +176,8 @@ public class OrderServiceImpl implements OrderService {
         // 3. Sales today
         LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = java.time.LocalDate.now().atTime(java.time.LocalTime.MAX);
-        Double salesToday = orderRepository.sumSalesByProductIdsAndDateRange(productIds, startOfDay, endOfDay,
-                List.of(OrderStatus.CANCELLED, OrderStatus.RETURNED));
+        Double salesToday = orderRepository.sumSalesByProductIdsAndDateRangeAndStatus(productIds, startOfDay, endOfDay,
+                OrderStatus.DELIVERED);
 
         stats.put("pending", pending);
         stats.put("processing", processing);
@@ -212,7 +212,7 @@ public class OrderServiceImpl implements OrderService {
     // Get data for shop owner orders
     @Override
     public Page<Order> getOrdersByShopOwner(String shopOwnerId, List<String> statuses, Integer pageNo,
-                                            Integer pageSize) {
+            Integer pageSize) {
         Pageable pageable = PageRequest.of(pageNo - 1, pageSize);
         List<String> productIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
 
@@ -272,13 +272,13 @@ public class OrderServiceImpl implements OrderService {
                     if ("PAID".equals(payment.getStatus())) {
                         // Tính tổng tiền cần refund = totalPrice (đã gồm ship - voucher)
                         BigDecimal totalRefundAmount = BigDecimal.valueOf(order.getTotalPrice());
-                        
+
                         // Validate userId exists
                         if (order.getUserId() == null || order.getUserId().trim().isEmpty()) {
                             log.error("[CANCEL] Cannot refund: userId is missing for order {}", orderId);
                             throw new RuntimeException("UserId is missing for order: " + orderId);
                         }
-                        
+
                         // Refund vào wallet của client
                         AddRefundRequestDto refundRequest = AddRefundRequestDto.builder()
                                 .userId(order.getUserId())
@@ -288,19 +288,23 @@ public class OrderServiceImpl implements OrderService {
                                 .reason(reason != null ? reason : "Order cancelled by user")
                                 .build();
 
-                        log.info("[CANCEL] Calling wallet service to add refund: orderId={}, userId={}, amount={}", 
+                        log.info("[CANCEL] Calling wallet service to add refund: orderId={}, userId={}, amount={}",
                                 orderId, order.getUserId(), totalRefundAmount);
 
-                        ResponseEntity<Map<String, Object>> walletResponse = userServiceClient.addRefundToWallet(refundRequest);
+                        ResponseEntity<Map<String, Object>> walletResponse = userServiceClient
+                                .addRefundToWallet(refundRequest);
                         if (walletResponse != null && walletResponse.getBody() != null) {
                             Map<String, Object> walletResult = walletResponse.getBody();
                             Boolean success = (Boolean) walletResult.get("success");
                             if (Boolean.TRUE.equals(success)) {
-                                log.info("[CANCEL] Refund added to wallet successfully: orderId={}, userId={}, amount={}, balance={}", 
-                                        orderId, order.getUserId(), totalRefundAmount, walletResult.get("balanceAvailable"));
+                                log.info(
+                                        "[CANCEL] Refund added to wallet successfully: orderId={}, userId={}, amount={}, balance={}",
+                                        orderId, order.getUserId(), totalRefundAmount,
+                                        walletResult.get("balanceAvailable"));
                             } else {
                                 String errorMsg = (String) walletResult.get("message");
-                                log.error("[CANCEL] Failed to add refund to wallet for order {}: {}", orderId, errorMsg);
+                                log.error("[CANCEL] Failed to add refund to wallet for order {}: {}", orderId,
+                                        errorMsg);
                                 throw new RuntimeException("Failed to add refund to wallet: " + errorMsg);
                             }
                         } else {
@@ -308,14 +312,17 @@ public class OrderServiceImpl implements OrderService {
                             throw new RuntimeException("Wallet service returned null response");
                         }
                     } else {
-                        log.info("[CANCEL] Payment not PAID, skipping refund: orderId={}, paymentStatus={}", orderId, payment.getStatus());
+                        log.info("[CANCEL] Payment not PAID, skipping refund: orderId={}, paymentStatus={}", orderId,
+                                payment.getStatus());
                     }
                 } else {
                     log.warn("[CANCEL] Payment response is null for order {}, skipping refund", orderId);
                 }
             } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
                 // Payment không tồn tại - có thể là COD hoặc payment chưa được tạo
-                log.warn("[CANCEL] Payment not found for order {} (may be COD or payment not created yet), skipping refund", orderId);
+                log.warn(
+                        "[CANCEL] Payment not found for order {} (may be COD or payment not created yet), skipping refund",
+                        orderId);
                 // Vẫn cho phép cancel order nếu payment không tồn tại
             } catch (RuntimeException e) {
                 // Kiểm tra nếu là "Resource not found" error từ Feign
@@ -331,7 +338,8 @@ public class OrderServiceImpl implements OrderService {
                 // Kiểm tra nếu là "Resource not found" error
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && (errorMsg.contains("Resource not found") || errorMsg.contains("404"))) {
-                    log.warn("[CANCEL] Payment not found for order {} (404/Resource not found), skipping refund", orderId);
+                    log.warn("[CANCEL] Payment not found for order {} (404/Resource not found), skipping refund",
+                            orderId);
                     // Vẫn cho phép cancel order nếu payment không tồn tại
                 } else {
                     log.error("[CANCEL] Failed to refund to wallet for order {}: {}", orderId, e.getMessage(), e);
@@ -341,25 +349,25 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Rollback stock và set cancelReason
-        // rollbackOrderStock() sẽ set status = CANCELLED, nhưng chúng ta cần set cancelReason
+        // rollbackOrderStock() sẽ set status = CANCELLED, nhưng chúng ta cần set
+        // cancelReason
         order.setCancelReason(reason);
         orderRepository.save(order);
-        
+
         // Rollback stock (method này sẽ set status = CANCELLED)
         rollbackOrderStock(orderId);
-        
+
         // Reload order để lấy status mới nhất (đã được set bởi rollbackOrderStock)
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found after rollback: " + orderId));
     }
-
 
     protected double calculateTotalPrice(List<OrderItem> orderItems) {
         return orderItems.stream()
                 .mapToDouble(item -> item.getUnitPrice() * item.getQuantity())
                 .sum();
     }
-    
+
     @Override
     public Order getOrderById(String orderId) {
         return orderRepository.findById(orderId)
@@ -417,10 +425,10 @@ public class OrderServiceImpl implements OrderService {
     public void rollbackOrderStock(String orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found for ID: " + orderId));
-        
+
         // Only rollback if order is still PENDING (not paid yet)
         if (order.getOrderStatus() != OrderStatus.PENDING) {
-            log.warn("[ROLLBACK] Order {} is not PENDING (status: {}), skipping rollback", 
+            log.warn("[ROLLBACK] Order {} is not PENDING (status: {}), skipping rollback",
                     orderId, order.getOrderStatus());
             return;
         }
@@ -429,22 +437,20 @@ public class OrderServiceImpl implements OrderService {
         if (order.getOrderItems() != null && !order.getOrderItems().isEmpty()) {
             for (OrderItem item : order.getOrderItems()) {
                 try {
-                    IncreaseStockRequest rollbackRequest =
-                            new IncreaseStockRequest(
-                                    item.getSizeId(), 
-                                    item.getQuantity()
-                            );
+                    IncreaseStockRequest rollbackRequest = new IncreaseStockRequest(
+                            item.getSizeId(),
+                            item.getQuantity());
                     stockServiceClient.increaseStock(rollbackRequest);
-                    log.info("[ROLLBACK] Rolled back stock for sizeId: {}, quantity: {}", 
+                    log.info("[ROLLBACK] Rolled back stock for sizeId: {}, quantity: {}",
                             item.getSizeId(), item.getQuantity());
                 } catch (Exception e) {
-                    log.error("[ROLLBACK] Failed to rollback stock for sizeId: {}, quantity: {}", 
+                    log.error("[ROLLBACK] Failed to rollback stock for sizeId: {}, quantity: {}",
                             item.getSizeId(), item.getQuantity(), e);
                     // Continue with other items even if one fails
                 }
             }
         }
-        
+
         // Update order status to CANCELLED
         order.setOrderStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
@@ -477,7 +483,6 @@ public class OrderServiceImpl implements OrderService {
         return userServiceClient.getAddressById(addressId).getBody();
     }
 
-
     // ====== Helpers Tạo order ======
     private Order initPendingOrder(String userId, String addressId, String paymentMethod) {
         Order order = Order.builder()
@@ -496,7 +501,7 @@ public class OrderServiceImpl implements OrderService {
                     if (si.getSizeId() == null || si.getSizeId().isBlank()) {
                         throw new RuntimeException("Size ID is required for product: " + si.getProductId());
                     }
-                    
+
                     DecreaseStockRequest dec = new DecreaseStockRequest();
                     dec.setSizeId(si.getSizeId());
                     dec.setQuantity(si.getQuantity());
@@ -515,7 +520,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * Tạo OrderItems từ SelectedItems cho checkout (skip decrease stock cho test products)
+     * Tạo OrderItems từ SelectedItems cho checkout (skip decrease stock cho test
+     * products)
      */
     private List<OrderItem> toOrderItemsFromSelectedForCheckout(List<SelectedItemDto> selectedItems, Order order) {
         return selectedItems.stream()
@@ -523,7 +529,7 @@ public class OrderServiceImpl implements OrderService {
                     if (si.getSizeId() == null || si.getSizeId().isBlank()) {
                         throw new RuntimeException("Size ID is required for product: " + si.getProductId());
                     }
-                    
+
                     // ✅ SKIP decrease stock cho test products
                     if (si.getProductId() == null || !si.getProductId().startsWith("test-product-")) {
                         DecreaseStockRequest dec = new DecreaseStockRequest();
@@ -532,7 +538,8 @@ public class OrderServiceImpl implements OrderService {
                         try {
                             stockServiceClient.decreaseStock(dec);
                         } catch (Exception e) {
-                            log.warn("[CONSUMER] Failed to decrease stock for product {}: {}", si.getProductId(), e.getMessage());
+                            log.warn("[CONSUMER] Failed to decrease stock for product {}: {}", si.getProductId(),
+                                    e.getMessage());
                             // Continue anyway for test purposes
                         }
                     } else {
@@ -565,30 +572,30 @@ public class OrderServiceImpl implements OrderService {
             log.warn("[CONSUMER] selectedItems is null or empty - skipping cart cleanup");
             return;
         }
-        
-        log.info("[CONSUMER] Starting cart cleanup for userId: {}, number of items to remove: {}", 
-            userId, selectedItems.size());
-        
+
+        log.info("[CONSUMER] Starting cart cleanup for userId: {}, number of items to remove: {}",
+                userId, selectedItems.size());
+
         for (SelectedItemDto item : selectedItems) {
             try {
-                log.info("[CONSUMER] Removing cart item - productId: {}, sizeId: {}, quantity: {}", 
-                    item.getProductId(), item.getSizeId(), item.getQuantity());
-                
+                log.info("[CONSUMER] Removing cart item - productId: {}, sizeId: {}, quantity: {}",
+                        item.getProductId(), item.getSizeId(), item.getQuantity());
+
                 RemoveCartItemByUserIdRequest request = new RemoveCartItemByUserIdRequest();
                 request.setUserId(userId);
                 request.setProductId(item.getProductId());
                 request.setSizeId(item.getSizeId());
-                
-                log.debug("[CONSUMER] Sending removeCartItemsByUserId request - userId: {}, productId: {}, sizeId: {}", 
-                    request.getUserId(), request.getProductId(), request.getSizeId());
-                
+
+                log.debug("[CONSUMER] Sending removeCartItemsByUserId request - userId: {}, productId: {}, sizeId: {}",
+                        request.getUserId(), request.getProductId(), request.getSizeId());
+
                 stockServiceClient.removeCartItemsByUserId(request);
-                
-                log.info("[CONSUMER] Successfully removed cart item - productId: {}, sizeId: {}", 
-                    item.getProductId(), item.getSizeId());
+
+                log.info("[CONSUMER] Successfully removed cart item - productId: {}, sizeId: {}",
+                        item.getProductId(), item.getSizeId());
             } catch (Exception e) {
-                log.error("[CONSUMER] Failed to remove cart item - productId: {}, sizeId: {}, error: {}", 
-                    item.getProductId(), item.getSizeId(), e.getMessage(), e);
+                log.error("[CONSUMER] Failed to remove cart item - productId: {}, sizeId: {}, error: {}",
+                        item.getProductId(), item.getSizeId(), e.getMessage(), e);
             }
         }
     }
@@ -603,7 +610,7 @@ public class OrderServiceImpl implements OrderService {
                 .message("Order placed successfully with ID: " + order.getId())
                 .isShopOwnerNotification(false) // false = user notification
                 .build();
-//        kafkaTemplateSend.send(notificationTopic.name(), noti);
+        // kafkaTemplateSend.send(notificationTopic.name(), noti);
         String partitionKey = noti.getUserId() != null ? noti.getUserId() : noti.getShopId();
         kafkaTemplateSend.send(notificationTopic.name(), partitionKey, noti);
     }
@@ -615,21 +622,21 @@ public class OrderServiceImpl implements OrderService {
 
         // Group order items by shop owner (product.userId)
         Map<String, List<OrderItem>> itemsByShopOwner = new HashMap<>();
-        
+
         for (OrderItem item : order.getOrderItems()) {
             try {
                 ResponseEntity<ProductDto> productResponse = stockServiceClient.getProductById(item.getProductId());
                 if (productResponse != null && productResponse.getBody() != null) {
                     ProductDto product = productResponse.getBody();
                     String shopOwnerId = product.getUserId();
-                    
+
                     if (shopOwnerId != null && !shopOwnerId.isBlank()) {
                         itemsByShopOwner.computeIfAbsent(shopOwnerId, k -> new ArrayList<>()).add(item);
                     }
                 }
             } catch (Exception e) {
-                log.error("[CONSUMER] Failed to fetch product for notification: productId={}, error={}", 
-                    item.getProductId(), e.getMessage());
+                log.error("[CONSUMER] Failed to fetch product for notification: productId={}, error={}",
+                        item.getProductId(), e.getMessage());
             }
         }
 
@@ -637,15 +644,14 @@ public class OrderServiceImpl implements OrderService {
         for (Map.Entry<String, List<OrderItem>> entry : itemsByShopOwner.entrySet()) {
             String shopOwnerId = entry.getKey();
             List<OrderItem> items = entry.getValue();
-            
+
             int totalItems = items.stream().mapToInt(OrderItem::getQuantity).sum();
             double totalAmount = items.stream().mapToDouble(OrderItem::getTotalPrice).sum();
-            
+
             String message = String.format(
-                "Bạn có đơn hàng mới #%s với %d sản phẩm, tổng giá trị: %.0f VNĐ", 
-                order.getId(), totalItems, totalAmount
-            );
-            
+                    "Bạn có đơn hàng mới #%s với %d sản phẩm, tổng giá trị: %.0f VNĐ",
+                    order.getId(), totalItems, totalAmount);
+
             try {
                 // Since 1 user = 1 shop, set both userId and shopId to shopOwnerId
                 // This is a notification for the shop owner, not the user who placed the order
@@ -656,53 +662,57 @@ public class OrderServiceImpl implements OrderService {
                         .message(message)
                         .isShopOwnerNotification(true) // true = shop owner notification
                         .build();
-//                kafkaTemplateSend.send(notificationTopic.name(), notification);
+                // kafkaTemplateSend.send(notificationTopic.name(), notification);
                 String partitionKey = notification.getShopId() != null
                         ? notification.getShopId()
                         : notification.getUserId();
                 kafkaTemplateSend.send(notificationTopic.name(), partitionKey, notification);
             } catch (Exception e) {
-                log.error("[CONSUMER] Failed to send notification to shop owner: shopId={}, error={}", 
-                    shopOwnerId, e.getMessage());
+                log.error("[CONSUMER] Failed to send notification to shop owner: shopId={}, error={}",
+                        shopOwnerId, e.getMessage());
             }
         }
     }
 
     // ========== GHN SHIPPING ORDER METHODS ==========
-    
+
     /**
      * TẠO VẬN ĐƠN GHN
      * Được gọi sau khi order được tạo thành công
      */
     private void createShippingOrder(Order order) {
         try {
-            
+
             // 1. Lấy địa chỉ khách hàng
             AddressDto customerAddress = userServiceClient.getAddressById(order.getAddressId()).getBody();
             if (customerAddress == null) {
                 return;
             }
-            
+
             // 2. Validate GHN fields
             if (customerAddress.getDistrictId() == null || customerAddress.getWardCode() == null) {
                 return;
             }
-            
+
             // 3. Validate order items
             if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
                 return;
             }
-            
-            
+
             // 4. Tính tổng weight từ order items (lấy weight từ Size)
             int totalWeight = 0;
             for (OrderItem item : order.getOrderItems()) {
                 try {
                     // Get size information to get weight
-                    ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient.getSizeById(item.getSizeId());
+                    ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient
+                            .getSizeById(item.getSizeId());
                     if (sizeResponse != null && sizeResponse.getBody() != null) {
                         com.example.orderservice.dto.SizeDto size = sizeResponse.getBody();
-                        int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight() : 500; // Default 500g if not set
+                        int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight() : 500; // Default
+                                                                                                                      // 500g
+                                                                                                                      // if
+                                                                                                                      // not
+                                                                                                                      // set
                         totalWeight += item.getQuantity() * itemWeight;
                     } else {
                         // Fallback to 500g if size not found
@@ -713,117 +723,115 @@ public class OrderServiceImpl implements OrderService {
                     totalWeight += item.getQuantity() * 500;
                 }
             }
-            
+
             // 5. Lấy shop owner address (FROM address)
             // Lấy shop owner ID từ product đầu tiên
             String shopOwnerId = null;
             try {
                 if (!order.getOrderItems().isEmpty()) {
                     ProductDto firstProduct = stockServiceClient.getProductById(
-                        order.getOrderItems().get(0).getProductId()
-                    ).getBody();
+                            order.getOrderItems().get(0).getProductId()).getBody();
                     if (firstProduct != null) {
                         shopOwnerId = firstProduct.getUserId();
                     }
                 }
             } catch (Exception e) {
             }
-            
+
             // Lấy shop owner info để có FROM address
             ShopOwnerDto shopOwner = null;
             if (shopOwnerId != null && !shopOwnerId.isBlank()) {
                 try {
-                    ResponseEntity<ShopOwnerDto> shopOwnerResponse = userServiceClient.getShopOwnerByUserId(shopOwnerId);
+                    ResponseEntity<ShopOwnerDto> shopOwnerResponse = userServiceClient
+                            .getShopOwnerByUserId(shopOwnerId);
                     if (shopOwnerResponse != null && shopOwnerResponse.getBody() != null) {
                         shopOwner = shopOwnerResponse.getBody();
                     }
                 } catch (Exception e) {
                 }
             }
-            
+
             // Validate shop owner address
             if (shopOwner == null || shopOwner.getDistrictId() == null || shopOwner.getWardCode() == null) {
                 return;
             }
-            
+
             // 6. Build items cho GHN
             List<GhnItemDto> ghnItems = order.getOrderItems().stream()
-                .map(item -> {
-                    String productName = "Product";
-                    try {
-                        ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
-                        if (product != null) {
-                            productName = product.getName();
+                    .map(item -> {
+                        String productName = "Product";
+                        try {
+                            ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
+                            if (product != null) {
+                                productName = product.getName();
+                            }
+                        } catch (Exception e) {
                         }
-                    } catch (Exception e) {
-                    }
-                    
-                    return GhnItemDto.builder()
-                        .name(productName)
-                        .quantity(item.getQuantity())
-                        .price((long) item.getUnitPrice())
-                        .build();
-                })
-                .collect(Collectors.toList());
-            
+
+                        return GhnItemDto.builder()
+                                .name(productName)
+                                .quantity(item.getQuantity())
+                                .price((long) item.getUnitPrice())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
             // 7. Build GHN request với FROM address từ shop owner
             GhnCreateOrderRequest.GhnCreateOrderRequestBuilder requestBuilder = GhnCreateOrderRequest.builder()
-                .paymentTypeId(2) // 2 = Người nhận trả phí
-                .requiredNote("CHOXEMHANGKHONGTHU") // Cho xem hàng không cho thử
-                .toName(customerAddress.getRecipientName())
-                .toPhone(customerAddress.getRecipientPhone())
-                .toAddress(customerAddress.getStreetAddress())
-                .toWardCode(customerAddress.getWardCode())
-                .toDistrictId(customerAddress.getDistrictId())
-                .codAmount((long) order.getTotalPrice()) // Thu hộ COD
-                .weight(totalWeight)
-                .length(20) // cm - Hardcode, có thể lấy từ product sau
-                .width(15)
-                .height(10)
-                .serviceTypeId(2) // 2 = Standard (rẻ hơn), 5 = Express
-                .items(ghnItems);
-            
+                    .paymentTypeId(2) // 2 = Người nhận trả phí
+                    .requiredNote("CHOXEMHANGKHONGTHU") // Cho xem hàng không cho thử
+                    .toName(customerAddress.getRecipientName())
+                    .toPhone(customerAddress.getRecipientPhone())
+                    .toAddress(customerAddress.getStreetAddress())
+                    .toWardCode(customerAddress.getWardCode())
+                    .toDistrictId(customerAddress.getDistrictId())
+                    .codAmount((long) order.getTotalPrice()) // Thu hộ COD
+                    .weight(totalWeight)
+                    .length(20) // cm - Hardcode, có thể lấy từ product sau
+                    .width(15)
+                    .height(10)
+                    .serviceTypeId(2) // 2 = Standard (rẻ hơn), 5 = Express
+                    .items(ghnItems);
+
             // Thêm FROM address từ shop owner
             if (shopOwner != null) {
                 requestBuilder
-                    .fromName(shopOwner.getShopName() != null ? shopOwner.getShopName() : shopOwner.getOwnerName())
-                    .fromPhone(shopOwner.getPhone() != null ? shopOwner.getPhone() : "0123456789")
-                    .fromAddress(shopOwner.getStreetAddress())
-                    .fromWardCode(shopOwner.getWardCode())
-                    .fromDistrictId(shopOwner.getDistrictId());
+                        .fromName(shopOwner.getShopName() != null ? shopOwner.getShopName() : shopOwner.getOwnerName())
+                        .fromPhone(shopOwner.getPhone() != null ? shopOwner.getPhone() : "0123456789")
+                        .fromAddress(shopOwner.getStreetAddress())
+                        .fromWardCode(shopOwner.getWardCode())
+                        .fromDistrictId(shopOwner.getDistrictId());
             }
-            
+
             GhnCreateOrderRequest ghnRequest = requestBuilder.build();
-            
-         
-            
+
             // 8. Call GHN API
             GhnCreateOrderResponse ghnResponse = ghnApiClient.createOrder(ghnRequest);
-            
+
             if (ghnResponse == null || ghnResponse.getCode() != 200) {
                 return;
             }
-            
+
             // 9. Save ShippingOrder
-            
+
             ShippingOrder shippingOrder = ShippingOrder.builder()
-                .orderId(order.getId())
-                .ghnOrderCode(ghnResponse.getData().getOrderCode())
-                .shippingFee(BigDecimal.valueOf(ghnResponse.getData().getTotalFee()))
-                .codAmount(BigDecimal.valueOf(order.getTotalPrice()))
-                .weight(totalWeight)
-                .status("PENDING")
-                .expectedDeliveryTime(parseDateTime(ghnResponse.getData().getExpectedDeliveryTime()))
-                .ghnResponse(toJson(ghnResponse))
-                .build();
-            
+                    .orderId(order.getId())
+                    .ghnOrderCode(ghnResponse.getData().getOrderCode())
+                    .shippingFee(BigDecimal.valueOf(ghnResponse.getData().getTotalFee()))
+                    .codAmount(BigDecimal.valueOf(order.getTotalPrice()))
+                    .weight(totalWeight)
+                    .status("PENDING")
+                    .expectedDeliveryTime(parseDateTime(ghnResponse.getData().getExpectedDeliveryTime()))
+                    .ghnResponse(toJson(ghnResponse))
+                    .build();
+
             shippingOrderRepository.save(shippingOrder);
 
         } catch (Exception e) {
             // Không throw exception để không làm fail order creation
         }
     }
-    
+
     /**
      * Helper: Parse datetime từ GHN response
      */
@@ -838,7 +846,7 @@ public class OrderServiceImpl implements OrderService {
             return null;
         }
     }
-    
+
     /**
      * Helper: Convert object to JSON string
      */
@@ -854,13 +862,13 @@ public class OrderServiceImpl implements OrderService {
     ///////////////////////////////////////////////////////////////////////////////////
     @Override
     @Transactional
-    public void orderByKafka(FrontendOrderRequest orderRequest, HttpServletRequest request){
+    public void orderByKafka(FrontendOrderRequest orderRequest, HttpServletRequest request) {
         String author = request.getHeader("Authorization");
         CartDto cartDto = stockServiceClient.getCart(author).getBody();
         AddressDto address = userServiceClient.getAddressById(orderRequest.getAddressId()).getBody();
         if (address == null)
             throw new RuntimeException("Address not found for ID: " + orderRequest.getAddressId());
-        if(cartDto == null || cartDto.getItems().isEmpty())
+        if (cartDto == null || cartDto.getItems().isEmpty())
             throw new RuntimeException("Cart not found or empty");
 
         for (SelectedItemDto item : orderRequest.getSelectedItems()) {
@@ -880,7 +888,8 @@ public class OrderServiceImpl implements OrderService {
 
             if (size.getStock() < item.getQuantity()) {
                 throw new RuntimeException("Insufficient stock for product: " + product.getName()
-                        + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: " + item.getQuantity());
+                        + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: "
+                        + item.getQuantity());
             }
         }
 
@@ -889,7 +898,9 @@ public class OrderServiceImpl implements OrderService {
                 .addressId(orderRequest.getAddressId())
                 .cartId(cartDto.getId())
                 .selectedItems(orderRequest.getSelectedItems())
-                .paymentMethod(orderRequest.getPaymentMethod() != null ? orderRequest.getPaymentMethod() : "COD") // Default to COD
+                .paymentMethod(orderRequest.getPaymentMethod() != null ? orderRequest.getPaymentMethod() : "COD") // Default
+                                                                                                                  // to
+                                                                                                                  // COD
                 .voucherId(orderRequest.getVoucherId())
                 .voucherDiscount(orderRequest.getVoucherDiscount())
                 .shippingFee(orderRequest.getShippingFee())
@@ -900,7 +911,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems, BigDecimal shippingFee, String voucherId, Double voucherDiscount) {
+    public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems,
+            BigDecimal shippingFee, String voucherId, Double voucherDiscount) {
         // Validate address
         AddressDto address = userServiceClient.getAddressById(addressId).getBody();
         if (address == null) {
@@ -925,7 +937,8 @@ public class OrderServiceImpl implements OrderService {
 
             if (size.getStock() < item.getQuantity()) {
                 throw new RuntimeException("Insufficient stock for product: " + product.getName()
-                        + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: " + item.getQuantity());
+                        + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: "
+                        + item.getQuantity());
             }
 
             // Ensure unitPrice is populated (frontend payload may omit it for VNPay flow)
@@ -935,13 +948,15 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        // Create order with PENDING status (payment is successful, but order needs shop confirmation)
+        // Create order with PENDING status (payment is successful, but order needs shop
+        // confirmation)
         Order order = Order.builder()
                 .userId(userId)
                 .addressId(addressId)
                 .orderStatus(OrderStatus.PENDING) // Payment successful, but order pending shop confirmation
                 .totalPrice(0.0) // sẽ set lại sau khi tính items + ship - voucher
-                .shippingFee(shippingFee != null ? shippingFee : BigDecimal.ZERO) // Lưu shipping fee đã thanh toán trong payment
+                .shippingFee(shippingFee != null ? shippingFee : BigDecimal.ZERO) // Lưu shipping fee đã thanh toán
+                                                                                  // trong payment
                 .paymentMethod("VNPAY") // Orders created from payment are VNPay
                 .voucherId(voucherId)
                 .voucherDiscount(voucherDiscount != null ? BigDecimal.valueOf(voucherDiscount) : null)
@@ -957,16 +972,15 @@ public class OrderServiceImpl implements OrderService {
         double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
         order.setTotalPrice(itemsTotal + ship - voucher);
         orderRepository.save(order);
-        
+
         // Apply voucher if present
         if (order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
             try {
                 voucherService.applyVoucherToOrder(
-                    order.getVoucherId(), 
-                    order.getId(), 
-                    order.getUserId(), 
-                    order.getVoucherDiscount()
-                );
+                        order.getVoucherId(),
+                        order.getId(),
+                        order.getUserId(),
+                        order.getVoucherDiscount());
             } catch (Exception e) {
                 log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
                 // Don't fail order creation if voucher application fails
@@ -1027,7 +1041,8 @@ public class OrderServiceImpl implements OrderService {
                     log.error("[CONSUMER] Insufficient stock for product {} size {}. Available: {}, Requested: {}",
                             item.getProductId(), size.getName(), size.getStock(), item.getQuantity());
                     throw new RuntimeException("Insufficient stock for product: " + product.getName()
-                            + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: " + item.getQuantity());
+                            + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: "
+                            + item.getQuantity());
                 }
             }
         } catch (Exception e) {
@@ -1041,7 +1056,7 @@ public class OrderServiceImpl implements OrderService {
                         .message("Order creation failed: " + e.getMessage())
                         .isShopOwnerNotification(false) // false = user notification
                         .build();
-//                kafkaTemplateSend.send(notificationTopic.name(), failNotification);
+                // kafkaTemplateSend.send(notificationTopic.name(), failNotification);
 
                 String partitionKey = failNotification.getUserId() != null
                         ? failNotification.getUserId()
@@ -1056,14 +1071,14 @@ public class OrderServiceImpl implements OrderService {
         // 1) Create order skeleton
         Order order = initPendingOrder(msg.getUserId(), msg.getAddressId(),
                 msg.getPaymentMethod() != null ? msg.getPaymentMethod() : "COD");
-        
+
         // Set voucher data if available
         if (msg.getVoucherId() != null) {
             order.setVoucherId(msg.getVoucherId());
-            order.setVoucherDiscount(msg.getVoucherDiscount() != null ? 
-                    BigDecimal.valueOf(msg.getVoucherDiscount()) : BigDecimal.ZERO);
+            order.setVoucherDiscount(
+                    msg.getVoucherDiscount() != null ? BigDecimal.valueOf(msg.getVoucherDiscount()) : BigDecimal.ZERO);
         }
-        
+
         // Set shipping fee if available
         if (msg.getShippingFee() != null) {
             order.setShippingFee(BigDecimal.valueOf(msg.getShippingFee()));
@@ -1078,16 +1093,15 @@ public class OrderServiceImpl implements OrderService {
         double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
         order.setTotalPrice(itemsTotal + ship - voucher);
         orderRepository.save(order);
-        
+
         // Apply voucher if present
         if (order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
             try {
                 voucherService.applyVoucherToOrder(
-                    order.getVoucherId(), 
-                    order.getId(), 
-                    order.getUserId(), 
-                    order.getVoucherDiscount()
-                );
+                        order.getVoucherId(),
+                        order.getId(),
+                        order.getUserId(),
+                        order.getVoucherDiscount());
             } catch (Exception e) {
                 log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
                 // Don't fail order creation if voucher application fails
@@ -1136,9 +1150,12 @@ public class OrderServiceImpl implements OrderService {
                     if (order != null) {
                         // Payment is successful
                         if (order.getOrderStatus() == OrderStatus.PENDING) {
-                            log.info("[PAYMENT-CONSUMER] Order {} payment successful, status remains PENDING for shop confirmation", event.getOrderId());
+                            log.info(
+                                    "[PAYMENT-CONSUMER] Order {} payment successful, status remains PENDING for shop confirmation",
+                                    event.getOrderId());
                         } else {
-                            log.info("[PAYMENT-CONSUMER] Order {} payment successful, current status: {}", event.getOrderId(), order.getOrderStatus());
+                            log.info("[PAYMENT-CONSUMER] Order {} payment successful, current status: {}",
+                                    event.getOrderId(), order.getOrderStatus());
                         }
                         // No need to change order status - PENDING is correct after successful payment
                     } else {
@@ -1150,10 +1167,12 @@ public class OrderServiceImpl implements OrderService {
                     try {
                         // Parse orderDataJson to get selectedItems and shippingFee
                         Map<String, Object> orderDataMap = objectMapper.readValue(event.getOrderDataJson(), Map.class);
-                        List<Map<String, Object>> selectedItemsList = (List<Map<String, Object>>) orderDataMap.get("selectedItems");
+                        List<Map<String, Object>> selectedItemsList = (List<Map<String, Object>>) orderDataMap
+                                .get("selectedItems");
 
                         if (selectedItemsList == null || selectedItemsList.isEmpty()) {
-                            log.error("[PAYMENT-CONSUMER] No selectedItems in orderData for payment: {}", event.getTxnRef());
+                            log.error("[PAYMENT-CONSUMER] No selectedItems in orderData for payment: {}",
+                                    event.getTxnRef());
                             return;
                         }
 
@@ -1173,9 +1192,9 @@ public class OrderServiceImpl implements OrderService {
                                 }
                             }
                         }
-                        
+
                         log.info("[PAYMENT-CONSUMER] Shipping fee from orderData: {}", shippingFee);
-                        
+
                         // Get voucher data from orderData
                         String voucherId = (String) orderDataMap.get("voucherId");
                         Double voucherDiscount = null;
@@ -1185,7 +1204,8 @@ public class OrderServiceImpl implements OrderService {
                                 voucherDiscount = ((Number) voucherDiscountObj).doubleValue();
                             }
                         }
-                        log.info("[PAYMENT-CONSUMER] Voucher from orderData - voucherId: {}, discount: {}", voucherId, voucherDiscount);
+                        log.info("[PAYMENT-CONSUMER] Voucher from orderData - voucherId: {}, discount: {}", voucherId,
+                                voucherDiscount);
 
                         // Convert to SelectedItemDto list
                         List<SelectedItemDto> selectedItems = selectedItemsList.stream()
@@ -1198,45 +1218,53 @@ public class OrderServiceImpl implements OrderService {
                                 })
                                 .collect(java.util.stream.Collectors.toList());
 
-                        // Create order with PENDING status (payment successful, waiting for shop confirmation)
-                        Order order = createOrderFromPayment(event.getUserId(), event.getAddressId(), selectedItems, shippingFee, voucherId, voucherDiscount);
-                        
+                        // Create order with PENDING status (payment successful, waiting for shop
+                        // confirmation)
+                        Order order = createOrderFromPayment(event.getUserId(), event.getAddressId(), selectedItems,
+                                shippingFee, voucherId, voucherDiscount);
+
                         // Set payment method from event (VNPAY, CARD, etc.) if available
                         if (event.getMethod() != null && !event.getMethod().trim().isEmpty()) {
                             order.setPaymentMethod(event.getMethod().toUpperCase());
                             orderRepository.save(order);
                         }
-                        
+
                         // Update payment with orderId so we can find it later when canceling
                         if (event.getPaymentId() != null && !event.getPaymentId().trim().isEmpty()) {
                             try {
-                                ResponseEntity<Map<String, Object>> updateResponse = paymentServiceClient.updatePaymentOrderId(
-                                        event.getPaymentId(), order.getId());
+                                ResponseEntity<Map<String, Object>> updateResponse = paymentServiceClient
+                                        .updatePaymentOrderId(
+                                                event.getPaymentId(), order.getId());
                                 if (updateResponse != null && updateResponse.getBody() != null) {
                                     Boolean success = (Boolean) updateResponse.getBody().get("success");
                                     if (Boolean.TRUE.equals(success)) {
-                                        log.info("[PAYMENT-CONSUMER] Updated payment {} with orderId: {}", 
+                                        log.info("[PAYMENT-CONSUMER] Updated payment {} with orderId: {}",
                                                 event.getPaymentId(), order.getId());
                                     } else {
-                                        log.warn("[PAYMENT-CONSUMER] Failed to update payment {} with orderId: {}", 
+                                        log.warn("[PAYMENT-CONSUMER] Failed to update payment {} with orderId: {}",
                                                 event.getPaymentId(), order.getId());
                                     }
                                 }
                             } catch (Exception e) {
-                                log.error("[PAYMENT-CONSUMER] Failed to update payment with orderId: {}", e.getMessage(), e);
+                                log.error("[PAYMENT-CONSUMER] Failed to update payment with orderId: {}",
+                                        e.getMessage(), e);
                                 // Don't fail order creation, just log error
                             }
                         }
-                        
-                        log.info("[PAYMENT-CONSUMER] Created order {} with PENDING status and payment method {} from payment event: {}", 
+
+                        log.info(
+                                "[PAYMENT-CONSUMER] Created order {} with PENDING status and payment method {} from payment event: {}",
                                 order.getId(), order.getPaymentMethod(), event.getTxnRef());
                     } catch (Exception e) {
-                        log.error("[PAYMENT-CONSUMER] Failed to create order from payment event: {}", e.getMessage(), e);
+                        log.error("[PAYMENT-CONSUMER] Failed to create order from payment event: {}", e.getMessage(),
+                                e);
                         // Note: Payment is already successful, but order creation failed
-                        // In production, you might want to implement retry mechanism or manual intervention
+                        // In production, you might want to implement retry mechanism or manual
+                        // intervention
                     }
                 } else {
-                    log.warn("[PAYMENT-CONSUMER] Payment successful but missing order data: txnRef={}", event.getTxnRef());
+                    log.warn("[PAYMENT-CONSUMER] Payment successful but missing order data: txnRef={}",
+                            event.getTxnRef());
                 }
             } else if ("FAILED".equals(event.getStatus())) {
                 // Payment failed - rollback if order exists
@@ -1245,10 +1273,12 @@ public class OrderServiceImpl implements OrderService {
                         rollbackOrderStock(event.getOrderId());
                         log.info("[PAYMENT-CONSUMER] Rolled back order {} due to payment failure", event.getOrderId());
                     } catch (Exception e) {
-                        log.error("[PAYMENT-CONSUMER] Failed to rollback order {}: {}", event.getOrderId(), e.getMessage(), e);
+                        log.error("[PAYMENT-CONSUMER] Failed to rollback order {}: {}", event.getOrderId(),
+                                e.getMessage(), e);
                     }
                 } else {
-                    log.info("[PAYMENT-CONSUMER] Payment failed but no order was created, no rollback needed: txnRef={}",
+                    log.info(
+                            "[PAYMENT-CONSUMER] Payment failed but no order was created, no rollback needed: txnRef={}",
                             event.getTxnRef());
                 }
             }

@@ -17,7 +17,20 @@ public class SubscriptionController {
     private final ShopSubscriptionService shopSubscriptionService;
 
     @GetMapping("/internal/shop/{shopOwnerId}")
-    public ResponseEntity<ShopSubscriptionDTO> getSubscriptionByShopOwnerId(@PathVariable String shopOwnerId) {
+    public ResponseEntity<ShopSubscriptionDTO> getSubscriptionByShopOwnerInernal(@PathVariable String shopOwnerId) {
         return ResponseEntity.ok(shopSubscriptionService.getActiveSubscription(shopOwnerId));
+    }
+
+    // Public API for Shop Owner
+    @GetMapping("/shop/{shopOwnerId}")
+    public ResponseEntity<ShopSubscriptionDTO> getMySubscription(@PathVariable String shopOwnerId) {
+        return ResponseEntity.ok(shopSubscriptionService.getActiveSubscription(shopOwnerId));
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/shop/{shopOwnerId}/subscribe")
+    public ResponseEntity<ShopSubscriptionDTO> subscribe(
+            @PathVariable String shopOwnerId,
+            @org.springframework.web.bind.annotation.RequestBody @jakarta.validation.Valid com.example.userservice.request.subscription.CreateShopSubscriptionRequest request) {
+        return ResponseEntity.ok(shopSubscriptionService.subscribe(shopOwnerId, request));
     }
 }
