@@ -8,7 +8,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -53,5 +52,7 @@ public class PayoutBatch extends BaseEntity {
 
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason; // Lý do thất bại
+    @Column(name = "description")
+    private String description;
 }
 

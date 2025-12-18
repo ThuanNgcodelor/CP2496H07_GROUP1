@@ -73,13 +73,14 @@ public class OrderServiceImpl implements OrderService {
         LocalDateTime startOfToday = now.toLocalDate().atStartOfDay();
         LocalDateTime endOfToday = now.toLocalDate().atTime(java.time.LocalTime.MAX);
 
-        // 2. Today's Revenue & Orders
-        List<OrderStatus> excluded = List.of(OrderStatus.CANCELLED, OrderStatus.RETURNED);
-        Double todayRevenue = orderRepository.sumSalesByProductIdsAndDateRange(productIds, startOfToday, endOfToday,
-                excluded);
+        // 2. Today's Revenue (Only DELIVERED)
+        Double todayRevenue = orderRepository.sumSalesByProductIdsAndDateRangeAndStatus(productIds, startOfToday,
+                endOfToday, OrderStatus.DELIVERED);
         if (todayRevenue == null)
             todayRevenue = 0.0;
 
+        // Today's Orders (All except cancelled/returned)
+        List<OrderStatus> excluded = List.of(OrderStatus.CANCELLED, OrderStatus.RETURNED);
         Long todayOrders = orderRepository.countByProductIdsAndCreatedAtBetween(productIds, startOfToday,
                 endOfToday, excluded);
         if (todayOrders == null)
@@ -88,8 +89,9 @@ public class OrderServiceImpl implements OrderService {
         // 3. Yesterday's Revenue for Growth
         LocalDateTime startOfYesterday = startOfToday.minusDays(1);
         LocalDateTime endOfYesterday = endOfToday.minusDays(1);
-        Double yesterdayRevenue = orderRepository.sumSalesByProductIdsAndDateRange(productIds, startOfYesterday,
-                endOfYesterday, excluded);
+        Double yesterdayRevenue = orderRepository.sumSalesByProductIdsAndDateRangeAndStatus(productIds,
+                startOfYesterday,
+                endOfYesterday, OrderStatus.DELIVERED);
         if (yesterdayRevenue == null)
             yesterdayRevenue = 0.0;
 
@@ -109,7 +111,8 @@ public class OrderServiceImpl implements OrderService {
         for (int i = 6; i >= 0; i--) {
             LocalDateTime start = now.minusDays(i).toLocalDate().atStartOfDay();
             LocalDateTime end = now.minusDays(i).toLocalDate().atTime(java.time.LocalTime.MAX);
-            Double dailyRevenue = orderRepository.sumSalesByProductIdsAndDateRange(productIds, start, end, excluded);
+            Double dailyRevenue = orderRepository.sumSalesByProductIdsAndDateRangeAndStatus(productIds, start, end,
+                    OrderStatus.DELIVERED);
 
             labels.add(start.format(formatter));
             data.add(dailyRevenue != null ? dailyRevenue : 0.0);
@@ -198,6 +201,7 @@ public class OrderServiceImpl implements OrderService {
     private final GhnApiClient ghnApiClient;
     private final PaymentServiceClient paymentServiceClient;
     private final ShippingOrderRepository shippingOrderRepository;
+    private final VoucherService voucherService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final NewTopic orderTopic;
     private final NewTopic notificationTopic;
@@ -266,11 +270,8 @@ public class OrderServiceImpl implements OrderService {
                 if (paymentResponse != null && paymentResponse.getBody() != null) {
                     PaymentDto payment = paymentResponse.getBody();
                     if ("PAID".equals(payment.getStatus())) {
-                        // Tính tổng tiền cần refund (totalPrice + shippingFee)
+                        // Tính tổng tiền cần refund = totalPrice (đã gồm ship - voucher)
                         BigDecimal totalRefundAmount = BigDecimal.valueOf(order.getTotalPrice());
-                        if (order.getShippingFee() != null) {
-                            totalRefundAmount = totalRefundAmount.add(order.getShippingFee());
-                        }
                         
                         // Validate userId exists
                         if (order.getUserId() == null || order.getUserId().trim().isEmpty()) {
@@ -358,7 +359,7 @@ public class OrderServiceImpl implements OrderService {
                 .mapToDouble(item -> item.getUnitPrice() * item.getQuantity())
                 .sum();
     }
-
+    
     @Override
     public Order getOrderById(String orderId) {
         return orderRepository.findById(orderId)
@@ -675,36 +676,23 @@ public class OrderServiceImpl implements OrderService {
      */
     private void createShippingOrder(Order order) {
         try {
-            log.info("[GHN] ========== CREATING SHIPPING ORDER ==========");
-            log.info("[GHN] Order ID: {}", order.getId());
             
             // 1. Lấy địa chỉ khách hàng
             AddressDto customerAddress = userServiceClient.getAddressById(order.getAddressId()).getBody();
             if (customerAddress == null) {
-                log.error("[GHN] Customer address not found: {}", order.getAddressId());
                 return;
             }
             
-            log.info("[GHN] Customer: {}, Phone: {}", 
-                customerAddress.getRecipientName(), 
-                customerAddress.getRecipientPhone());
-            
             // 2. Validate GHN fields
             if (customerAddress.getDistrictId() == null || customerAddress.getWardCode() == null) {
-                log.warn("[GHN] ⚠️  Address missing GHN fields!");
-                log.warn("[GHN] District ID: {}, Ward Code: {}", 
-                    customerAddress.getDistrictId(), customerAddress.getWardCode());
-                log.warn("[GHN] SKIPPING GHN order creation - address needs update with GHN data");
                 return;
             }
             
             // 3. Validate order items
             if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
-                log.error("[GHN] Order has no items!");
                 return;
             }
             
-            log.info("[GHN] Order has {} items", order.getOrderItems().size());
             
             // 4. Tính tổng weight từ order items (lấy weight từ Size)
             int totalWeight = 0;
@@ -716,22 +704,15 @@ public class OrderServiceImpl implements OrderService {
                         com.example.orderservice.dto.SizeDto size = sizeResponse.getBody();
                         int itemWeight = (size.getWeight() != null && size.getWeight() > 0) ? size.getWeight() : 500; // Default 500g if not set
                         totalWeight += item.getQuantity() * itemWeight;
-                        log.debug("[GHN] Item: productId={}, sizeId={}, quantity={}, weight={}g, total={}g", 
-                                item.getProductId(), item.getSizeId(), item.getQuantity(), itemWeight, item.getQuantity() * itemWeight);
                     } else {
                         // Fallback to 500g if size not found
-                        log.warn("[GHN] Size not found for sizeId: {}, using default 500g", item.getSizeId());
                         totalWeight += item.getQuantity() * 500;
                     }
                 } catch (Exception e) {
                     // Fallback to 500g if error
-                    log.warn("[GHN] Failed to get size weight for sizeId: {}, using default 500g. Error: {}", 
-                            item.getSizeId(), e.getMessage());
                     totalWeight += item.getQuantity() * 500;
                 }
             }
-            
-            log.info("[GHN] Total weight: {}g", totalWeight);
             
             // 5. Lấy shop owner address (FROM address)
             // Lấy shop owner ID từ product đầu tiên
@@ -746,7 +727,6 @@ public class OrderServiceImpl implements OrderService {
                     }
                 }
             } catch (Exception e) {
-                log.warn("[GHN] Cannot get shop owner ID: {}", e.getMessage());
             }
             
             // Lấy shop owner info để có FROM address
@@ -756,21 +736,13 @@ public class OrderServiceImpl implements OrderService {
                     ResponseEntity<ShopOwnerDto> shopOwnerResponse = userServiceClient.getShopOwnerByUserId(shopOwnerId);
                     if (shopOwnerResponse != null && shopOwnerResponse.getBody() != null) {
                         shopOwner = shopOwnerResponse.getBody();
-                        log.info("[GHN] Shop Owner: {}, Address: {}", shopOwner.getShopName(), shopOwner.getStreetAddress());
                     }
                 } catch (Exception e) {
-                    log.warn("[GHN] Cannot get shop owner address: {}", e.getMessage());
                 }
             }
             
             // Validate shop owner address
             if (shopOwner == null || shopOwner.getDistrictId() == null || shopOwner.getWardCode() == null) {
-                log.warn("[GHN] ⚠️  Shop owner address missing GHN fields!");
-                log.warn("[GHN] Shop Owner ID: {}, District ID: {}, Ward Code: {}", 
-                    shopOwnerId, 
-                    shopOwner != null ? shopOwner.getDistrictId() : "null",
-                    shopOwner != null ? shopOwner.getWardCode() : "null");
-                log.warn("[GHN] SKIPPING GHN order creation - shop owner needs to configure GHN address in Settings");
                 return;
             }
             
@@ -784,7 +756,6 @@ public class OrderServiceImpl implements OrderService {
                             productName = product.getName();
                         }
                     } catch (Exception e) {
-                        log.warn("[GHN] Cannot get product name for: {}", item.getProductId());
                     }
                     
                     return GhnItemDto.builder()
@@ -824,32 +795,16 @@ public class OrderServiceImpl implements OrderService {
             
             GhnCreateOrderRequest ghnRequest = requestBuilder.build();
             
-            log.info("[GHN] Request Details:");
-            log.info("[GHN]   FROM - Shop: {}, District ID: {}, Ward Code: {}", 
-                shopOwner != null ? shopOwner.getShopName() : "N/A",
-                ghnRequest.getFromDistrictId(),
-                ghnRequest.getFromWardCode());
-            log.info("[GHN]   TO - Customer: {}, District ID: {}, Ward Code: {}", 
-                customerAddress.getRecipientName(),
-                ghnRequest.getToDistrictId(),
-                ghnRequest.getToWardCode());
-            log.info("[GHN]   COD Amount: {} VNĐ", ghnRequest.getCodAmount());
-            log.info("[GHN]   Weight: {}g", ghnRequest.getWeight());
+         
             
             // 8. Call GHN API
-            log.info("[GHN] Calling GHN API...");
             GhnCreateOrderResponse ghnResponse = ghnApiClient.createOrder(ghnRequest);
             
             if (ghnResponse == null || ghnResponse.getCode() != 200) {
-                log.error("[GHN] GHN API returned error!");
-                log.error("[GHN] Code: {}, Message: {}", 
-                    ghnResponse != null ? ghnResponse.getCode() : "null",
-                    ghnResponse != null ? ghnResponse.getMessage() : "null");
                 return;
             }
             
             // 9. Save ShippingOrder
-            log.info("[GHN] Saving shipping order to database...");
             
             ShippingOrder shippingOrder = ShippingOrder.builder()
                 .orderId(order.getId())
@@ -864,15 +819,7 @@ public class OrderServiceImpl implements OrderService {
             
             shippingOrderRepository.save(shippingOrder);
 
-            log.info("[GHN] SUCCESS!");
-            log.info("[GHN] GHN Order Code: {}", ghnResponse.getData().getOrderCode());
-            log.info("[GHN] Shipping Fee: {} VNĐ", ghnResponse.getData().getTotalFee());
-            log.info("[GHN] Expected Delivery: {}", ghnResponse.getData().getExpectedDeliveryTime());
-            log.info("[GHN] ===============================================");
-
         } catch (Exception e) {
-            log.error("[GHN] Exception occurred: {}", e.getMessage(), e);
-            log.error("[GHN] Order creation continues, but shipping order failed");
             // Không throw exception để không làm fail order creation
         }
     }
@@ -943,6 +890,9 @@ public class OrderServiceImpl implements OrderService {
                 .cartId(cartDto.getId())
                 .selectedItems(orderRequest.getSelectedItems())
                 .paymentMethod(orderRequest.getPaymentMethod() != null ? orderRequest.getPaymentMethod() : "COD") // Default to COD
+                .voucherId(orderRequest.getVoucherId())
+                .voucherDiscount(orderRequest.getVoucherDiscount())
+                .shippingFee(orderRequest.getShippingFee())
                 .build();
 
         kafkaTemplate.send(orderTopic.name(), kafkaRequest);
@@ -950,7 +900,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems, BigDecimal shippingFee) {
+    public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems, BigDecimal shippingFee, String voucherId, Double voucherDiscount) {
         // Validate address
         AddressDto address = userServiceClient.getAddressById(addressId).getBody();
         if (address == null) {
@@ -990,17 +940,38 @@ public class OrderServiceImpl implements OrderService {
                 .userId(userId)
                 .addressId(addressId)
                 .orderStatus(OrderStatus.PENDING) // Payment successful, but order pending shop confirmation
-                .totalPrice(0.0)
+                .totalPrice(0.0) // sẽ set lại sau khi tính items + ship - voucher
                 .shippingFee(shippingFee != null ? shippingFee : BigDecimal.ZERO) // Lưu shipping fee đã thanh toán trong payment
                 .paymentMethod("VNPAY") // Orders created from payment are VNPay
+                .voucherId(voucherId)
+                .voucherDiscount(voucherDiscount != null ? BigDecimal.valueOf(voucherDiscount) : null)
                 .build();
         order = orderRepository.save(order);
 
         // Add items and decrease stock
         List<OrderItem> items = toOrderItemsFromSelected(selectedItems, order);
         order.setOrderItems(items);
-        order.setTotalPrice(calculateTotalPrice(items));
+        // Tính tổng cuối cùng: items + ship - voucher
+        double itemsTotal = calculateTotalPrice(items);
+        double ship = order.getShippingFee() != null ? order.getShippingFee().doubleValue() : 0.0;
+        double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
+        order.setTotalPrice(itemsTotal + ship - voucher);
         orderRepository.save(order);
+        
+        // Apply voucher if present
+        if (order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
+            try {
+                voucherService.applyVoucherToOrder(
+                    order.getVoucherId(), 
+                    order.getId(), 
+                    order.getUserId(), 
+                    order.getVoucherDiscount()
+                );
+            } catch (Exception e) {
+                log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
+                // Don't fail order creation if voucher application fails
+            }
+        }
 
         // Cleanup cart
         try {
@@ -1034,8 +1005,6 @@ public class OrderServiceImpl implements OrderService {
                 if (item.getSizeId() == null || item.getSizeId().isBlank()) {
                     throw new RuntimeException("Size ID is required for product: " + item.getProductId());
                 }
-
-                // ✅ SKIP VALIDATION cho test products (bắt đầu với "test-product-")
                 // Để test throughput mà không cần gọi Stock Service
                 if (item.getProductId() != null && item.getProductId().startsWith("test-product-")) {
                     log.info("[CONSUMER] Skipping validation for test product: {}", item.getProductId());
@@ -1085,14 +1054,45 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // 1) Create order skeleton
-        Order order = initPendingOrder(msg.getUserId(), msg.getAddressId(), 
+        Order order = initPendingOrder(msg.getUserId(), msg.getAddressId(),
                 msg.getPaymentMethod() != null ? msg.getPaymentMethod() : "COD");
+        
+        // Set voucher data if available
+        if (msg.getVoucherId() != null) {
+            order.setVoucherId(msg.getVoucherId());
+            order.setVoucherDiscount(msg.getVoucherDiscount() != null ? 
+                    BigDecimal.valueOf(msg.getVoucherDiscount()) : BigDecimal.ZERO);
+        }
+        
+        // Set shipping fee if available
+        if (msg.getShippingFee() != null) {
+            order.setShippingFee(BigDecimal.valueOf(msg.getShippingFee()));
+        }
 
         // 2) Items + decrease stock (skip decrease stock cho test products)
         List<OrderItem> items = toOrderItemsFromSelectedForCheckout(msg.getSelectedItems(), order);
         order.setOrderItems(items);
-        order.setTotalPrice(calculateTotalPrice(items));
+        // Tính tổng cuối cùng: items + ship - voucher
+        double itemsTotal = calculateTotalPrice(items);
+        double ship = order.getShippingFee() != null ? order.getShippingFee().doubleValue() : 0.0;
+        double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
+        order.setTotalPrice(itemsTotal + ship - voucher);
         orderRepository.save(order);
+        
+        // Apply voucher if present
+        if (order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
+            try {
+                voucherService.applyVoucherToOrder(
+                    order.getVoucherId(), 
+                    order.getId(), 
+                    order.getUserId(), 
+                    order.getVoucherDiscount()
+                );
+            } catch (Exception e) {
+                log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
+                // Don't fail order creation if voucher application fails
+            }
+        }
 
         // 3) Cleanup cart - remove items that were added to order
         try {
@@ -1126,19 +1126,15 @@ public class OrderServiceImpl implements OrderService {
     @KafkaListener(topics = "#{@paymentTopic.name}", groupId = "order-service-payment", containerFactory = "paymentListenerFactory")
     @Transactional
     public void consumePaymentEvent(PaymentEvent event) {
-        log.info("[PAYMENT-CONSUMER] Received payment event: txnRef={}, status={}, orderId={}",
-                event.getTxnRef(), event.getStatus(), event.getOrderId());
-
         try {
             if ("PAID".equals(event.getStatus())) {
                 // Payment successful
                 if (event.getOrderId() != null && !event.getOrderId().trim().isEmpty()) {
-                    // Order already exists - payment successful, keep order status as PENDING (waiting for shop confirmation)
+                    // Order already exists - payment successful
                     Order order = orderRepository.findById(event.getOrderId())
                             .orElse(null);
                     if (order != null) {
-                        // Payment is successful, but order status should remain PENDING for shop to confirm
-                        // Only update if order was in a different state (e.g., if it was created before payment)
+                        // Payment is successful
                         if (order.getOrderStatus() == OrderStatus.PENDING) {
                             log.info("[PAYMENT-CONSUMER] Order {} payment successful, status remains PENDING for shop confirmation", event.getOrderId());
                         } else {
@@ -1179,6 +1175,17 @@ public class OrderServiceImpl implements OrderService {
                         }
                         
                         log.info("[PAYMENT-CONSUMER] Shipping fee from orderData: {}", shippingFee);
+                        
+                        // Get voucher data from orderData
+                        String voucherId = (String) orderDataMap.get("voucherId");
+                        Double voucherDiscount = null;
+                        if (orderDataMap.containsKey("voucherDiscount")) {
+                            Object voucherDiscountObj = orderDataMap.get("voucherDiscount");
+                            if (voucherDiscountObj instanceof Number) {
+                                voucherDiscount = ((Number) voucherDiscountObj).doubleValue();
+                            }
+                        }
+                        log.info("[PAYMENT-CONSUMER] Voucher from orderData - voucherId: {}, discount: {}", voucherId, voucherDiscount);
 
                         // Convert to SelectedItemDto list
                         List<SelectedItemDto> selectedItems = selectedItemsList.stream()
@@ -1192,7 +1199,7 @@ public class OrderServiceImpl implements OrderService {
                                 .collect(java.util.stream.Collectors.toList());
 
                         // Create order with PENDING status (payment successful, waiting for shop confirmation)
-                        Order order = createOrderFromPayment(event.getUserId(), event.getAddressId(), selectedItems, shippingFee);
+                        Order order = createOrderFromPayment(event.getUserId(), event.getAddressId(), selectedItems, shippingFee, voucherId, voucherDiscount);
                         
                         // Set payment method from event (VNPAY, CARD, etc.) if available
                         if (event.getMethod() != null && !event.getMethod().trim().isEmpty()) {

@@ -14,6 +14,10 @@ import java.util.List;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, String> {
+    @Query("SELECT SUM(oi.totalPrice) FROM Order o JOIN o.orderItems oi WHERE oi.productId IN :productIds AND o.createdAt BETWEEN :startDate AND :endDate AND o.orderStatus = :status")
+    Double sumSalesByProductIdsAndDateRangeAndStatus(@Param("productIds") List<String> productIds,
+                                                     @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate,
+                                                     @Param("status") OrderStatus status);
     List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
 
     List<Order> findByOrderStatus(OrderStatus orderStatus);

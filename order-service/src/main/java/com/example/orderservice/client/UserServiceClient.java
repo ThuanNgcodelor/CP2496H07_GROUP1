@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @FeignClient(name = "user-service", path = "/v1", configuration = com.example.orderservice.config.FeignConfig.class)
-public interface UserServiceClient {
+public interface    UserServiceClient {
     @GetMapping("/user/getUserById/{userId}")
     ResponseEntity<UserDto> getUserById(@PathVariable String userId);
     
@@ -32,4 +32,7 @@ public interface UserServiceClient {
     
     @PostMapping("/wallet/internal/refund")
     ResponseEntity<Map<String, Object>> addRefundToWallet(@RequestBody com.example.orderservice.dto.AddRefundRequestDto request);
+    @GetMapping("/shop-subscriptions/internal/shop/{shopOwnerId}")
+    ResponseEntity<com.example.orderservice.dto.ShopSubscriptionDTO> getSubscriptionByShopOwnerId(
+            @PathVariable("shopOwnerId") String shopOwnerId);
 }

@@ -15,4 +15,11 @@ public class FrontendOrderRequest {
     private String addressId;
     
     private String paymentMethod; // VNPAY, CARD, COD
+    
+    // Voucher fields
+    private String voucherId;
+    private Double voucherDiscount;
+    
+    // Shipping fee
+    private Double shippingFee;
 }

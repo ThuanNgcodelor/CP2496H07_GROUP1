@@ -335,6 +335,7 @@ public class OrderController {
             }
             
             // 6. Build GHN fee calculation request
+            // GHN Service IDs: 53320 = Express, 53321 = Standard
             com.example.orderservice.dto.GhnCalculateFeeRequest ghnRequest = com.example.orderservice.dto.GhnCalculateFeeRequest.builder()
                 .fromDistrictId(shopOwner.getDistrictId())
                 .fromWardCode(shopOwner.getWardCode())
@@ -344,6 +345,7 @@ public class OrderController {
                 .length(20) // cm
                 .width(15)
                 .height(10)
+                .serviceId(53321) // GHN Standard service ID (required)
                 .serviceTypeId(2) // Standard
                 .build();
             
@@ -671,6 +673,16 @@ public class OrderController {
                 }
             }
 
+            // Get voucher data from orderData
+            String voucherId = (String) orderData.get("voucherId");
+            Double voucherDiscount = null;
+            if (orderData.containsKey("voucherDiscount")) {
+                Object voucherDiscountObj = orderData.get("voucherDiscount");
+                if (voucherDiscountObj instanceof Number) {
+                    voucherDiscount = ((Number) voucherDiscountObj).doubleValue();
+                }
+            }
+            
             // Convert Map to SelectedItemDto
             List<SelectedItemDto> selectedItems = selectedItemsRaw.stream()
                     .map(item -> {
@@ -683,7 +695,7 @@ public class OrderController {
                     })
                     .collect(java.util.stream.Collectors.toList());
 
-            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems, shippingFee);
+            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems, shippingFee, voucherId, voucherDiscount);
             
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Order created successfully from payment",

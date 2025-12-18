@@ -15,5 +15,9 @@ public interface ShopSubscriptionRepository extends JpaRepository<ShopSubscripti
     List<ShopSubscription> findByShopOwnerIdOrderByCreationTimestampDesc(String shopOwnerId);
     List<ShopSubscription> findByIsActiveTrueAndEndDateBefore(LocalDateTime date);
     List<ShopSubscription> findBySubscriptionTypeAndIsActiveTrue(SubscriptionType subscriptionType);
+    List<ShopSubscription> findByPlan(com.example.userservice.model.SubscriptionPlan plan);
+
+    List<ShopSubscription> findByPlanAndIsActiveTrue(com.example.userservice.model.SubscriptionPlan plan);
+
 }
 

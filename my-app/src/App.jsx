@@ -6,6 +6,7 @@ import AuthPage from "./pages/client/AuthPage.jsx";
 import UserPage from "./pages/client/UserPage.jsx";
 import ShopPage from "./pages/client/ShopPage.jsx";
 import CartPage from "./pages/client/CartPage.jsx";
+import CheckoutPage from "./pages/client/CheckoutPage.jsx";
 import GoogleCallback from "./pages/client/GoogleCallback.jsx";
 import VnpayReturnPage from "./pages/client/VnpayReturnPage.jsx";
 import ForgotPasswordPage from "./pages/client/ForgotPasswordPage.jsx";
@@ -15,11 +16,7 @@ import AdminLayout from "./components/admin/AdminLayout.jsx";
 import ProtectedRoute from "./components/admin/ProtectedRoute.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import DataTablesPage from "./pages/admin/DataTablesPage.jsx";
-import ChartAdmin from "./pages/admin/ChartAdmin.jsx";
-import OrdersPage from "./pages/admin/OrdersPage.jsx";
 import RolesPage from "./pages/admin/RolesPage.jsx";
-import CategoriesPage from "./pages/admin/categoeis/CategoriesPage.jsx";
-import ProductsPage from "./pages/admin/products/ProductsPage.jsx";
 import ContactPage from "./pages/client/ContactPage.jsx";
 import Logout from "./components/admin/Logout.jsx";
 import ProductDetailPage from "./pages/client/ProductDetailPage.jsx";
@@ -37,6 +34,7 @@ import ChatPage from "./pages/shop-owner/ChatPage.jsx";
 import WalletPage from "./pages/shop-owner/WalletPage.jsx";
 import SubscriptionPage from "./pages/shop-owner/SubscriptionPage.jsx";
 import VoucherManagementPage from "./pages/admin/VoucherManagementPage.jsx";
+import SubscriptionPlanManagementPage from "./pages/admin/SubscriptionPlanManagementPage.jsx";
 import BannerManagementPage from "./pages/admin/BannerManagementPage.jsx";
 import ShopOwnerManagementPage from "./pages/admin/ShopOwnerManagementPage.jsx";
 
@@ -64,6 +62,7 @@ export default function App() {
           <Route path="/information/*" element={<UserPage />} />
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/oauth2/callback" element={<GoogleCallback />} />
           <Route path="/payment/vnpay/return" element={<VnpayReturnPage />} />
           <Route path="/forgot" element={<ForgotPasswordPage />} />
@@ -95,11 +94,9 @@ export default function App() {
                 <Route path="shop-owners" element={<ShopOwnerManagementPage />} />
                 <Route path="banner" element={<BannerManagementPage />} />
                 <Route path="voucher" element={<VoucherManagementPage />} />
+                <Route path="subscription" element={<SubscriptionPlanManagementPage />} />
                 <Route path="logout" element={<Logout />} />
             </Route>
-
-
-
 
           {/* Shop Owner routes */}
             {/* Shop Owner routes */}

@@ -637,8 +637,19 @@ export default function OrderList() {
                                         </div>
                                         <div className="d-flex align-items-center gap-3">
                                             <div className="text-end" style={{ fontSize: '12px' }}>
+                                                {order.voucherDiscount > 0 && (
+                                                    <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>
+                                                        <span style={{ textDecoration: 'line-through' }}>
+                                                            {formatVND((order.totalPrice || 0) + (order.voucherDiscount || 0))}
+                                                        </span>
+                                                        {' '}
+                                                        <span style={{ color: '#26aa99' }}>
+                                                            (-{formatVND(order.voucherDiscount)} voucher)
+                                                        </span>
+                                                    </div>
+                                                )}
                                                 <div style={{ fontSize: '18px', color: '#ee4d2d', fontWeight: 500 }}>
-                                                    {formatVND((order.totalPrice || 0) + (order.shippingFee || 0))}
+                                                    {formatVND(order.totalPrice || 0)}
                                                 </div>
                                             </div>
                                             <div className="d-flex gap-2 align-items-center">

@@ -4,11 +4,18 @@ import Sidebar from "./layout/Sidebar";
 import TopBar from "./layout/TopBar";
 import Footer from "./layout/Footer";
 import {logout} from "../../api/auth.js";
+import $ from "jquery";
+
+// Expose jQuery to window for legacy scripts
+if (typeof window !== 'undefined') {
+    window.jQuery = $;
+    window.$ = $;
+}
 
 export default function AdminLayout() {
     useEffect(() => {
         // Load admin CSS và JS
-        const loadAdminAssets = () => {
+        const loadAdminAssets = async () => {
             // Load admin CSS
             const adminCSS = document.createElement('link');
             adminCSS.rel = 'stylesheet';
@@ -37,42 +44,66 @@ export default function AdminLayout() {
             dataTablesCSS.id = 'datatables-css';
             document.head.appendChild(dataTablesCSS);
 
-            // Load jQuery
-            if (!window.$) {
-                const jqueryScript = document.createElement('script');
-                jqueryScript.src = '/src/assets/admin/vendor/jquery/jquery.min.js';
-                jqueryScript.id = 'jquery-script';
-                document.body.appendChild(jqueryScript);
+            // jQuery is already loaded from npm package and exposed to window
+            // Just ensure it's available before loading dependent scripts
+            const ensurejQuery = () => {
+                return new Promise((resolve) => {
+                    if (window.jQuery && window.$) {
+                        resolve();
+                        return;
+                    }
+                    // Wait a bit for jQuery to be available (should be instant since we imported it)
+                    const checkInterval = setInterval(() => {
+                        if (window.jQuery && window.$) {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 10);
+                    // Timeout after 1 second
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                        resolve(); // Resolve anyway to continue
+                    }, 1000);
+                });
+            };
+
+            // Load scripts sequentially after jQuery
+            const loadScript = (src, id) => {
+                return new Promise((resolve, reject) => {
+                    // Check if already loaded
+                    if (document.getElementById(id)) {
+                        resolve();
+                        return;
+                    }
+
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.id = id;
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+                    document.body.appendChild(script);
+                });
+            };
+
+            try {
+                // Step 1: Ensure jQuery is available (should be instant)
+                await ensurejQuery();
+
+                // Step 2: Load jQuery Easing (depends on jQuery)
+                await loadScript('/src/assets/admin/vendor/jquery-easing/jquery.easing.min.js', 'easing-js');
+
+                // Step 3: Load Bootstrap JS (depends on jQuery)
+                await loadScript('/src/assets/admin/vendor/bootstrap/js/bootstrap.bundle.min.js', 'bootstrap-js');
+
+                // Step 4: Load DataTables JS (depends on jQuery)
+                await loadScript('/src/assets/admin/vendor/datatables/jquery.dataTables.min.js', 'datatables-js');
+                await loadScript('/src/assets/admin/vendor/datatables/dataTables.bootstrap4.min.js', 'datatables-bootstrap-js');
+
+                // Step 5: Load admin JS (depends on jQuery and other libs)
+                await loadScript('/src/assets/admin/js/ruang-admin.min.js', 'admin-js');
+            } catch (error) {
+                console.error('Error loading admin assets:', error);
             }
-
-            // Load Bootstrap JS
-            const bootstrapJS = document.createElement('script');
-            bootstrapJS.src = '/src/assets/admin/vendor/bootstrap/js/bootstrap.bundle.min.js';
-            bootstrapJS.id = 'bootstrap-js';
-            document.body.appendChild(bootstrapJS);
-
-            // Load jQuery Easing
-            const easingJS = document.createElement('script');
-            easingJS.src = '/src/assets/admin/vendor/jquery-easing/jquery.easing.min.js';
-            easingJS.id = 'easing-js';
-            document.body.appendChild(easingJS);
-
-            // Load admin JS
-            const adminJS = document.createElement('script');
-            adminJS.src = '/src/assets/admin/js/ruang-admin.min.js';
-            adminJS.id = 'admin-js';
-            document.body.appendChild(adminJS);
-
-            // Load DataTables JS
-            const dataTablesJS = document.createElement('script');
-            dataTablesJS.src = '/src/assets/admin/vendor/datatables/jquery.dataTables.min.js';
-            dataTablesJS.id = 'datatables-js';
-            document.body.appendChild(dataTablesJS);
-
-            const dataTablesBootstrapJS = document.createElement('script');
-            dataTablesBootstrapJS.src = '/src/assets/admin/vendor/datatables/dataTables.bootstrap4.min.js';
-            dataTablesBootstrapJS.id = 'datatables-bootstrap-js';
-            document.body.appendChild(dataTablesBootstrapJS);
         };
 
         loadAdminAssets();
@@ -81,7 +112,7 @@ export default function AdminLayout() {
         return () => {
             const assetsToRemove = [
                 'admin-css', 'fontawesome-css', 'bootstrap-admin-css', 'datatables-css',
-                'jquery-script', 'bootstrap-js', 'easing-js', 'admin-js', 
+                'bootstrap-js', 'easing-js', 'admin-js', 
                 'datatables-js', 'datatables-bootstrap-js'
             ];
             

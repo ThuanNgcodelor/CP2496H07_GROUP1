@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getActiveBanners, trackBannerClick } from '../../api/banner';
+import { fetchImageById } from '../../api/image';
 
 export default function ShopeeBanner() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [banners, setBanners] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [bannerImageUrls, setBannerImageUrls] = useState({}); // Store loaded image URLs by banner ID
+    const createdUrlsRef = useRef([]); // Track created blob URLs for cleanup
 
     // Default fallback banners (hardcoded)
     const defaultBanners = {
@@ -57,6 +60,12 @@ export default function ShopeeBanner() {
     // Fetch banners from API
     useEffect(() => {
         fetchBanners();
+        
+        // Cleanup blob URLs on unmount
+        return () => {
+            createdUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+            createdUrlsRef.current = [];
+        };
     }, []);
 
     const fetchBanners = async () => {
@@ -66,6 +75,8 @@ export default function ShopeeBanner() {
             if (data && (data.LEFT_MAIN?.length > 0 || data.RIGHT_TOP?.length > 0 || data.RIGHT_BOTTOM?.length > 0)) {
                 console.log('Loaded banners from database:', data);
                 setBanners(data);
+                // Load images for all banners
+                await loadBannerImages(data);
             } else {
                 console.log('No active banners in database, using defaults');
             }
@@ -74,6 +85,66 @@ export default function ShopeeBanner() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadBannerImages = async (bannersData) => {
+        // Collect all banners from all positions
+        const allBanners = [
+            ...(bannersData.LEFT_MAIN || []),
+            ...(bannersData.RIGHT_TOP || []),
+            ...(bannersData.RIGHT_BOTTOM || [])
+        ];
+
+        const imagePromises = allBanners.map(async (banner) => {
+            // Priority: imageId > imageUrl
+            if (banner.imageId) {
+                try {
+                    const response = await fetchImageById(banner.imageId);
+                    const blob = new Blob([response.data], {
+                        type: response.headers['content-type'] || 'image/jpeg'
+                    });
+                    const url = URL.createObjectURL(blob);
+                    createdUrlsRef.current.push(url);
+                    return { bannerId: banner.id, url };
+                } catch (error) {
+                    console.error(`Error loading image for banner ${banner.id}:`, error);
+                    // Fallback to imageUrl if fetch fails
+                    if (banner.imageUrl) {
+                        return { bannerId: banner.id, url: buildImageUrl(banner.imageUrl) };
+                    }
+                    return { bannerId: banner.id, url: null };
+                }
+            } else if (banner.imageUrl) {
+                // Use imageUrl as fallback
+                return { bannerId: banner.id, url: buildImageUrl(banner.imageUrl) };
+            }
+            return { bannerId: banner.id, url: null };
+        });
+
+        const results = await Promise.all(imagePromises);
+        const urlMap = {};
+        results.forEach(({ bannerId, url }) => {
+            if (url) {
+                urlMap[bannerId] = url;
+            }
+        });
+        setBannerImageUrls(prev => ({ ...prev, ...urlMap }));
+    };
+
+    // Helper to build full image URL from relative path or return full URL as-is
+    const buildImageUrl = (imageUrl) => {
+        if (!imageUrl) return null;
+        // If already a full URL (starts with http:// or https://), return as-is
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            return imageUrl;
+        }
+        // If relative path, build full URL using API base URL
+        const API_BASE_URL = import.meta.env.MODE === 'production' 
+            ? '/api' 
+            : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080');
+        // Remove leading slash if present to avoid double slashes
+        const path = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+        return `${API_BASE_URL}/${path}`;
     };
 
     // Use database banners if available, otherwise use defaults
@@ -115,9 +186,12 @@ export default function ShopeeBanner() {
     const renderBanner = (banner, isMain = false) => {
         if (!banner) return null;
 
-        const hasImage = banner.imageUrl && !banner.imageUrl.includes('default');
-        const background = hasImage
-            ? `url(${banner.imageUrl})`
+        // Check if we have loaded image URL for this banner
+        const loadedImageUrl = bannerImageUrls[banner.id];
+        const hasImage = loadedImageUrl || (banner.imageUrl && !banner.imageUrl.includes('default'));
+        const imageUrl = loadedImageUrl || (banner.imageUrl ? buildImageUrl(banner.imageUrl) : null);
+        const background = hasImage && imageUrl
+            ? `url(${imageUrl})`
             : (banner.bg || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)');
 
         return (
@@ -154,7 +228,6 @@ export default function ShopeeBanner() {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: 'linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5))',
                         zIndex: 1
                     }} />
                 )}

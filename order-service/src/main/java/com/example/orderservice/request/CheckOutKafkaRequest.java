@@ -20,4 +20,7 @@ public class CheckOutKafkaRequest {
     private List<SelectedItemDto> selectedItems;
     private String cartId;
     private String paymentMethod; // COD, VNPAY, CARD
+    private String voucherId;
+    private Double voucherDiscount;
+    private Double shippingFee;
 }

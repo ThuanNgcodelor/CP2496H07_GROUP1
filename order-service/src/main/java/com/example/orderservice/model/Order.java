@@ -25,18 +25,33 @@ import java.util.List;
 public class Order extends BaseEntity {
     private String userId;
     private String addressId;
+
+    // Tổng tiền CUỐI CÙNG user phải trả 
     private double totalPrice;
+
     @Column(name = "shipping_fee", precision = 10, scale = 2)
-    private BigDecimal shippingFee; // Phí ship đã thanh toán trong payment (VNPay) hoặc sẽ thu khi nhận hàng (COD)
+    private BigDecimal shippingFee; // Phí ship 
+
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
+
     @Column(name = "payment_method", length = 20)
     private String paymentMethod; // COD, VNPAY, CARD
+
     private String cancelReason;
     private String returnReason;
+    
+    // Voucher fields
+    @Column(name = "voucher_id")
+    private String voucherId;
+    
+    @Column(name = "voucher_discount", precision = 15, scale = 2)
+    private BigDecimal voucherDiscount;
 
     @JsonManagedReference
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
 }
+
+

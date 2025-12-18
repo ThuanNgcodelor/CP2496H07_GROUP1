@@ -36,7 +36,10 @@ public class GhnCalculateFeeRequest {
     @JsonProperty("height")
     private Integer height; // cm
     
+    @JsonProperty("service_id")
+    private Integer serviceId; // GHN Service ID 
+    
     @JsonProperty("service_type_id")
-    private Integer serviceTypeId; // 2 = Standard, 5 = Express
+    private Integer serviceTypeId; // 2 = Standard, 5 = Express (optional)
 }
 

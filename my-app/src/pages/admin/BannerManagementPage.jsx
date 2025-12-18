@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllBanners, deleteBanner, toggleBannerActive, createBanner, updateBanner } from '../../api/banner';
+import { fetchImageById } from '../../api/image';
 import Swal from 'sweetalert2';
 import '../../assets/admin/css/BannerManagement.css';
 
@@ -31,9 +32,17 @@ const BannerManagementPage = () => {
 
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
+    const [bannerImageUrls, setBannerImageUrls] = useState({}); // Store loaded image URLs by banner ID
+    const createdUrlsRef = useRef([]); // Track created blob URLs for cleanup
 
     useEffect(() => {
         fetchBanners();
+        
+        // Cleanup blob URLs on unmount
+        return () => {
+            createdUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+            createdUrlsRef.current = [];
+        };
     }, []);
 
     useEffect(() => {
@@ -45,12 +54,68 @@ const BannerManagementPage = () => {
             setLoading(true);
             const data = await getAllBanners();
             setBanners(data);
+            
+            // Load images for all banners
+            await loadBannerImages(data);
         } catch (error) {
             console.error('Error fetching banners:', error);
             Swal.fire('Error!', 'Failed to fetch banners.', 'error');
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadBannerImages = async (banners) => {
+        const imagePromises = banners.map(async (banner) => {
+            // Priority: imageId > imageUrl
+            if (banner.imageId) {
+                try {
+                    const response = await fetchImageById(banner.imageId);
+                    const blob = new Blob([response.data], {
+                        type: response.headers['content-type'] || 'image/jpeg'
+                    });
+                    const url = URL.createObjectURL(blob);
+                    createdUrlsRef.current.push(url);
+                    return { bannerId: banner.id, url };
+                } catch (error) {
+                    console.error(`Error loading image for banner ${banner.id}:`, error);
+                    // Fallback to imageUrl if fetch fails
+                    if (banner.imageUrl) {
+                        return { bannerId: banner.id, url: buildImageUrl(banner.imageUrl) };
+                    }
+                    return { bannerId: banner.id, url: null };
+                }
+            } else if (banner.imageUrl) {
+                // Use imageUrl as fallback
+                return { bannerId: banner.id, url: buildImageUrl(banner.imageUrl) };
+            }
+            return { bannerId: banner.id, url: null };
+        });
+
+        const results = await Promise.all(imagePromises);
+        const urlMap = {};
+        results.forEach(({ bannerId, url }) => {
+            if (url) {
+                urlMap[bannerId] = url;
+            }
+        });
+        setBannerImageUrls(prev => ({ ...prev, ...urlMap }));
+    };
+
+    // Helper to build full image URL from relative path or return full URL as-is
+    const buildImageUrl = (imageUrl) => {
+        if (!imageUrl) return null;
+        // If already a full URL (starts with http:// or https://), return as-is
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            return imageUrl;
+        }
+        // If relative path, build full URL using API base URL
+        const API_BASE_URL = import.meta.env.MODE === 'production' 
+            ? '/api' 
+            : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080');
+        // Remove leading slash if present to avoid double slashes
+        const path = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+        return `${API_BASE_URL}/${path}`;
     };
 
     const filterBanners = () => {
@@ -127,7 +192,8 @@ const BannerManagementPage = () => {
             endDate: banner.endDate ? banner.endDate.substring(0, 16) : '',
             isActive: banner.isActive !== undefined ? banner.isActive : true
         });
-        setImagePreview(banner.imageUrl);
+        // Use loaded image URL if available, otherwise use imageUrl from banner
+        setImagePreview(bannerImageUrls[banner.id] || banner.imageUrl);
         setShowModal(true);
     };
 
@@ -201,16 +267,21 @@ const BannerManagementPage = () => {
                 data.append('image', imageFile);
             }
 
+            let savedBanner;
             if (editingBanner) {
-                await updateBanner(editingBanner.id, data);
+                savedBanner = await updateBanner(editingBanner.id, data);
                 Swal.fire('Success!', 'Banner updated successfully.', 'success');
             } else {
-                await createBanner(data);
+                savedBanner = await createBanner(data);
                 Swal.fire('Success!', 'Banner created successfully.', 'success');
             }
 
             setShowModal(false);
-            fetchBanners();
+            setImageFile(null);
+            setImagePreview(null);
+            
+            // Reload banners and images
+            await fetchBanners();
         } catch (error) {
             console.error('Error saving banner:', error);
             Swal.fire('Error!', 'Failed to save banner.', 'error');
@@ -356,8 +427,13 @@ const BannerManagementPage = () => {
                                             <tr key={banner.id}>
                                                 <td>
                                                     <div className="banner-preview">
-                                                        {banner.imageUrl ? (
-                                                            <img src={banner.imageUrl} alt={banner.altText || banner.title} />
+                                                        {bannerImageUrls[banner.id] ? (
+                                                            <img src={bannerImageUrls[banner.id]} alt={banner.altText || banner.title} />
+                                                        ) : banner.imageId ? (
+                                                            <div className="no-image">
+                                                                <i className="fas fa-spinner fa-spin"></i>
+                                                                <span>Loading...</span>
+                                                            </div>
                                                         ) : (
                                                             <div className="no-image">
                                                                 <i className="fas fa-image"></i>

@@ -32,7 +32,7 @@ public interface OrderService {
     AddressDto getAddressById(String addressId);
     // Frontend order creation
     void orderByKafka(FrontendOrderRequest orderRequest, HttpServletRequest request);
-    Order createOrderFromPayment(String userId, String addressId, List<com.example.orderservice.dto.SelectedItemDto> selectedItems, java.math.BigDecimal shippingFee);
+    Order createOrderFromPayment(String userId, String addressId, List<com.example.orderservice.dto.SelectedItemDto> selectedItems, java.math.BigDecimal shippingFee, String voucherId, Double voucherDiscount);
     Order cancelOrder(String orderId,String reason);
     void rollbackOrderStock(String orderId);
 }
