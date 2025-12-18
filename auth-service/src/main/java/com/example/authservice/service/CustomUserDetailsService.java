@@ -1,7 +1,6 @@
 package com.example.authservice.service;
 
 import com.example.authservice.client.UserServiceClient;
-import jakarta.transaction.Transactional;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -17,7 +16,6 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
-    @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         var user = userServiceClient.getUserByEmail(email)
                 .getBody();
