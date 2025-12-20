@@ -223,6 +223,46 @@ export const updateOrderStatusForShopOwner = async (orderId, status) => {
 };
 
 /**
+ * Simulate GHN status update (DEV)
+ * @param {string} ghnOrderCode
+ * @param {string} status
+ */
+export const simulateGhnStatus = async (ghnOrderCode, status) => {
+    try {
+        const response = await api.post(`/simulate-ghn-status/${ghnOrderCode}`, { status });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || "Failed to simulate GHN status");
+    }
+};
+
+/**
+ * Get tracking info by GHN order code
+ * @param {string} ghnOrderCode
+ */
+export const getTrackingByGhnCode = async (ghnOrderCode) => {
+    try {
+        const response = await api.get(`/tracking/${ghnOrderCode}`);
+        return response.data;
+    } catch (error) {
+        throw new Error("Failed to fetch tracking info");
+    }
+};
+
+/**
+ * Client confirms receipt -> COMPLETE
+ * @param {string} orderId
+ */
+export const confirmReceipt = async (orderId) => {
+    try {
+        const response = await api.post(`/confirm/${orderId}`);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || "Failed to confirm receipt");
+    }
+};
+
+/**
  * Tính phí vận chuyển trước khi checkout
  * @param {string} addressId - ID của địa chỉ giao hàng
  * @param {Array} selectedItems - Danh sách sản phẩm đã chọn

@@ -35,4 +35,10 @@ public interface OrderService {
     Order createOrderFromPayment(String userId, String addressId, List<com.example.orderservice.dto.SelectedItemDto> selectedItems, java.math.BigDecimal shippingFee, String voucherId, Double voucherDiscount);
     Order cancelOrder(String orderId,String reason);
     void rollbackOrderStock(String orderId);
+    // Create shipping order via GHN when shop owner confirms
+    void createShippingOrderForOrder(String orderId);
+    // Handle GHN status update (simulate / webhook)
+    void handleGhnStatus(String ghnOrderCode, String status);
+    // Client confirms receipt -> COMPLETE
+    Order confirmOrder(String orderId);
 }

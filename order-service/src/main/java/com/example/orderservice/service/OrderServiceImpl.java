@@ -32,6 +32,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -208,6 +212,8 @@ public class OrderServiceImpl implements OrderService {
     private final KafkaTemplate<String, CheckOutKafkaRequest> kafkaTemplate;
     private final KafkaTemplate<String, SendNotificationRequest> kafkaTemplateSend;
     private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
+    // Scheduler for auto-complete after DELIVERED
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     // Get data for shop owner orders
     @Override
@@ -1199,7 +1205,12 @@ public class OrderServiceImpl implements OrderService {
 
         // 4) Create GHN shipping order
         try {
-            createShippingOrder(order);
+            // Only create shipping order automatically when order is already CONFIRMED.
+            if (order.getOrderStatus() != null && order.getOrderStatus().name().equalsIgnoreCase("CONFIRMED")) {
+                createShippingOrder(order);
+            } else {
+                log.info("[CONSUMER] Order {} not CONFIRMED yet - skipping GHN creation", order.getId());
+            }
         } catch (Exception e) {
             log.error("[CONSUMER] Failed to create GHN shipping order: {}", e.getMessage(), e);
             // Don't throw - order is already created, just log the error
@@ -1356,4 +1367,82 @@ public class OrderServiceImpl implements OrderService {
         }
     }
     /////////////////////////////////////////////////////////////////////////////////////
+    @Override
+    public void createShippingOrderForOrder(String orderId) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null) {
+            log.warn("[GHN] createShippingOrderForOrder: order not found {}", orderId);
+            return;
+        }
+        try {
+            createShippingOrder(order);
+        } catch (Exception e) {
+            log.error("[GHN] Failed to create shipping order for {}: {}", orderId, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void handleGhnStatus(String ghnOrderCode, String status) {
+        if (ghnOrderCode == null || ghnOrderCode.isBlank() || status == null || status.isBlank()) {
+            log.warn("[GHN] handleGhnStatus invalid params");
+            return;
+        }
+        Optional<ShippingOrder> opt = shippingOrderRepository.findByGhnOrderCode(ghnOrderCode);
+        if (opt.isEmpty()) {
+            log.warn("[GHN] ShippingOrder not found for code {}", ghnOrderCode);
+            return;
+        }
+        ShippingOrder sh = opt.get();
+        String s = status.toUpperCase();
+        sh.setStatus(s);
+        shippingOrderRepository.save(sh);
+
+        // Update order status accordingly
+        try {
+            Order order = orderRepository.findById(sh.getOrderId()).orElse(null);
+            if (order == null) {
+                log.warn("[GHN] Order not found for shippingOrder {}", sh.getOrderId());
+                return;
+            }
+
+            if ("PICKED".equalsIgnoreCase(s) || "PICK_UP".equalsIgnoreCase(s) || "PICK".equalsIgnoreCase(s)) {
+                order.setOrderStatus(OrderStatus.SHIPPED);
+                orderRepository.save(order);
+            } else if ("DELIVERED".equalsIgnoreCase(s) || "DELIVER".equalsIgnoreCase(s)) {
+                order.setOrderStatus(OrderStatus.DELIVERED);
+                orderRepository.save(order);
+                // Schedule auto-complete after 60 seconds
+                scheduleAutoComplete(order.getId(), 60);
+            }
+        } catch (Exception e) {
+            log.error("[GHN] Failed to update order status from GHN status: {}", e.getMessage(), e);
+        }
+    }
+
+    private void scheduleAutoComplete(String orderId, long seconds) {
+        if (orderId == null || orderId.isBlank()) return;
+        scheduler.schedule(() -> {
+            try {
+                Order o = orderRepository.findById(orderId).orElse(null);
+                if (o != null && o.getOrderStatus() == OrderStatus.DELIVERED) {
+                    o.setOrderStatus(OrderStatus.COMPLETED);
+                    orderRepository.save(o);
+                    log.info("[AUTO-COMPLETE] Order {} auto-completed after {}s", orderId, seconds);
+                }
+            } catch (Exception e) {
+                log.error("[AUTO-COMPLETE] Failed to auto-complete order {}: {}", orderId, e.getMessage(), e);
+            }
+        }, seconds, TimeUnit.SECONDS);
+    }
+
+    @Override
+    public Order confirmOrder(String orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+        if (order.getOrderStatus() != OrderStatus.DELIVERED) {
+            throw new RuntimeException("Order must be DELIVERED to confirm receipt");
+        }
+        order.setOrderStatus(OrderStatus.COMPLETED);
+        return orderRepository.save(order);
+    }
 }

@@ -559,6 +559,15 @@ public class OrderController {
             // Update order status
             Order updatedOrder = orderService.updateOrderStatus(orderId, status);
 
+            // If shop owner confirms, create GHN shipping order
+            if ("CONFIRMED".equalsIgnoreCase(status)) {
+                try {
+                    orderService.createShippingOrderForOrder(orderId);
+                } catch (Exception e) {
+                    log.error("Failed to create shipping order on CONFIRMED: {}", e.getMessage());
+                }
+            }
+
             // Trigger Ledger Update if DELIVERED
             if ("DELIVERED".equalsIgnoreCase(status)) {
                 try {
@@ -578,6 +587,52 @@ public class OrderController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Simulate GHN status update (DEV only)
+     */
+    @PostMapping("/simulate-ghn-status/{ghnOrderCode}")
+    public ResponseEntity<?> simulateGhnStatus(@PathVariable String ghnOrderCode, @RequestBody Map<String, String> payload) {
+        try {
+            String status = payload != null ? payload.get("status") : null;
+            if (status == null || status.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "status is required"));
+            }
+            orderService.handleGhnStatus(ghnOrderCode, status);
+            return ResponseEntity.ok(Map.of("message", "GHN status updated", "ghnOrderCode", ghnOrderCode, "status", status));
+        } catch (Exception e) {
+            log.error("simulateGhnStatus error: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Get tracking info by GHN order code
+     */
+    @GetMapping("/tracking/{ghnOrderCode}")
+    public ResponseEntity<?> getTrackingByGhnCode(@PathVariable String ghnOrderCode) {
+        try {
+            return ResponseEntity.ok(shippingOrderRepository.findByGhnOrderCode(ghnOrderCode).orElse(null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Client confirms receipt -> set order to COMPLETED (only if DELIVERED)
+     */
+    @PostMapping("/confirm/{orderId}")
+    public ResponseEntity<?> confirmReceipt(@PathVariable String orderId) {
+        try {
+            Order updated = orderService.confirmOrder(orderId);
+            OrderDto dto = enrichOrderDto(updated);
+            return ResponseEntity.ok(dto);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
     }
 

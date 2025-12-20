@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import RatingModal from "./RatingMockModal.jsx";
 import Swal from "sweetalert2";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { getOrdersByUser, cancelOrder } from "../../../api/order.js";
+import { getOrdersByUser, cancelOrder, confirmReceipt } from "../../../api/order.js";
 import { createReview } from "../../../api/review.js";
 import { getUser } from "../../../api/user.js";
 import { fetchImageById } from "../../../api/image.js";
@@ -15,9 +15,11 @@ const PAGE_SIZE = 5;
 const getStatusConfig = (t) => ({
     ALL: { label: t('orders.all'), color: "#555", bg: "#f8f8f8" },
     PENDING: { label: t('orders.pending'), color: "#ee4d2d", bg: "#fff5f0" },
+    CONFIRMED: { label: t('orders.confirmed') || 'Confirmed', color: "#ff9800", bg: "#fff7ed" },
     PROCESSING: { label: t('orders.processing'), color: "#2673dd", bg: "#e8f4ff" },
     SHIPPED: { label: t('orders.shipped'), color: "#2673dd", bg: "#e8f4ff" },
     DELIVERED: { label: t('orders.delivered'), color: "#26aa99", bg: "#e8f9f7" },
+    COMPLETED: { label: t('orders.completed') || 'Completed', color: "#1e7e34", bg: "#e9f8f1" },
     CANCELLED: { label: t('orders.cancelled'), color: "#999", bg: "#f5f5f5" },
     RETURNED: { label: t('orders.returned'), color: "#ee4d2d", bg: "#fff5f0" }
 });
@@ -29,6 +31,8 @@ const STATUS_NUMERIC_MAP = {
     3: "DELIVERED",
     4: "CANCELLED",
     5: "RETURNED",
+    6: "CONFIRMED",
+    7: "COMPLETED",
 };
 
 // Styles for action buttons
@@ -266,16 +270,25 @@ export default function OrderList() {
         }
     }, [searchParams, orders]);
 
-    // Filter orders by tab
+    // Filter orders by tab (custom groups)
     const filteredOrders = useMemo(() => {
-        let result = orders;
+        let result = orders || [];
 
-        // Filter by status tab
-        if (activeTab !== "ALL") {
-            result = result.filter(order => normalizeStatus(order.orderStatus) === activeTab);
-        }
+        if (!activeTab || activeTab === "ALL") return result;
 
-        return result;
+        const tabMap = {
+            'TO_PAY': ['PENDING', 'CONFIRMED'],
+            'TO_SHIP': ['PROCESSING'],
+            'TO_RECEIVE': ['SHIPPED'],
+            'COMPLETED': ['DELIVERED', 'COMPLETED'],
+            'CANCELLED': ['CANCELLED'],
+            'RETURNED': ['RETURNED']
+        };
+
+        const wanted = tabMap[activeTab];
+        if (!wanted) return result;
+
+        return result.filter(order => wanted.includes(normalizeStatus(order.orderStatus)));
     }, [orders, activeTab]);
 
     const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
@@ -388,27 +401,35 @@ export default function OrderList() {
                     zIndex: 10
                 }}>
                     <div className="d-flex" style={{ overflowX: 'auto', padding: '0 24px' }}>
-                        {Object.keys(STATUS_CONFIG).map(status => (
+                        {[
+                            { id: 'ALL', label: t('orders.all') },
+                            { id: 'TO_PAY', label: t('orders.toPay'), statuses: ['PENDING', 'CONFIRMED'] },
+                            { id: 'TO_SHIP', label: t('orders.toShip'), statuses: ['PROCESSING'] },
+                            { id: 'TO_RECEIVE', label: t('orders.toReceive'), statuses: ['SHIPPED'] },
+                            { id: 'COMPLETED', label: t('orders.completed'), statuses: ['DELIVERED', 'COMPLETED'] },
+                            { id: 'CANCELLED', label: t('orders.cancelled'), statuses: ['CANCELLED'] },
+                            { id: 'RETURNED', label: t('orders.returned'), statuses: ['RETURNED'] }
+                        ].map(tab => (
                             <button
-                                key={status}
+                                key={tab.id}
                                 onClick={() => {
-                                    setActiveTab(status);
+                                    setActiveTab(tab.id);
                                     setPage(1);
                                 }}
                                 style={{
                                     padding: '16px 20px',
                                     border: 'none',
                                     background: 'transparent',
-                                    color: activeTab === status ? '#ee4d2d' : '#555',
-                                    borderBottom: activeTab === status ? '2px solid #ee4d2d' : '2px solid transparent',
-                                    fontWeight: activeTab === status ? 500 : 400,
+                                    color: activeTab === tab.id ? '#ee4d2d' : '#555',
+                                    borderBottom: activeTab === tab.id ? '2px solid #ee4d2d' : '2px solid transparent',
+                                    fontWeight: activeTab === tab.id ? 500 : 400,
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
                                     fontSize: '14px',
                                     whiteSpace: 'nowrap'
                                 }}
                             >
-                                {STATUS_CONFIG[status]?.label || status}
+                                {tab.label}
                             </button>
                         ))}
                     </div>
@@ -705,6 +726,29 @@ export default function OrderList() {
 
                                                 {(normalizeStatus(order.orderStatus) === 'DELIVERED' || normalizeStatus(order.orderStatus) === 'COMPLETED') && (
                                                     <>
+                                                        {normalizeStatus(order.orderStatus) === 'DELIVERED' && (
+                                                            <button
+                                                                className="btn"
+                                                                style={{ ...ratingButtonPrimary, background: '#26aa99', borderColor: '#26aa99' }}
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        setLoading(true);
+                                                                        setError('');
+                                                                        await confirmReceipt(order.id);
+                                                                        const data = await getOrdersByUser();
+                                                                        setOrders(Array.isArray(data) ? data : []);
+                                                                        setSuccessMessage(t('orders.confirmSuccess') || 'Đã nhận hàng. Đơn hàng hoàn thành.');
+                                                                        setTimeout(() => setSuccessMessage(''), 4000);
+                                                                    } catch (e) {
+                                                                        setError(e.message || t('orders.confirmError'));
+                                                                    } finally {
+                                                                        setLoading(false);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {t('orders.confirmReceipt') || 'Confirm Receipt'}
+                                                            </button>
+                                                        )}
                                                         <button
                                                             className="btn"
                                                             style={ratingButtonOutline}
