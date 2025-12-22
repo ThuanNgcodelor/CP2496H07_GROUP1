@@ -1,6 +1,5 @@
 import Header from "../../components/client/Header.jsx";
 import Footer from "../../components/client/Footer.jsx";
-import ChatBotWidget from "../../components/client/ChatBotWidget.jsx";
 import ShopeeBanner from "../../components/client/ShopeeBanner.jsx";
 import ShopeeCategoryGrid from "../../components/client/ShopeeCategoryGrid.jsx";
 import FlashSale from "../../components/client/FlashSale.jsx";
@@ -28,7 +27,6 @@ export default function HomePage() {
         <TodaysSuggestions />
       </main>
       <Footer />
-      <ChatBotWidget />
     </div>
   );
 }

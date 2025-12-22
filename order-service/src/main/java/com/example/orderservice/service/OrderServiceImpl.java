@@ -1432,14 +1432,25 @@ public class OrderServiceImpl implements OrderService {
         ShippingOrder sh = opt.get();
         String s = status.toLowerCase(); // GHN returns lowercase status
         String upperS = s.toUpperCase();
+        
+        // Get Vietnamese title and description for this status
+        String[] statusInfo = getGhnStatusInfo(s);
+        String title = statusInfo[0];
+        String description = statusInfo[1];
+        
+        // Append to tracking history
+        appendTrackingHistory(sh, s, title, description);
+        
         sh.setStatus(upperS);
         shippingOrderRepository.save(sh);
 
-        // publish minimal tracking event (no location)
+        // publish tracking event with title and description
         Map<String, Object> evt = new HashMap<>();
         evt.put("orderId", sh.getOrderId());
         evt.put("ghnOrderCode", sh.getGhnOrderCode());
         evt.put("status", upperS);
+        evt.put("title", title);
+        evt.put("description", description);
         evt.put("ts", java.time.LocalDateTime.now().toString());
         trackingEmitterService.send(sh.getOrderId(), evt);
 
@@ -1528,6 +1539,88 @@ public class OrderServiceImpl implements OrderService {
             }
         } catch (Exception e) {
             log.error("[GHN] Failed to update order status from GHN status: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get Vietnamese title and description for GHN status
+     * @return String[2] where [0] = title, [1] = description
+     */
+    private String[] getGhnStatusInfo(String ghnStatus) {
+        switch (ghnStatus.toLowerCase()) {
+            case "ready_to_pick":
+                return new String[]{"Chờ lấy hàng", "Đơn hàng đang chờ shipper đến lấy"};
+            case "picking":
+                return new String[]{"Đang lấy hàng", "Shipper đang đến lấy hàng từ shop"};
+            case "money_collect_picking":
+                return new String[]{"Đang lấy hàng", "Shipper đang thu tiền và lấy hàng"};
+            case "picked":
+                return new String[]{"Đã lấy hàng", "Shipper đã lấy hàng thành công"};
+            case "storing":
+                return new String[]{"Đã nhập kho", "Đơn hàng đã được nhập kho phân loại"};
+            case "transporting":
+                return new String[]{"Đang luân chuyển", "Đơn hàng đang được vận chuyển đến kho đích"};
+            case "sorting":
+                return new String[]{"Đang phân loại", "Đơn hàng đang được phân loại tại kho"};
+            case "delivering":
+                return new String[]{"Đang giao hàng", "Shipper đang giao hàng đến bạn, vui lòng chú ý điện thoại"};
+            case "money_collect_delivering":
+                return new String[]{"Đang giao hàng", "Shipper đang giao hàng và thu tiền COD"};
+            case "delivered":
+                return new String[]{"Đã giao hàng", "Giao hàng thành công"};
+            case "delivery_fail":
+                return new String[]{"Giao thất bại", "Giao hàng không thành công, sẽ giao lại"};
+            case "waiting_to_return":
+                return new String[]{"Chờ trả hàng", "Đơn hàng đang chờ trả về shop sau 3 lần giao thất bại"};
+            case "return":
+            case "returning":
+                return new String[]{"Đang trả hàng", "Đơn hàng đang được trả về shop"};
+            case "return_transporting":
+                return new String[]{"Đang luân chuyển trả", "Đơn hàng đang được vận chuyển trả về shop"};
+            case "return_sorting":
+                return new String[]{"Đang phân loại trả", "Đơn hàng đang được phân loại để trả về shop"};
+            case "return_fail":
+                return new String[]{"Trả hàng thất bại", "Không thể trả hàng về shop"};
+            case "returned":
+                return new String[]{"Đã trả hàng", "Đơn hàng đã được trả về shop thành công"};
+            case "cancel":
+                return new String[]{"Đã hủy", "Đơn hàng đã bị hủy"};
+            case "exception":
+                return new String[]{"Có sự cố", "Đơn hàng gặp sự cố, đang xử lý"};
+            case "damage":
+                return new String[]{"Hàng bị hư hỏng", "Hàng hóa bị hư hỏng trong quá trình vận chuyển"};
+            case "lost":
+                return new String[]{"Hàng bị thất lạc", "Hàng hóa bị thất lạc"};
+            default:
+                return new String[]{"Cập nhật trạng thái", "Trạng thái: " + ghnStatus};
+        }
+    }
+    
+    /**
+     * Append a new entry to the tracking history JSON array
+     */
+    private void appendTrackingHistory(ShippingOrder sh, String status, String title, String description) {
+        try {
+            java.util.List<Map<String, Object>> history = new java.util.ArrayList<>();
+            String old = sh.getTrackingHistory();
+            if (old != null && !old.isBlank()) {
+                try {
+                    history = objectMapper.readValue(old, java.util.List.class);
+                } catch (Exception e) {
+                    log.warn("[GHN] Failed to parse existing tracking history, starting fresh");
+                }
+            }
+            
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("ts", java.time.LocalDateTime.now().toString());
+            entry.put("status", status);
+            entry.put("title", title);
+            entry.put("description", description);
+            history.add(entry);
+            
+            sh.setTrackingHistory(objectMapper.writeValueAsString(history));
+        } catch (Exception e) {
+            log.error("[GHN] Failed to append tracking history: {}", e.getMessage());
         }
     }
 

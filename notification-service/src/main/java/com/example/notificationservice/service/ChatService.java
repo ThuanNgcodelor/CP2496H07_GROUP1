@@ -34,31 +34,28 @@ public class ChatService {
     
     /**
      * Lấy hoặc tạo conversation
-     * QUAN TRỌNG: Phân biệt theo product
+     * QUAN TRỌNG: Chỉ 1 conversation giữa client và shop owner
+     * ProductId chỉ dùng để hiển thị sản phẩm hiện tại, KHÔNG tạo conversation riêng
      */
     @Transactional
     public ConversationDto getOrCreateConversation(
         String clientId, 
         String shopOwnerId, 
-        String productId  // Có thể NULL nếu chat chung
+        String productId  // Có thể NULL - chỉ dùng để hiển thị context sản phẩm
     ) {
-        Optional<Conversation> existing;
-        
-        if (productId != null && !productId.trim().isEmpty()) {
-            // Chat về sản phẩm cụ thể
-            existing = conversationRepo.findByClientIdAndShopOwnerIdAndProductId(
-                clientId, shopOwnerId, productId
-            );
-        } else {
-            // Chat chung (không gắn product)
-            existing = conversationRepo.findGeneralConversation(
-                clientId, shopOwnerId
-            );
-        }
+        // Luôn tìm conversation theo clientId + shopOwnerId (không phân biệt productId)
+        Optional<Conversation> existing = conversationRepo.findByClientIdAndShopOwnerId(
+            clientId, shopOwnerId
+        );
         
         Conversation conversation;
         if (existing.isPresent()) {
             conversation = existing.get();
+            // Cập nhật productId hiện tại nếu có (để hiển thị sản phẩm đang hỏi)
+            if (productId != null && !productId.trim().isEmpty()) {
+                conversation.setProductId(productId);
+                conversation = conversationRepo.save(conversation);
+            }
         } else {
             // Tạo mới
             conversation = new Conversation();
@@ -69,16 +66,9 @@ public class ChatService {
             
             // Auto-generate title
             try {
-                if (productId != null && !productId.trim().isEmpty()) {
-                    var productResponse = stockServiceClient.getProductById(productId);
-                    if (productResponse.getBody() != null) {
-                        conversation.setTitle("Ask about " + productResponse.getBody().getName());
-                    }
-                } else {
-                    var userResponse = userServiceClient.getUserById(shopOwnerId);
-                    if (userResponse.getBody() != null) {
-                        conversation.setTitle("Chat with " + userResponse.getBody().getUsername());
-                    }
+                var userResponse = userServiceClient.getUserById(shopOwnerId);
+                if (userResponse.getBody() != null) {
+                    conversation.setTitle("Chat with " + userResponse.getBody().getUsername());
                 }
             } catch (Exception e) {
                 conversation.setTitle("New Conversation");

@@ -5,7 +5,7 @@ import Swal from "sweetalert2";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { getOrdersByUser, cancelOrder, confirmReceipt } from "../../../api/order.js";
 import { createReview } from "../../../api/review.js";
-import { getUser } from "../../../api/user.js";
+import { getUser, getShopOwnerByUserId } from "../../../api/user.js";
 import { fetchImageById } from "../../../api/image.js";
 import { fetchProductById } from "../../../api/product.js";
 import Loading from "../Loading.jsx";
@@ -106,6 +106,7 @@ export default function OrderList() {
     const [activeTab, setActiveTab] = useState("ALL");
     const [imageUrls, setImageUrls] = useState({});
     const [confirmModal, setConfirmModal] = useState({ open: false, orderId: null });
+    const [shopInfoByOrder, setShopInfoByOrder] = useState({}); // { orderId: { shopName, shopOwnerId } }
 
     // Rating State
     const [ratingModalOpen, setRatingModalOpen] = useState(false);
@@ -120,15 +121,42 @@ export default function OrderList() {
         getUser().then(setCurrentUser).catch(err => console.error("Failed to load user info", err));
     }, []);
 
-    const openRatingModal = (product, mode = 'full') => {
+    const openRatingModal = (product, order, mode = 'full') => {
+        const shopInfo = shopInfoByOrder[order?.id];
         setSelectedProduct({
             id: product.productId,
             name: product.productName,
             image: imageUrls[product.imageId] || imageUrls[product.id] || imageUrls[`${product.productId}-${product.sizeId}`],
-            shopName: "MERIER STORE"
+            shopName: shopInfo?.shopName || t('orders.unknownShop') || 'Shop'
         });
         setRatingMode(mode);
         setRatingModalOpen(true);
+    };
+
+    // Handle View Shop - navigate to shop page
+    const handleViewShop = (order) => {
+        const shopInfo = shopInfoByOrder[order?.id];
+        if (shopInfo?.shopOwnerId) {
+            navigate(`/shop/${shopInfo.shopOwnerId}`);
+        } else {
+            console.warn('Shop owner ID not available for this order');
+        }
+    };
+
+    // Handle Chat with Shop - dispatch event to open chat widget
+    const handleChatWithShop = (order) => {
+        const shopInfo = shopInfoByOrder[order?.id];
+        const firstItem = order?.orderItems?.[0];
+        if (shopInfo?.shopOwnerId) {
+            window.dispatchEvent(new CustomEvent('open-chat-with-product', {
+                detail: {
+                    shopOwnerId: shopInfo.shopOwnerId,
+                    productId: firstItem?.productId || null
+                }
+            }));
+        } else {
+            console.warn('Shop owner ID not available for this order');
+        }
     };
 
     const handleSubmitReview = async (data) => {
@@ -257,6 +285,76 @@ export default function OrderList() {
         };
     }, [orders]);
 
+    // Load shop owner info for each order
+    useEffect(() => {
+        if (orders.length === 0) return;
+
+        let isActive = true;
+        const shopInfoMap = {};
+        const userIdCache = new Map(); // Cache userId -> shopInfo
+
+        const loadShopInfo = async () => {
+            const shopPromises = [];
+
+            orders.forEach((order) => {
+                const firstItem = order.orderItems?.[0];
+                if (!firstItem?.productId) return;
+
+                shopPromises.push(
+                    (async () => {
+                        try {
+                            // Fetch product to get userId (shop owner)
+                            const prodRes = await fetchProductById(firstItem.productId);
+                            const product = prodRes?.data;
+                            const userId = product?.userId;
+
+                            if (!userId) return;
+
+                            // Check cache first
+                            if (userIdCache.has(userId)) {
+                                shopInfoMap[order.id] = userIdCache.get(userId);
+                                return;
+                            }
+
+                            // Fetch shop owner info
+                            try {
+                                const shopOwner = await getShopOwnerByUserId(userId);
+                                const info = {
+                                    shopName: shopOwner?.shopName || product?.shopName || 'Shop',
+                                    shopOwnerId: userId
+                                };
+                                shopInfoMap[order.id] = info;
+                                userIdCache.set(userId, info);
+                            } catch {
+                                // Fallback to product name
+                                const info = {
+                                    shopName: product?.shopName || 'Shop',
+                                    shopOwnerId: userId
+                                };
+                                shopInfoMap[order.id] = info;
+                                userIdCache.set(userId, info);
+                            }
+                        } catch (e) {
+                            console.error('Failed to load shop info for order', order.id, e);
+                        }
+                    })()
+                );
+            });
+
+            await Promise.all(shopPromises);
+
+            if (isActive) {
+                setShopInfoByOrder(shopInfoMap);
+            }
+        };
+
+        loadShopInfo();
+
+        return () => {
+            isActive = false;
+        };
+    }, [orders]);
+
     // Auto expand order from URL
     useEffect(() => {
         const orderIdFromUrl = searchParams.get('orderId');
@@ -270,25 +368,35 @@ export default function OrderList() {
         }
     }, [searchParams, orders]);
 
-    // Filter orders by tab (custom groups)
+    // Filter orders by tab (custom groups) and sort newest first
     const filteredOrders = useMemo(() => {
         let result = orders || [];
 
-        if (!activeTab || activeTab === "ALL") return result;
+        // Filter by active tab
+        if (activeTab && activeTab !== "ALL") {
+            const tabMap = {
+                'TO_PAY': ['PENDING'],                    // Chờ thanh toán - chỉ PENDING
+                'TO_SHIP': ['CONFIRMED', 'PROCESSING'],   // Chờ vận chuyển - CONFIRMED (đã confirm, chờ ship lấy)
+                'TO_RECEIVE': ['SHIPPED'],                // Chờ nhận hàng - đang giao
+                'COMPLETED': ['DELIVERED', 'COMPLETED'],
+                'CANCELLED': ['CANCELLED'],
+                'RETURNED': ['RETURNED']
+            };
 
-        const tabMap = {
-            'TO_PAY': ['PENDING'],                    // Chờ thanh toán - chỉ PENDING
-            'TO_SHIP': ['CONFIRMED', 'PROCESSING'],   // Chờ vận chuyển - CONFIRMED (đã confirm, chờ ship lấy)
-            'TO_RECEIVE': ['SHIPPED'],                // Chờ nhận hàng - đang giao
-            'COMPLETED': ['DELIVERED', 'COMPLETED'],
-            'CANCELLED': ['CANCELLED'],
-            'RETURNED': ['RETURNED']
-        };
+            const wanted = tabMap[activeTab];
+            if (wanted) {
+                result = result.filter(order => wanted.includes(normalizeStatus(order.orderStatus)));
+            }
+        }
 
-        const wanted = tabMap[activeTab];
-        if (!wanted) return result;
-
-        return result.filter(order => wanted.includes(normalizeStatus(order.orderStatus)));
+        // Sort by newest first (createTimestamp descending, fallback to id)
+        return [...result].sort((a, b) => {
+            const dateA = a.createTimestamp ? new Date(a.createTimestamp).getTime() : 0;
+            const dateB = b.createTimestamp ? new Date(b.createTimestamp).getTime() : 0;
+            if (dateB !== dateA) return dateB - dateA; // Newest first
+            // Fallback: sort by id descending if timestamps are equal
+            return (b.id || 0) - (a.id || 0);
+        });
     }, [orders, activeTab]);
 
     const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
@@ -322,15 +430,6 @@ export default function OrderList() {
                 {config.label}
             </span>
         );
-    };
-
-    const handleViewShop = (order) => {
-        // Try to navigate to shop page, fallback to home if shopId not available
-        if (order.shopId) {
-            navigate(`/shop/${order.shopId}`);
-        } else {
-            navigate('/shop');
-        }
     };
 
     const openTracking = (order) => {
@@ -503,11 +602,11 @@ export default function OrderList() {
                                     >
                                         <div className="d-flex align-items-center gap-2 flex-wrap">
                                             <span style={{ fontSize: '14px', fontWeight: 500, color: '#222' }}>
-                                                MERIER STORE
+                                                {shopInfoByOrder[order.id]?.shopName || t('orders.loadingShop') || 'Loading...'}
                                             </span>
                                             <button
                                                 className="btn btn-sm"
-                                                onClick={() => handleViewShop(order)}
+                                                onClick={() => handleChatWithShop(order)}
                                                 style={{
                                                     background: 'transparent',
                                                     border: '1px solid #ee4d2d',

@@ -1314,6 +1314,8 @@
     "statusMessages": {
       "cancelled": "Order has been cancelled",
       "returned": "Order has been returned"
-    }
+    },
+    "thankYouMessage": "Thank you for your purchase!",
+    "customer": "Customer"
   }
 }

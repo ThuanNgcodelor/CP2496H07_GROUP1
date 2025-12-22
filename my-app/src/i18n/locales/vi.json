@@ -1313,6 +1313,8 @@
     "statusMessages": {
       "cancelled": "Đơn hàng đã bị hủy",
       "returned": "Đơn hàng đã được trả lại"
-    }
+    },
+    "thankYouMessage": "Cảm ơn bạn đã mua sắm!",
+    "customer": "Khách hàng"
   }
 }

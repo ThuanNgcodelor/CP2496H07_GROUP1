@@ -57,64 +57,103 @@ const STATUS_STEP_MAP = {
     'RETURNED': -2
 };
 
-// Mock tracking timeline data - in real app, this would come from API
-const generateMockTimeline = (order) => {
+// Get status display info (color, i18n key)
+const getDisplayStatus = (orderStatus) => {
+    const statusMap = {
+        'PENDING': { color: '#ff9800', key: 'pending' },
+        'CONFIRMED': { color: '#2196f3', key: 'confirmed' },
+        'SHIPPED': { color: '#4caf50', key: 'shipped' },
+        'DELIVERED': { color: '#26aa99', key: 'delivered' },
+        'COMPLETED': { color: '#26aa99', key: 'completed' },
+        'CANCELLED': { color: '#999', key: 'cancelled' },
+        'RETURNED': { color: '#ee4d2d', key: 'returned' }
+    };
+    return statusMap[orderStatus] || { color: '#666', key: 'pending' };
+};
+
+// Generate timeline from real shipping trackingHistory or fallback to order events
+const generateTimeline = (order, shipping) => {
     const timeline = [];
-    const status = order?.orderStatus || 'PENDING';
-    const stepIndex = STATUS_STEP_MAP[status] ?? 0;
 
+    // Parse real tracking history from shipping order if available
+    if (shipping?.trackingHistory) {
+        try {
+            const history = typeof shipping.trackingHistory === 'string'
+                ? JSON.parse(shipping.trackingHistory)
+                : shipping.trackingHistory;
+
+            if (Array.isArray(history) && history.length > 0) {
+                // Convert tracking history to timeline format (newest first)
+                history.slice().reverse().forEach((entry, index) => {
+                    timeline.push({
+                        time: entry.ts ? formatDateTime(new Date(entry.ts)) : '-',
+                        status: entry.status || 'update',
+                        title: entry.title || 'Cập nhật trạng thái',
+                        description: entry.description || '',
+                        highlight: index === 0 // Highlight newest entry
+                    });
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to parse tracking history:', e);
+        }
+    }
+
+    // Add order creation event at the end (always present)
     const baseDate = order?.createTimestamp ? new Date(order.createTimestamp) : new Date();
-
-    // Generate timeline events based on current status
-    if (stepIndex >= 4) {
-        timeline.push({
-            time: formatDateTime(new Date(baseDate.getTime() + 5 * 24 * 60 * 60 * 1000)),
-            status: 'completed',
-            title: 'Đã giao',
-            description: 'Giao hàng thành công',
-            highlight: true
-        });
-    }
-
-    if (stepIndex >= 3) {
-        timeline.push({
-            time: formatDateTime(new Date(baseDate.getTime() + 4 * 24 * 60 * 60 * 1000)),
-            status: 'shipped',
-            title: 'Đang vận chuyển',
-            description: 'Đơn hàng sẽ sớm được giao, vui lòng chú ý điện thoại'
-        });
-        timeline.push({
-            time: formatDateTime(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
-            status: 'shipped',
-            title: 'Đơn hàng đã đến trạm giao hàng',
-            description: 'Đơn hàng đã đến trạm giao hàng tại khu vực của bạn và sẽ được giao trong vòng 12 giờ tiếp theo'
-        });
-    }
-
-    if (stepIndex >= 2) {
-        timeline.push({
-            time: formatDateTime(new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000)),
-            status: 'processing',
-            title: 'Đã giao cho đơn vị vận chuyển',
-            description: 'Đơn hàng đã được bàn giao cho đơn vị vận chuyển'
-        });
-    }
-
-    if (stepIndex >= 1) {
-        timeline.push({
-            time: formatDateTime(new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000)),
-            status: 'confirmed',
-            title: 'Đã xác nhận đơn hàng',
-            description: 'Đơn hàng đã được xác nhận thanh toán'
-        });
-    }
-
     timeline.push({
         time: formatDateTime(baseDate),
         status: 'pending',
         title: 'Đặt hàng thành công',
-        description: 'Đơn hàng đã được đặt thành công'
+        description: 'Đơn hàng đã được đặt thành công',
+        highlight: timeline.length === 0 // Highlight if it's the only event
     });
+
+    // If no tracking history but order has status changes, add basic events
+    if (timeline.length === 1 && order?.orderStatus) {
+        const status = order.orderStatus;
+        const stepIndex = STATUS_STEP_MAP[status] ?? 0;
+
+        if (stepIndex >= 1 || status === 'CONFIRMED') {
+            timeline.unshift({
+                time: formatDateTime(new Date(baseDate.getTime() + 1 * 60 * 60 * 1000)),
+                status: 'confirmed',
+                title: 'Đã xác nhận đơn hàng',
+                description: 'Đơn hàng đã được shop xác nhận',
+                highlight: stepIndex === 1
+            });
+        }
+
+        if (stepIndex >= 2 || status === 'SHIPPED') {
+            timeline.unshift({
+                time: formatDateTime(new Date(baseDate.getTime() + 2 * 60 * 60 * 1000)),
+                status: 'processing',
+                title: 'Đã giao cho đơn vị vận chuyển',
+                description: 'Đơn hàng đã được bàn giao cho GHN',
+                highlight: stepIndex === 2
+            });
+        }
+
+        if (stepIndex >= 3 || status === 'DELIVERED') {
+            timeline.unshift({
+                time: formatDateTime(new Date(baseDate.getTime() + 3 * 60 * 60 * 1000)),
+                status: 'shipped',
+                title: 'Đã giao hàng',
+                description: 'Giao hàng thành công',
+                highlight: stepIndex === 3
+            });
+        }
+
+        if (stepIndex >= 4 || status === 'COMPLETED') {
+            timeline.unshift({
+                time: formatDateTime(new Date(baseDate.getTime() + 4 * 60 * 60 * 1000)),
+                status: 'completed',
+                title: 'Hoàn thành',
+                description: 'Đơn hàng đã hoàn thành',
+                highlight: stepIndex === 4
+            });
+        }
+    }
 
     return timeline;
 };
@@ -134,9 +173,9 @@ export default function TrackingPage() {
         async function load() {
             setLoading(true);
             try {
-                // Load shipping info
+                // Load shipping info (full object including trackingHistory)
                 const sh = await getShippingByOrderId(orderId);
-                setGhn(sh ? sh.ghnOrderCode : null);
+                setGhn(sh); // Store full shipping object, not just ghnOrderCode
 
                 // Load order details
                 try {
@@ -213,7 +252,7 @@ export default function TrackingPage() {
     const isCancelled = order?.orderStatus === 'CANCELLED';
     const isReturned = order?.orderStatus === 'RETURNED';
     const ORDER_STEPS = getOrderSteps(order?.paymentMethod, t);
-    const timeline = generateMockTimeline(order);
+    const timeline = generateTimeline(order, ghn);
     const displayedTimeline = showAllTimeline ? timeline : timeline.slice(0, 4);
 
     if (loading) {
@@ -271,25 +310,21 @@ export default function TrackingPage() {
                             }}
                         >
                             <i className="fa fa-arrow-left" style={{ fontSize: '14px' }}></i>
-                            TRỞ LẠI
+                            {t('tracking.backButton')}
                         </button>
 
                         <div style={{ textAlign: 'center' }}>
-                            <span style={{ color: '#666', fontSize: '13px' }}>MÃ ĐƠN HÀNG. </span>
+                            <span style={{ color: '#666', fontSize: '13px' }}>{t('tracking.orderId')}. </span>
                             <span style={{ color: '#333', fontWeight: 500, fontSize: '13px' }}>{orderId?.slice(0, 16).toUpperCase()}</span>
                         </div>
 
                         <div style={{
-                            color: isCancelled ? '#999' : isReturned ? '#ee4d2d' : '#26aa99',
+                            color: getDisplayStatus(order?.orderStatus).color,
                             fontWeight: 600,
                             fontSize: '13px',
                             textTransform: 'uppercase'
                         }}>
-                            {isCancelled
-                                ? t('tracking.statusMessages.cancelled').toUpperCase()
-                                : isReturned
-                                    ? t('tracking.statusMessages.returned').toUpperCase()
-                                    : t('tracking.steps.completed').toUpperCase()}
+                            {t(`tracking.orderStatus.${getDisplayStatus(order?.orderStatus).key}`).toUpperCase()}
                         </div>
                     </div>
 
@@ -398,7 +433,7 @@ export default function TrackingPage() {
                         gap: '12px'
                     }}>
                         <span style={{ color: '#666', fontSize: '13px' }}>
-                            Cảm ơn bạn đã mua sắm tại Shopee!
+                            {t('tracking.thankYouMessage', 'Cảm ơn bạn đã mua sắm!')}
                         </span>
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button
@@ -438,7 +473,7 @@ export default function TrackingPage() {
                                     e.currentTarget.style.color = '#555';
                                 }}
                             >
-                                Liên Hệ Người Bán
+                                {t('tracking.buttons.contactSeller')}
                             </button>
                         </div>
                     </div>
@@ -473,7 +508,7 @@ export default function TrackingPage() {
                                         textAlign: 'right'
                                     }}>
                                         <div style={{ color: '#26aa99', fontWeight: 500 }}>SPX Express</div>
-                                        <div>{ghn || 'SPXVN...'}</div>
+                                        <div>{ghn?.ghnOrderCode || 'SPXVN...'}</div>
                                     </div>
                                 </div>
 
@@ -563,20 +598,6 @@ export default function TrackingPage() {
                                                 }}>
                                                     {event.description}
                                                 </div>
-                                                {index === 0 && event.highlight && (
-                                                    <a
-                                                        href="#"
-                                                        style={{
-                                                            color: '#26aa99',
-                                                            fontSize: '12px',
-                                                            textDecoration: 'none',
-                                                            marginTop: '4px',
-                                                            display: 'inline-block'
-                                                        }}
-                                                    >
-                                                        Xem hình ảnh giao hàng
-                                                    </a>
-                                                )}
                                             </div>
                                         </div>
                                     ))}

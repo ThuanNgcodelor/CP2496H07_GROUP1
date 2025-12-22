@@ -22,6 +22,12 @@ public interface ConversationRepository extends JpaRepository<Conversation, Stri
     );
 
     /**
+     * Tìm conversation giữa client và shop (bất kể product nào)
+     * Mỗi cặp client-shop chỉ có 1 conversation duy nhất
+     */
+    Optional<Conversation> findByClientIdAndShopOwnerId(String clientId, String shopOwnerId);
+
+    /**
      * Tìm conversation chung (không gắn product)
      * Dùng khi chat từ trang shop chung
      */

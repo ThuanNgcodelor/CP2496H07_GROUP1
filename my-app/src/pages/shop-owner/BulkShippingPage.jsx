@@ -1,9 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders } from '../../api/order';
+import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders, getShippingByOrderId } from '../../api/order';
 import { getUserById } from '../../api/user';
 import { useTranslation } from 'react-i18next';
 import '../../components/shop-owner/ShopOwnerLayout.css';
+
+// GHN status to Vietnamese mapping
+const GHN_STATUS_MAP = {
+    'ready_to_pick': { title: 'Chờ lấy hàng', color: '#ff9800' },
+    'picking': { title: 'Đang lấy hàng', color: '#ff9800' },
+    'picked': { title: 'Đã lấy hàng', color: '#2196f3' },
+    'storing': { title: 'Đã nhập kho', color: '#2196f3' },
+    'transporting': { title: 'Đang vận chuyển', color: '#2196f3' },
+    'sorting': { title: 'Đang phân loại', color: '#2196f3' },
+    'delivering': { title: 'Đang giao hàng', color: '#4caf50' },
+    'delivered': { title: 'Đã giao hàng', color: '#26aa99' },
+    'delivery_fail': { title: 'Giao thất bại', color: '#f44336' },
+    'waiting_to_return': { title: 'Chờ trả hàng', color: '#f44336' },
+    'return': { title: 'Đang trả hàng', color: '#e91e63' },
+    'returning': { title: 'Đang trả hàng', color: '#e91e63' },
+    'returned': { title: 'Đã trả hàng', color: '#9c27b0' },
+    'cancel': { title: 'Đã hủy', color: '#9e9e9e' }
+};
+
+// Format datetime helper
+const formatTrackingTime = (ts) => {
+    if (!ts) return '-';
+    try {
+        const date = new Date(ts);
+        return date.toLocaleString('vi-VN', {
+            hour: '2-digit', minute: '2-digit',
+            day: '2-digit', month: '2-digit', year: 'numeric'
+        });
+    } catch {
+        return '-';
+    }
+};
 
 export default function BulkShippingPage() {
     const { t } = useTranslation();
@@ -19,6 +51,9 @@ export default function BulkShippingPage() {
     const [usernames, setUsernames] = useState({});
     const [selectedOrders, setSelectedOrders] = useState(new Set());
     const [bulkStatus, setBulkStatus] = useState('');
+    const [shippingData, setShippingData] = useState({}); // Shipping data per order
+    const [loadingShipping, setLoadingShipping] = useState({});
+    const [showTrackingModal, setShowTrackingModal] = useState(null); // orderId for modal
 
     // Load orders
     useEffect(() => {
@@ -179,12 +214,10 @@ export default function BulkShippingPage() {
 
     const STATUS_NUMERIC_MAP = {
         0: 'PENDING',
-        1: 'PROCESSING',
-        2: 'SHIPPED',
-        3: 'DELIVERED',
-        4: 'CANCELLED',
-        5: 'COMPLETED',
-        6: 'RETURNED'
+        1: 'CONFIRMED',
+        2: 'CANCELLED',
+        3: 'COMPLETED',
+        4: 'RETURNED'
     };
 
     const normalizeStatus = (status) => {
@@ -197,11 +230,8 @@ export default function BulkShippingPage() {
         const normalizedStatus = normalizeStatus(status);
         const statusMap = {
             PENDING: { label: 'Pending', class: 'bg-warning' },
-            PROCESSING: { label: 'Processing', class: 'bg-info' },
-            SHIPPED: { label: 'Shipped', class: 'bg-success' },
-            DELIVERED: { label: 'Delivered', class: 'bg-success' },
-            CANCELLED: { label: 'Cancelled', class: 'bg-danger' },
-            COMPLETED: { label: 'Completed', class: 'bg-success' }
+            CONFIRMED: { label: 'Confirmed', class: 'bg-info' },
+            CANCELLED: { label: 'Cancelled', class: 'bg-danger' }
         };
 
         return statusMap[normalizedStatus] || { label: status || 'N/A', class: 'bg-secondary' };
@@ -211,9 +241,7 @@ export default function BulkShippingPage() {
         const normalized = normalizeStatus(status);
         const statusMap = {
             PENDING: 'Pending',
-            PROCESSING: 'Processing',
-            SHIPPED: 'Shipped',
-            DELIVERED: 'Delivered',
+            CONFIRMED: 'Confirmed',
             CANCELLED: 'Cancelled',
             COMPLETED: 'Completed'
         };
@@ -223,11 +251,24 @@ export default function BulkShippingPage() {
     const getNextStatus = (currentStatus) => {
         const cur = normalizeStatus(currentStatus);
         const statusFlow = {
-            PENDING: 'PROCESSING',
-            PROCESSING: 'SHIPPED',
-            SHIPPED: 'DELIVERED'
+            PENDING: 'CONFIRMED'
         };
         return statusFlow[cur];
+    };
+
+    // Load shipping data for an order
+    const loadShippingData = async (orderId) => {
+        if (shippingData[orderId] || loadingShipping[orderId]) return;
+
+        setLoadingShipping(prev => ({ ...prev, [orderId]: true }));
+        try {
+            const shipping = await getShippingByOrderId(orderId);
+            setShippingData(prev => ({ ...prev, [orderId]: shipping }));
+        } catch (err) {
+            console.error('Failed to load shipping data:', err);
+        } finally {
+            setLoadingShipping(prev => ({ ...prev, [orderId]: false }));
+        }
     };
 
     const toggleRowExpansion = (orderId) => {
@@ -235,6 +276,7 @@ export default function BulkShippingPage() {
             setExpandedRow(null);
         } else {
             setExpandedRow(orderId);
+            loadShippingData(orderId); // Auto-load shipping when expanding
         }
     };
 
@@ -410,9 +452,7 @@ export default function BulkShippingPage() {
                                     style={{ width: '150px' }}
                                 >
                                     <option value="">{t('shopOwner.manageOrder.selectStatus')}</option>
-                                    <option value="PROCESSING">{t('common.status.processing')}</option>
-                                    <option value="SHIPPED">{t('common.status.shipped')}</option>
-                                    <option value="DELIVERED">{t('common.status.delivered')}</option>
+                                    <option value="CONFIRMED">{t('common.status.processing')}</option>
                                     <option value="CANCELLED">{t('common.status.cancelled')}</option>
                                     <option value="RETURNED">{t('common.status.returned')}</option>
                                 </select>
@@ -661,6 +701,83 @@ export default function BulkShippingPage() {
                                                                             </tbody>
                                                                         </table>
                                                                     </div>
+                                                                </div>
+
+                                                                {/* Tracking Section */}
+                                                                <div className="mb-4">
+                                                                    <h6 className="text-muted text-uppercase small fw-bold mb-3">
+                                                                        <i className="fas fa-shipping-fast me-2"></i>Tracking Vận Chuyển
+                                                                    </h6>
+                                                                    {loadingShipping[order.id] ? (
+                                                                        <div className="text-center py-3">
+                                                                            <i className="fas fa-spinner fa-spin me-2"></i>Đang tải...
+                                                                        </div>
+                                                                    ) : shippingData[order.id] ? (
+                                                                        <div className="border rounded p-3 bg-light">
+                                                                            {/* GHN Order Code */}
+                                                                            <div className="d-flex justify-content-between align-items-center mb-3">
+                                                                                <span className="text-muted small">Mã vận đơn GHN:</span>
+                                                                                <span className="fw-bold text-primary">{shippingData[order.id].ghnOrderCode || 'N/A'}</span>
+                                                                            </div>
+
+                                                                            {/* Current Status */}
+                                                                            {shippingData[order.id].status && (
+                                                                                <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                                                                    <span className="text-muted small">Trạng thái hiện tại:</span>
+                                                                                    <span
+                                                                                        className="badge"
+                                                                                        style={{
+                                                                                            backgroundColor: GHN_STATUS_MAP[shippingData[order.id].status?.toLowerCase()]?.color || '#555',
+                                                                                            color: 'white'
+                                                                                        }}
+                                                                                    >
+                                                                                        {GHN_STATUS_MAP[shippingData[order.id].status?.toLowerCase()]?.title || shippingData[order.id].status}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+
+                                                                            {/* Tracking Timeline */}
+                                                                            {shippingData[order.id].trackingHistory ? (() => {
+                                                                                try {
+                                                                                    const history = typeof shippingData[order.id].trackingHistory === 'string'
+                                                                                        ? JSON.parse(shippingData[order.id].trackingHistory)
+                                                                                        : shippingData[order.id].trackingHistory;
+
+                                                                                    if (Array.isArray(history) && history.length > 0) {
+                                                                                        return (
+                                                                                            <div className="mt-3">
+                                                                                                <div className="small fw-bold text-muted mb-2">Lịch sử vận chuyển:</div>
+                                                                                                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                                                                                    {history.slice().reverse().map((entry, idx) => (
+                                                                                                        <div key={idx} className="d-flex align-items-start mb-2" style={{ paddingLeft: '16px', borderLeft: idx === 0 ? '3px solid #26aa99' : '3px solid #e0e0e0' }}>
+                                                                                                            <div>
+                                                                                                                <div className={`small ${idx === 0 ? 'fw-bold text-success' : 'text-muted'}`}>
+                                                                                                                    {formatTrackingTime(entry.ts)}
+                                                                                                                </div>
+                                                                                                                <div className={`${idx === 0 ? 'fw-bold' : ''}`}>
+                                                                                                                    {entry.title || 'Cập nhật'}
+                                                                                                                </div>
+                                                                                                                {entry.description && (
+                                                                                                                    <div className="small text-muted">{entry.description}</div>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    }
+                                                                                    return <div className="text-muted small">Chưa có lịch sử vận chuyển</div>;
+                                                                                } catch (e) {
+                                                                                    return <div className="text-muted small">Không thể hiển thị lịch sử</div>;
+                                                                                }
+                                                                            })() : (
+                                                                                <div className="text-muted small">Chưa có lịch sử vận chuyển</div>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="text-muted small">Chưa có thông tin vận chuyển</div>
+                                                                    )}
                                                                 </div>
 
                                                                 <div className="d-flex justify-content-end gap-2 pt-3 border-top">

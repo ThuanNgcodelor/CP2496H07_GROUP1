@@ -5,11 +5,23 @@ import imgFallback from "../../../assets/images/shop/6.png";
 
 const formatVND = (n) => (Number(n) || 0).toLocaleString("vi-VN") + "₫";
 
+// Helper to open chat with shop owner
+const openChatWithShop = (shopOwnerId, productId = null) => {
+  if (!shopOwnerId) {
+    console.warn('No shop owner ID provided');
+    return;
+  }
+  window.dispatchEvent(new CustomEvent('open-chat-with-product', {
+    detail: { shopOwnerId, productId }
+  }));
+};
+
 export function Cart({
   items = [],
   imageUrls = {},
   productNames = {},
   shopOwners = {},
+  shopOwnerIds = {}, // Map of productId -> shopOwnerId (UUID)
   selected = new Set(),
   onToggle,
   onToggleAll,
@@ -22,16 +34,23 @@ export function Cart({
 }) {
   const { t } = useTranslation();
 
-  // Group items by shop owner
+  // Group items by shop owner - now also track shopOwnerId
   const itemsByShop = {};
+  const shopIdMap = {}; // Map shopName -> shopOwnerId
   items.forEach((item) => {
     const pid = item.productId ?? item.id;
     const shopOwnerName = shopOwners[pid] || item.shopOwnerName || item.shopName || 'Unknown Shop';
-    
+    const shopOwnerId = shopOwnerIds[pid] || item.shopOwnerId || null;
+
     if (!itemsByShop[shopOwnerName]) {
       itemsByShop[shopOwnerName] = [];
+      shopIdMap[shopOwnerName] = shopOwnerId;
     }
     itemsByShop[shopOwnerName].push(item);
+    // Use the first available shopOwnerId for this shop
+    if (shopOwnerId && !shopIdMap[shopOwnerName]) {
+      shopIdMap[shopOwnerName] = shopOwnerId;
+    }
   });
 
   return (
@@ -372,9 +391,23 @@ export function Cart({
                       }}
                     />
                     <span style={{ fontWeight: 600, marginLeft: '8px' }}>{shopName}</span>
-                    <Link to="#" style={{ color: '#333', textDecoration: 'none', marginLeft: 'auto', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button
+                      onClick={() => openChatWithShop(shopIdMap[shopName], shopItems[0]?.productId)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#333',
+                        cursor: 'pointer',
+                        marginLeft: 'auto',
+                        fontSize: '13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 8px'
+                      }}
+                    >
                       💬 Chat ngay
-                    </Link>
+                    </button>
                   </div>
 
                   {/* Deal Shock Section */}
@@ -389,7 +422,7 @@ export function Cart({
                     const uniqueKey = `${pid}:${item.sizeId || 'no-size'}`;
                     const img = imageUrls[pid] ?? imgFallback;
                     const isSelected = selected.has(uniqueKey);
-                    
+
                     return (
                       <div key={uniqueKey} className="cart2-item">
                         <div>

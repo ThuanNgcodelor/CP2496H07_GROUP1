@@ -14,7 +14,7 @@ const formatDate = (dateString) => {
     const now = new Date();
     const diff = now - date;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (days === 1) {
@@ -144,7 +144,7 @@ export default function ChatBotWidget() {
       setCurrentUserId(null);
       return;
     }
-    
+
     getUser().then(user => {
       setCurrentUserId(user?.id || user?.userId || null);
     }).catch((err) => {
@@ -165,16 +165,38 @@ export default function ChatBotWidget() {
       try {
         // Start or get conversation
         const conversation = await startConversation(shopOwnerId, productId || null);
-        
+
         // Open chat panel
         setOpen(true);
         setMinimized(false);
-        
+
         // Reload conversations to get the latest list
         await loadConversations();
-        
+
         // Select the conversation
         setSelectedChat(conversation);
+
+        // Auto-send PRODUCT_LINK message if productId is provided
+        // This creates clear history showing which product user is asking about
+        if (productId && conversation?.id) {
+          try {
+            // Send automatic product link message
+            await sendMessage(
+              conversation.id,
+              'Tôi muốn hỏi về sản phẩm này:', // "I want to ask about this product"
+              'PRODUCT_LINK',
+              null, // imageId
+              productId
+            );
+
+            // Reload messages to show the new product link
+            const msgs = await getMessages(conversation.id, 0, 50);
+            setMessages(msgs.reverse ? msgs.reverse() : msgs);
+          } catch (msgError) {
+            console.error('Error sending product link message:', msgError);
+            // Continue anyway - the chat is still open
+          }
+        }
       } catch (error) {
         console.error('Error opening chat:', error);
         alert('Failed to open chat. Please try again.');
@@ -232,7 +254,7 @@ export default function ChatBotWidget() {
   React.useEffect(() => {
     if (selectedChat?.id) {
       loadMessages(selectedChat.id);
-      
+
       // Chỉ mark as read nếu conversation đã có messages (tránh lỗi khi conversation mới tạo)
       // Đợi một chút để đảm bảo conversation đã được lưu vào DB
       setTimeout(() => {
@@ -243,14 +265,14 @@ export default function ChatBotWidget() {
           }
         });
       }, 500);
-      
+
       // Subscribe to WebSocket for this conversation
       if (isConnected()) {
         // Unsubscribe previous subscription if exists
         if (wsSubscription) {
           wsSubscription.unsubscribe();
         }
-        
+
         const sub = subscribeToConversation(selectedChat.id, (message) => {
           console.log('Received message via WebSocket:', message);
           setMessages(prev => {
@@ -325,7 +347,7 @@ export default function ChatBotWidget() {
       const data = await getConversations();
       const convs = Array.isArray(data) ? data : [];
       setConversations(convs);
-      
+
       // Load shop names for shop owners
       const shopOwnerIds = [...new Set(convs.map(conv => conv.shopOwnerId).filter(Boolean))];
       const newShopNames = { ...shopNames };
@@ -352,11 +374,11 @@ export default function ChatBotWidget() {
 
   const loadMessages = async (conversationId) => {
     try {
-    setLoading(true);
+      setLoading(true);
       const data = await getMessages(conversationId, 0, 50);
       // Reverse để hiển thị từ cũ đến mới
       setMessages(Array.isArray(data) ? data.reverse() : []);
-      
+
       // Load images for messages
       loadMessageImages(data);
     } catch (error) {
@@ -390,11 +412,11 @@ export default function ChatBotWidget() {
       // Fetch product data
       const productRes = await fetchProductById(productId);
       const product = productRes.data;
-      
+
       // Update selectedChat with full product data
       if (product) {
         setSelectedChat(prev => ({ ...prev, product }));
-        
+
         // Load product image
         if (product?.imageId) {
           const imgRes = await fetchProductImageById(product.imageId);
@@ -433,21 +455,22 @@ export default function ChatBotWidget() {
   };
 
   const filteredConversations = React.useMemo(() => {
-    let filtered = conversations.length > 0 ? conversations : MOCK_CONVERSATIONS;
-    
+    // Don't use mock data, show real conversations only
+    let filtered = conversations;
+
     if (searchQuery.trim()) {
       filtered = filtered.filter(conv => {
         const name = conv.opponent?.username || conv.name || '';
         const title = conv.title || '';
         return name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               title.toLowerCase().includes(searchQuery.toLowerCase());
+          title.toLowerCase().includes(searchQuery.toLowerCase());
       });
     }
-    
+
     if (filterType === "unread") {
       filtered = filtered.filter(conv => (conv.unreadCount || 0) > 0);
     }
-    
+
     return filtered;
   }, [conversations, searchQuery, filterType]);
 
@@ -463,8 +486,8 @@ export default function ChatBotWidget() {
           aria-label="Open chat"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H6L4 18V4H20V16Z" fill="currentColor"/>
-            <path d="M7 9H17V11H7V9ZM7 12H15V14H7V12Z" fill="currentColor"/>
+            <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H6L4 18V4H20V16Z" fill="currentColor" />
+            <path d="M7 9H17V11H7V9ZM7 12H15V14H7V12Z" fill="currentColor" />
           </svg>
           <span>Chat</span>
         </button>
@@ -472,7 +495,7 @@ export default function ChatBotWidget() {
 
       {/* Minimized Banner */}
       {open && minimized && (
-        <div 
+        <div
           className="shopee-chat-minimized-banner"
           onClick={() => setMinimized(false)}
         >
@@ -488,7 +511,7 @@ export default function ChatBotWidget() {
               <div className="shopee-chat-sidebar-header">
                 <h2 className="shopee-chat-title">Chat</h2>
               </div>
-              
+
               <div className="shopee-chat-search-section">
                 <div className="shopee-chat-search-wrapper">
                   <i className="fas fa-search shopee-chat-search-icon"></i>
@@ -517,7 +540,7 @@ export default function ChatBotWidget() {
                   </div>
                 ) : filteredConversations.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                    No conversations found
+                    Chưa có cuộc trò chuyện nào
                   </div>
                 ) : (
                   filteredConversations.map((conv) => {
@@ -533,14 +556,14 @@ export default function ChatBotWidget() {
                     } else if (conv.shopOwnerId) {
                       name = `Shop ${conv.shopOwnerId.substring(0, 8)}`;
                     }
-                    
+
                     const lastMsg = conv.lastMessageContent || 'Start a conversation';
                     const date = formatDate(conv.lastMessageAt);
                     const unread = conv.unreadCount || 0;
-                    const avatarColor = conv.opponent?.id ? 
-                      `#${conv.opponent.id.substring(0, 6)}` : 
+                    const avatarColor = conv.opponent?.id ?
+                      `#${conv.opponent.id.substring(0, 6)}` :
                       (conv.product?.id ? `#${conv.product.id.substring(0, 6)}` : '#EE4D2D');
-                    
+
                     return (
                       <div
                         key={conv.id}
@@ -586,8 +609,8 @@ export default function ChatBotWidget() {
             <div className="shopee-chat-main">
               <div className="shopee-chat-main-header">
                 <div className="shopee-chat-main-header-actions">
-                  <button 
-                    className="shopee-chat-icon-btn" 
+                  <button
+                    className="shopee-chat-icon-btn"
                     title="Minimize"
                     onClick={() => setMinimized(true)}
                   >
@@ -596,32 +619,32 @@ export default function ChatBotWidget() {
                   <button className="shopee-chat-icon-btn" title="More options">
                     <i className="fas fa-chevron-down"></i>
                   </button>
-              <button
-                    className="shopee-chat-icon-btn" 
+                  <button
+                    className="shopee-chat-icon-btn"
                     title="Close"
                     onClick={() => setOpen(false)}
                   >
                     <i className="fas fa-times"></i>
-              </button>
-            </div>
-          </div>
+                  </button>
+                </div>
+              </div>
 
               {!selectedChat ? (
                 <div className="shopee-chat-welcome">
                   <div className="shopee-chat-welcome-illustration">
                     <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
                       {/* Laptop */}
-                      <rect x="30" y="80" width="140" height="90" rx="4" fill="#E5E7EB"/>
-                      <rect x="35" y="85" width="130" height="80" rx="2" fill="#F3F4F6"/>
+                      <rect x="30" y="80" width="140" height="90" rx="4" fill="#E5E7EB" />
+                      <rect x="35" y="85" width="130" height="80" rx="2" fill="#F3F4F6" />
                       {/* Screen lines */}
-                      <line x1="50" y1="100" x2="150" y2="100" stroke="#9CA3AF" strokeWidth="2"/>
-                      <line x1="50" y1="120" x2="150" y2="120" stroke="#9CA3AF" strokeWidth="2"/>
+                      <line x1="50" y1="100" x2="150" y2="100" stroke="#9CA3AF" strokeWidth="2" />
+                      <line x1="50" y1="120" x2="150" y2="120" stroke="#9CA3AF" strokeWidth="2" />
                       {/* Chat bubble */}
-                      <circle cx="160" cy="60" r="25" fill="#EE4D2D"/>
-                      <circle cx="160" cy="60" r="8" fill="#FFFFFF" opacity="0.8"/>
-                      <circle cx="155" cy="58" r="3" fill="#FFFFFF"/>
-                      <circle cx="165" cy="58" r="3" fill="#FFFFFF"/>
-                      <circle cx="160" cy="64" r="3" fill="#FFFFFF"/>
+                      <circle cx="160" cy="60" r="25" fill="#EE4D2D" />
+                      <circle cx="160" cy="60" r="8" fill="#FFFFFF" opacity="0.8" />
+                      <circle cx="155" cy="58" r="3" fill="#FFFFFF" />
+                      <circle cx="165" cy="58" r="3" fill="#FFFFFF" />
+                      <circle cx="160" cy="64" r="3" fill="#FFFFFF" />
                     </svg>
                   </div>
                   <h3 className="shopee-chat-welcome-title">
@@ -636,11 +659,11 @@ export default function ChatBotWidget() {
                   {/* Chat Header */}
                   <div className="shopee-chat-content-header">
                     <div className="shopee-chat-header-name">
-                      {selectedChat.shopOwnerId && shopNames[selectedChat.shopOwnerId] 
+                      {selectedChat.shopOwnerId && shopNames[selectedChat.shopOwnerId]
                         ? shopNames[selectedChat.shopOwnerId]
                         : (selectedChat.opponent?.username || selectedChat.title || 'Shop')}
                     </div>
-          </div>
+                  </div>
 
                   {/* Product Card - Hiển thị khi có product và có name */}
                   {selectedChat.product && selectedChat.product.name && (
@@ -683,9 +706,9 @@ export default function ChatBotWidget() {
                         // Determine if message is from current user
                         const isOwn = currentUserId && msg.senderId === currentUserId;
                         const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                        const showDate = !prevMsg || 
+                        const showDate = !prevMsg ||
                           new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
-                        
+
                         return (
                           <React.Fragment key={msg.id}>
                             {showDate && (
@@ -725,9 +748,9 @@ export default function ChatBotWidget() {
                                 )}
                                 <div>{msg.content}</div>
                                 {msg.imageId && imageUrls[msg.imageId] && (
-                                  <img 
-                                    src={imageUrls[msg.imageId]} 
-                                    alt="Message" 
+                                  <img
+                                    src={imageUrls[msg.imageId]}
+                                    alt="Message"
                                     style={{ maxWidth: '200px', marginTop: '8px', borderRadius: '8px' }}
                                   />
                                 )}
@@ -752,11 +775,11 @@ export default function ChatBotWidget() {
                       })
                     )}
                     <div ref={messagesEndRef} />
-          </div>
+                  </div>
 
                   {/* Message Input */}
                   <form className="shopee-chat-input-form" onSubmit={handleSendMessage}>
-            <input
+                    <input
                       type="text"
                       className="shopee-chat-input-field"
                       placeholder="Nhập tin nhắn..."
@@ -770,11 +793,11 @@ export default function ChatBotWidget() {
                       disabled={!messageInput.trim() || loading}
                     >
                       <i className="fas fa-paper-plane"></i>
-            </button>
-          </form>
+                    </button>
+                  </form>
                 </div>
               )}
-          </div>
+            </div>
           </div>
         </div>
       )}

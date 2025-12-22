@@ -45,6 +45,7 @@ import ShopOwnerManagementPage from "./pages/admin/ShopOwnerManagementPage.jsx";
 import RegisterShopOwner from "./pages/client/RegisterShopOwner.jsx";
 import ReviewManagementPage from "./pages/shop-owner/ReviewManagementPage.jsx";
 import CategoriesPage from "./pages/admin/categoeis/CategoriesPage.jsx";
+import ChatBotWidget from "./components/client/ChatBotWidget.jsx";
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -57,6 +58,22 @@ function ScrollToTop() {
   return null;
 }
 
+// Global Chat Widget - only show on client pages (not admin or shop-owner)
+function GlobalChatWidget() {
+  const { pathname } = useLocation();
+
+  // Don't show chat on admin or shop-owner routes
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isShopOwnerRoute = pathname.startsWith('/shop-owner');
+  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/auth') || pathname.startsWith('/forgot') || pathname.startsWith('/verify-otp') || pathname.startsWith('/reset-password');
+
+  if (isAdminRoute || isShopOwnerRoute || isAuthRoute) {
+    return null;
+  }
+
+  return <ChatBotWidget />;
+}
+
 function ShopOwnerVoucherManagementPage() {
   return null;
 }
@@ -66,6 +83,7 @@ export default function App() {
     <HelmetProvider>
       <BrowserRouter>
         <ScrollToTop />
+        <GlobalChatWidget />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthPage />} />
@@ -95,12 +113,12 @@ export default function App() {
           {/* Admin routes */}
           {/* Admin routes */}
           <Route
-              path="/admin/*"
-              element={
-                <ProtectedRoute allowedRoles={["ROLE_ADMIN"]}>
-                  <AdminLayout />
-                </ProtectedRoute>
-              }
+            path="/admin/*"
+            element={
+              <ProtectedRoute allowedRoles={["ROLE_ADMIN"]}>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
           >
             <Route index element={<AdminDashboard />} />
             <Route path="tables/datatables" element={<DataTablesPage />} />
@@ -126,7 +144,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-              <Route path="live" element={<LiveStreamPage />} />
+            <Route path="live" element={<LiveStreamPage />} />
             <Route index element={<ShopOwnerDashboard />} />
             <Route path="products" element={<AllProductsPage />} />
             <Route path="products/add" element={<AddProductPage />} />
