@@ -47,6 +47,8 @@ import ReviewManagementPage from "./pages/shop-owner/ReviewManagementPage.jsx";
 import CategoriesPage from "./pages/admin/categoeis/CategoriesPage.jsx";
 import ChatBotWidget from "./components/client/ChatBotWidget.jsx";
 
+import ShopVoucherPage from "./pages/shop-owner/VoucherManagementPage.jsx";
+
 // Component to scroll to top on route change
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -152,7 +154,8 @@ export default function App() {
             <Route path="orders/returns" element={<ReturnOrderPage />} />
             <Route path="orders/bulk-shipping" element={<BulkShippingPage />} />
             <Route path="reviews" element={<ReviewManagementPage />} />
-            <Route path="vouchers" element={<ShopOwnerVoucherManagementPage />} />
+            <Route path="reviews" element={<ReviewManagementPage />} />
+            <Route path="vouchers" element={<ShopVoucherPage />} />
 
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="chat" element={<ChatPage />} />

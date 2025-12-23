@@ -26,13 +26,14 @@ public class Order extends BaseEntity {
     private String userId;
     private String addressId;
 
-    // Tổng tiền CUỐI CÙNG user phải trả 
+    // Tổng tiền CUỐI CÙNG user phải trả
     private double totalPrice;
 
     @Column(name = "shipping_fee", precision = 10, scale = 2)
-    private BigDecimal shippingFee; // Phí ship 
+    private BigDecimal shippingFee; // Phí ship
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "order_status", length = 50)
     private OrderStatus orderStatus;
 
     @Column(name = "payment_method", length = 20)
@@ -40,11 +41,11 @@ public class Order extends BaseEntity {
 
     private String cancelReason;
     private String returnReason;
-    
+
     // Voucher fields
     @Column(name = "voucher_id")
     private String voucherId;
-    
+
     @Column(name = "voucher_discount", precision = 15, scale = 2)
     private BigDecimal voucherDiscount;
 
@@ -53,5 +54,3 @@ public class Order extends BaseEntity {
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
 }
-
-

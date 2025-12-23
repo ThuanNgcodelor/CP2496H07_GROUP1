@@ -70,7 +70,12 @@ export default function SubscriptionPage() {
                         color: color,
                         lightColor: lightColor,
                         isPopular: p.code === 'BOTH',
-                        serviceFeePercent: (p.commissionFreeshipRate * 100) + (p.commissionVoucherRate * 100)
+                        serviceFeePercent: parseFloat((
+                            ((p.commissionFixedRate || 0) * 100) +
+                            ((p.commissionPaymentRate || 0) * 100) +
+                            (p.freeshipEnabled || p.code === 'FREESHIP_XTRA' || p.code === 'BOTH' ? ((p.commissionFreeshipRate || 0) * 100) : 0) +
+                            (p.voucherEnabled || p.code === 'VOUCHER_XTRA' || p.code === 'BOTH' ? ((p.commissionVoucherRate || 0) * 100) : 0)
+                        ).toFixed(2))
                     };
                 });
 

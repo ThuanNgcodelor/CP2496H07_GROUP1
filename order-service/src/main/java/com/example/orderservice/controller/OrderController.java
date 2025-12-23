@@ -368,17 +368,16 @@ public class OrderController {
             Integer serviceTypeId = 2; // Default: Hàng nhẹ
             try {
                 GhnAvailableServicesResponse servicesResponse = ghnApiClient.getAvailableServices(
-                        shopOwner.getDistrictId(), 
-                        customerAddress.getDistrictId()
-                );
-                
-                if (servicesResponse != null && servicesResponse.getCode() == 200 
+                        shopOwner.getDistrictId(),
+                        customerAddress.getDistrictId());
+
+                if (servicesResponse != null && servicesResponse.getCode() == 200
                         && servicesResponse.getData() != null && !servicesResponse.getData().isEmpty()) {
-                    
+
                     // Ưu tiên service_type_id = 2 (Hàng nhẹ) nếu có
                     GhnAvailableServicesResponse.ServiceData preferredService = null;
                     GhnAvailableServicesResponse.ServiceData fallbackService = null;
-                    
+
                     for (GhnAvailableServicesResponse.ServiceData service : servicesResponse.getData()) {
                         if (service.getServiceTypeId() == 2) {
                             preferredService = service;
@@ -386,7 +385,7 @@ public class OrderController {
                             fallbackService = service;
                         }
                     }
-                    
+
                     if (preferredService != null) {
                         serviceTypeId = preferredService.getServiceTypeId();
                     } else if (fallbackService != null) {
@@ -618,14 +617,16 @@ public class OrderController {
      * Simulate GHN status update (DEV only)
      */
     @PostMapping("/simulate-ghn-status/{ghnOrderCode}")
-    public ResponseEntity<?> simulateGhnStatus(@PathVariable String ghnOrderCode, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<?> simulateGhnStatus(@PathVariable String ghnOrderCode,
+            @RequestBody Map<String, String> payload) {
         try {
             String status = payload != null ? payload.get("status") : null;
             if (status == null || status.isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "status is required"));
             }
             orderService.handleGhnStatus(ghnOrderCode, status);
-            return ResponseEntity.ok(Map.of("message", "GHN status updated", "ghnOrderCode", ghnOrderCode, "status", status));
+            return ResponseEntity
+                    .ok(Map.of("message", "GHN status updated", "ghnOrderCode", ghnOrderCode, "status", status));
         } catch (Exception e) {
             log.error("simulateGhnStatus error: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
@@ -859,9 +860,9 @@ public class OrderController {
         return ResponseEntity.badRequest().build();
     }
 
-
     /**
-     * SSE stream for order tracking. Client opens EventSource to receive tracking events.
+     * SSE stream for order tracking. Client opens EventSource to receive tracking
+     * events.
      */
     @GetMapping("/track/{orderId}/stream")
     public SseEmitter streamOrderTracking(@PathVariable String orderId) {

@@ -8,7 +8,8 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
     const [expandedSections, setExpandedSections] = useState({
         orders: false,
         products: false,
-        finance: false
+        finance: false,
+        marketing: false
     });
 
     // Auto-expand section if current route belongs to it (but not the main route)
@@ -36,6 +37,14 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
             setExpandedSections(prev => ({
                 ...prev,
                 finance: true
+            }));
+        }
+
+        // Check if current route is in marketing section
+        if (path.startsWith('/shop-owner/vouchers')) {
+            setExpandedSections(prev => ({
+                ...prev,
+                marketing: true
             }));
         }
     }, [location.pathname]);
@@ -216,6 +225,29 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
                         <i className="fas fa-video"></i>
                         <span>🔴 Livestream</span>
                     </Link>
+                </div>
+
+                {/* Marketing Section */}
+                <div className="sidebar-section">
+                    <div
+                        className="sidebar-section-header"
+                        onClick={() => toggleSection('marketing')}
+                    >
+                        <span>{t('shopOwner.sidebar.marketing') || "Marketing Channel"}</span>
+                        <i className={`fas fa-chevron-${expandedSections.marketing ? 'up' : 'down'}`}></i>
+                    </div>
+                    {expandedSections.marketing && (
+                        <div className="sidebar-menu-items">
+                            <Link
+                                className={`sidebar-item ${isActive('/shop-owner/vouchers') ? 'active' : ''}`}
+                                to="/shop-owner/vouchers"
+                                onClick={handleLinkClick}
+                            >
+                                <i className="fas fa-ticket-alt"></i>
+                                <span>{t('shopOwner.sidebar.vouchers') || "Vouchers"}</span>
+                            </Link>
+                        </div>
+                    )}
                 </div>
 
                 {/* Finance Section */}

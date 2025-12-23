@@ -34,7 +34,7 @@ public class ShopSubscriptionServiceImpl implements ShopSubscriptionService {
     @Override
     @org.springframework.transaction.annotation.Transactional
     public ShopSubscriptionDTO subscribe(String shopOwnerId,
-                                         com.example.userservice.request.subscription.CreateShopSubscriptionRequest request) {
+            com.example.userservice.request.subscription.CreateShopSubscriptionRequest request) {
         // 1. Get Plan
         com.example.userservice.model.SubscriptionPlan plan = subscriptionPlanRepository.findById(request.getPlanId())
                 .orElseThrow(() -> new RuntimeException("Subscription Plan not found"));
@@ -129,6 +129,7 @@ public class ShopSubscriptionServiceImpl implements ShopSubscriptionService {
                 .isActive(sub.getIsActive())
                 .build();
     }
+
     @Override
     @org.springframework.transaction.annotation.Transactional
     public void cancelSubscription(String shopOwnerId) {

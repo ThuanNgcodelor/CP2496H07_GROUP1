@@ -48,7 +48,7 @@ export const createOrder = async (orderData) => {
                 details: errorData.details || null
             };
         }
-        
+
         throw {
             type: 'NETWORK_ERROR',
             message: 'Network error occurred. Please try again.',
@@ -65,7 +65,7 @@ export const getUserOrders = async () => {
     try {
         const response = await api.get("/user-orders");
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch orders");
     }
 };
@@ -79,7 +79,7 @@ export const getOrderById = async (orderId) => {
     try {
         const response = await api.get(`/${orderId}`);
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch order");
     }
 };
@@ -231,7 +231,7 @@ export const confirmReceipt = async (orderId) => {
 export const calculateShippingFee = async (addressId, selectedItems) => {
     try {
         const firstProductId = selectedItems.length > 0 ? (selectedItems[0].productId || selectedItems[0].id) : null;
-        
+
         // Map selectedItems to format expected by backend
         const selectedItemsData = selectedItems.map(item => ({
             productId: item.productId || item.id,
@@ -239,16 +239,16 @@ export const calculateShippingFee = async (addressId, selectedItems) => {
             quantity: item.quantity || 0,
             unitPrice: item.unitPrice || item.price || 0
         }));
-        
+
         const requestData = {
             addressId: addressId,
             selectedItems: selectedItemsData, // Send selectedItems to calculate weight from actual product sizes
             productId: firstProductId // For backward compatibility
         };
-        
+
         const response = await api.post("/calculate-shipping-fee", requestData);
         return response.data;
-    } catch  {
+    } catch {
         return null;
     }
 };
@@ -261,7 +261,7 @@ export const getSalesAnalytics = async () => {
     try {
         const response = await api.get("/shop-owner/analytics");
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch sales analytics");
     }
 };

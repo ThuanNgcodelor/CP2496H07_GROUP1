@@ -20,10 +20,31 @@ public class ShopVoucherServiceImpl implements ShopVoucherService {
 
     private final ShopVoucherRepository shopVoucherRepository;
     private final VoucherApplicabilityRepository voucherApplicabilityRepository;
+    private final com.example.orderservice.client.UserServiceClient userServiceClient;
 
     @Override
     @Transactional
     public ShopVoucher createShopVoucher(CreateShopVoucherRequest request) {
+        // 1. Check Subscription Permission
+        try {
+            var subResponse = userServiceClient.getSubscriptionByShopOwnerId(request.getShopOwnerId());
+            var sub = subResponse != null ? subResponse.getBody() : null;
+
+            // Allow if enabled flag is true OR if subscription type implies it (backward
+            // compatibility)
+            boolean isVoucherAllowed = sub != null && (Boolean.TRUE.equals(sub.getVoucherEnabled()) ||
+                    com.example.orderservice.enums.SubscriptionType.VOUCHER_XTRA.equals(sub.getSubscriptionType()) ||
+                    com.example.orderservice.enums.SubscriptionType.BOTH.equals(sub.getSubscriptionType()));
+
+            if (!isVoucherAllowed) {
+                throw new SecurityException(
+                        "Your subscription plan does not support creating vouchers. Please upgrade to Voucher Xtra or Both.");
+            }
+        } catch (Exception e) {
+            // Handle 404 or other errors
+            throw new SecurityException("Unable to verify subscription: " + e.getMessage());
+        }
+
         if (shopVoucherRepository.existsByShopOwnerIdAndCode(request.getShopOwnerId(), request.getCode())) {
             throw new IllegalArgumentException("Voucher code already exists for this shop");
         }

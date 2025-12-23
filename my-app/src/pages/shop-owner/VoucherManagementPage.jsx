@@ -46,7 +46,17 @@ export default function VoucherManagementPage() {
 
                 try {
                     const sub = await getMySubscription(id);
-                    setIsSubscribed(sub && sub.isActive);
+                    // Check if subscription allows Vouchers (Flag OR Type for backward compatibility)
+                    const hasPermission = sub && sub.isActive && (
+                        sub.voucherEnabled === true ||
+                        sub.subscriptionType === 'VOUCHER_XTRA' ||
+                        sub.subscriptionType === 'BOTH'
+                    );
+                    setIsSubscribed(hasPermission);
+
+                    if (sub && sub.isActive && !hasPermission) {
+                        toast.error(t('shopOwner.vouchers.upgradeRequired') || "Your current plan does not support Vouchers.");
+                    }
                 } catch (err) {
                     console.error("Failed to fetch subscription", err);
                     setIsSubscribed(false);

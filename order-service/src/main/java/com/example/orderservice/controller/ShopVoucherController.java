@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/shop-vouchers")
+@RequestMapping("/v1/order/shop-vouchers")
 @RequiredArgsConstructor
 public class ShopVoucherController {
 
@@ -23,5 +23,25 @@ public class ShopVoucherController {
     public ResponseEntity<ShopVoucher> createShopVoucher(@Valid @RequestBody CreateShopVoucherRequest request) {
         ShopVoucher createdVoucher = shopVoucherService.createShopVoucher(request);
         return new ResponseEntity<>(createdVoucher, HttpStatus.CREATED);
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/shops/{shopOwnerId}")
+    public ResponseEntity<java.util.List<ShopVoucher>> getShopVouchers(
+            @org.springframework.web.bind.annotation.PathVariable String shopOwnerId) {
+        return ResponseEntity.ok(shopVoucherService.getAllShopVouchers(shopOwnerId));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{voucherId}")
+    public ResponseEntity<ShopVoucher> updateShopVoucher(
+            @org.springframework.web.bind.annotation.PathVariable String voucherId,
+            @RequestBody CreateShopVoucherRequest request) {
+        return ResponseEntity.ok(shopVoucherService.updateShopVoucher(voucherId, request));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{voucherId}")
+    public ResponseEntity<Void> deleteShopVoucher(
+            @org.springframework.web.bind.annotation.PathVariable String voucherId) {
+        shopVoucherService.deleteShopVoucher(voucherId);
+        return ResponseEntity.noContent().build();
     }
 }

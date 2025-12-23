@@ -764,12 +764,13 @@ public class OrderServiceImpl implements OrderService {
                 return;
             }
 
-            // 6. Build items cho GHN (bao gồm weight cho mỗi item - required for service_type_id = 5)
+            // 6. Build items cho GHN (bao gồm weight cho mỗi item - required for
+            // service_type_id = 5)
             List<GhnItemDto> ghnItems = order.getOrderItems().stream()
                     .map(item -> {
                         String productName = "Product";
                         int itemWeight = 500; // Default 500g per item
-                        
+
                         try {
                             ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
                             if (product != null) {
@@ -777,7 +778,7 @@ public class OrderServiceImpl implements OrderService {
                             }
                         } catch (Exception e) {
                         }
-                        
+
                         // Lấy weight từ Size
                         try {
                             ResponseEntity<com.example.orderservice.dto.SizeDto> sizeResponse = stockServiceClient
@@ -801,26 +802,26 @@ public class OrderServiceImpl implements OrderService {
                     })
                     .collect(Collectors.toList());
 
-            // 7. Chọn service type: ưu tiên theo weight, nhưng phải có trong GHN available services
+            // 7. Chọn service type: ưu tiên theo weight, nhưng phải có trong GHN available
+            // services
             // - Ưu tiên Hàng nhẹ (type 2) nếu weight < 20kg VÀ có khả dụng
             // - Fallback Hàng nặng (type 5) nếu type 2 không khả dụng
             Integer preferredType = (totalWeight < 20000) ? 2 : 5;
             Integer serviceTypeId = preferredType;
             String selectedServiceName = (preferredType == 2) ? "Hàng nhẹ" : "Hàng nặng";
-            
+
             try {
                 GhnAvailableServicesResponse servicesResponse = ghnApiClient.getAvailableServices(
-                        shopOwner.getDistrictId(), 
-                        customerAddress.getDistrictId()
-                );
-                
-                if (servicesResponse != null && servicesResponse.getCode() == 200 
+                        shopOwner.getDistrictId(),
+                        customerAddress.getDistrictId());
+
+                if (servicesResponse != null && servicesResponse.getCode() == 200
                         && servicesResponse.getData() != null && !servicesResponse.getData().isEmpty()) {
-                    
+
                     // Tìm xem service type ưu tiên có khả dụng không
                     GhnAvailableServicesResponse.ServiceData preferredService = null;
                     GhnAvailableServicesResponse.ServiceData fallbackService = null;
-                    
+
                     for (GhnAvailableServicesResponse.ServiceData service : servicesResponse.getData()) {
                         if (service.getServiceTypeId().equals(preferredType)) {
                             preferredService = service;
@@ -828,26 +829,26 @@ public class OrderServiceImpl implements OrderService {
                             fallbackService = service;
                         }
                     }
-                    
+
                     // Sử dụng service ưu tiên nếu có, không thì dùng fallback
                     if (preferredService != null) {
                         serviceTypeId = preferredService.getServiceTypeId();
                         selectedServiceName = preferredService.getShortName();
-                        log.info("[GHN] Using preferred service: {} (type: {}) for weight: {}g", 
+                        log.info("[GHN] Using preferred service: {} (type: {}) for weight: {}g",
                                 selectedServiceName, serviceTypeId, totalWeight);
                     } else if (fallbackService != null) {
                         serviceTypeId = fallbackService.getServiceTypeId();
                         selectedServiceName = fallbackService.getShortName();
-                        log.info("[GHN] Preferred type {} not available, using fallback: {} (type: {}) for weight: {}g", 
+                        log.info("[GHN] Preferred type {} not available, using fallback: {} (type: {}) for weight: {}g",
                                 preferredType, selectedServiceName, serviceTypeId, totalWeight);
                     }
                 }
             } catch (Exception e) {
-                log.warn("[GHN] Failed to get available services, using default type {}: {}", 
+                log.warn("[GHN] Failed to get available services, using default type {}: {}",
                         serviceTypeId, e.getMessage());
             }
-            
-            log.info("[GHN] Final service: {} (type: {}) for weight: {}g, route {} -> {}", 
+
+            log.info("[GHN] Final service: {} (type: {}) for weight: {}g, route {} -> {}",
                     selectedServiceName, serviceTypeId, totalWeight,
                     shopOwner.getDistrictId(), customerAddress.getDistrictId());
 
@@ -884,7 +885,7 @@ public class OrderServiceImpl implements OrderService {
             GhnCreateOrderResponse ghnResponse = ghnApiClient.createOrder(ghnRequest);
 
             if (ghnResponse == null || ghnResponse.getCode() != 200) {
-                log.error("[GHN] Failed to create order - Response: {}", 
+                log.error("[GHN] Failed to create order - Response: {}",
                         ghnResponse != null ? ghnResponse.getMessage() : "null response");
                 return;
             }
@@ -902,11 +903,12 @@ public class OrderServiceImpl implements OrderService {
                     .ghnResponse(toJson(ghnResponse))
                     .build();
 
-            // Initialize tracking history using shop owner & customer coordinates if available
+            // Initialize tracking history using shop owner & customer coordinates if
+            // available
             try {
-                java.util.List<java.util.Map<String,Object>> history = new java.util.ArrayList<>();
+                java.util.List<java.util.Map<String, Object>> history = new java.util.ArrayList<>();
                 if (shopOwner != null && shopOwner.getLatitude() != null && shopOwner.getLongitude() != null) {
-                    java.util.Map<String,Object> p = new java.util.HashMap<>();
+                    java.util.Map<String, Object> p = new java.util.HashMap<>();
                     p.put("ts", java.time.LocalDateTime.now().toString());
                     p.put("lat", shopOwner.getLatitude());
                     p.put("lng", shopOwner.getLongitude());
@@ -920,8 +922,9 @@ public class OrderServiceImpl implements OrderService {
                     shippingOrder.setLastTs(java.time.LocalDateTime.now());
                 }
 
-                if (customerAddress != null && customerAddress.getLatitude() != null && customerAddress.getLongitude() != null) {
-                    java.util.Map<String,Object> dest = new java.util.HashMap<>();
+                if (customerAddress != null && customerAddress.getLatitude() != null
+                        && customerAddress.getLongitude() != null) {
+                    java.util.Map<String, Object> dest = new java.util.HashMap<>();
                     dest.put("ts", java.time.LocalDateTime.now().toString());
                     dest.put("lat", customerAddress.getLatitude());
                     dest.put("lng", customerAddress.getLongitude());
@@ -1403,6 +1406,7 @@ public class OrderServiceImpl implements OrderService {
             log.error("[PAYMENT-CONSUMER] Error processing payment event: {}", e.getMessage(), e);
         }
     }
+
     /////////////////////////////////////////////////////////////////////////////////////
     @Override
     public void createShippingOrderForOrder(String orderId) {
@@ -1432,15 +1436,15 @@ public class OrderServiceImpl implements OrderService {
         ShippingOrder sh = opt.get();
         String s = status.toLowerCase(); // GHN returns lowercase status
         String upperS = s.toUpperCase();
-        
+
         // Get Vietnamese title and description for this status
         String[] statusInfo = getGhnStatusInfo(s);
         String title = statusInfo[0];
         String description = statusInfo[1];
-        
+
         // Append to tracking history
         appendTrackingHistory(sh, s, title, description);
-        
+
         sh.setStatus(upperS);
         shippingOrderRepository.save(sh);
 
@@ -1541,61 +1545,62 @@ public class OrderServiceImpl implements OrderService {
             log.error("[GHN] Failed to update order status from GHN status: {}", e.getMessage(), e);
         }
     }
-    
+
     /**
      * Get Vietnamese title and description for GHN status
+     * 
      * @return String[2] where [0] = title, [1] = description
      */
     private String[] getGhnStatusInfo(String ghnStatus) {
         switch (ghnStatus.toLowerCase()) {
             case "ready_to_pick":
-                return new String[]{"Chờ lấy hàng", "Đơn hàng đang chờ shipper đến lấy"};
+                return new String[] { "Chờ lấy hàng", "Đơn hàng đang chờ shipper đến lấy" };
             case "picking":
-                return new String[]{"Đang lấy hàng", "Shipper đang đến lấy hàng từ shop"};
+                return new String[] { "Đang lấy hàng", "Shipper đang đến lấy hàng từ shop" };
             case "money_collect_picking":
-                return new String[]{"Đang lấy hàng", "Shipper đang thu tiền và lấy hàng"};
+                return new String[] { "Đang lấy hàng", "Shipper đang thu tiền và lấy hàng" };
             case "picked":
-                return new String[]{"Đã lấy hàng", "Shipper đã lấy hàng thành công"};
+                return new String[] { "Đã lấy hàng", "Shipper đã lấy hàng thành công" };
             case "storing":
-                return new String[]{"Đã nhập kho", "Đơn hàng đã được nhập kho phân loại"};
+                return new String[] { "Đã nhập kho", "Đơn hàng đã được nhập kho phân loại" };
             case "transporting":
-                return new String[]{"Đang luân chuyển", "Đơn hàng đang được vận chuyển đến kho đích"};
+                return new String[] { "Đang luân chuyển", "Đơn hàng đang được vận chuyển đến kho đích" };
             case "sorting":
-                return new String[]{"Đang phân loại", "Đơn hàng đang được phân loại tại kho"};
+                return new String[] { "Đang phân loại", "Đơn hàng đang được phân loại tại kho" };
             case "delivering":
-                return new String[]{"Đang giao hàng", "Shipper đang giao hàng đến bạn, vui lòng chú ý điện thoại"};
+                return new String[] { "Đang giao hàng", "Shipper đang giao hàng đến bạn, vui lòng chú ý điện thoại" };
             case "money_collect_delivering":
-                return new String[]{"Đang giao hàng", "Shipper đang giao hàng và thu tiền COD"};
+                return new String[] { "Đang giao hàng", "Shipper đang giao hàng và thu tiền COD" };
             case "delivered":
-                return new String[]{"Đã giao hàng", "Giao hàng thành công"};
+                return new String[] { "Đã giao hàng", "Giao hàng thành công" };
             case "delivery_fail":
-                return new String[]{"Giao thất bại", "Giao hàng không thành công, sẽ giao lại"};
+                return new String[] { "Giao thất bại", "Giao hàng không thành công, sẽ giao lại" };
             case "waiting_to_return":
-                return new String[]{"Chờ trả hàng", "Đơn hàng đang chờ trả về shop sau 3 lần giao thất bại"};
+                return new String[] { "Chờ trả hàng", "Đơn hàng đang chờ trả về shop sau 3 lần giao thất bại" };
             case "return":
             case "returning":
-                return new String[]{"Đang trả hàng", "Đơn hàng đang được trả về shop"};
+                return new String[] { "Đang trả hàng", "Đơn hàng đang được trả về shop" };
             case "return_transporting":
-                return new String[]{"Đang luân chuyển trả", "Đơn hàng đang được vận chuyển trả về shop"};
+                return new String[] { "Đang luân chuyển trả", "Đơn hàng đang được vận chuyển trả về shop" };
             case "return_sorting":
-                return new String[]{"Đang phân loại trả", "Đơn hàng đang được phân loại để trả về shop"};
+                return new String[] { "Đang phân loại trả", "Đơn hàng đang được phân loại để trả về shop" };
             case "return_fail":
-                return new String[]{"Trả hàng thất bại", "Không thể trả hàng về shop"};
+                return new String[] { "Trả hàng thất bại", "Không thể trả hàng về shop" };
             case "returned":
-                return new String[]{"Đã trả hàng", "Đơn hàng đã được trả về shop thành công"};
+                return new String[] { "Đã trả hàng", "Đơn hàng đã được trả về shop thành công" };
             case "cancel":
-                return new String[]{"Đã hủy", "Đơn hàng đã bị hủy"};
+                return new String[] { "Đã hủy", "Đơn hàng đã bị hủy" };
             case "exception":
-                return new String[]{"Có sự cố", "Đơn hàng gặp sự cố, đang xử lý"};
+                return new String[] { "Có sự cố", "Đơn hàng gặp sự cố, đang xử lý" };
             case "damage":
-                return new String[]{"Hàng bị hư hỏng", "Hàng hóa bị hư hỏng trong quá trình vận chuyển"};
+                return new String[] { "Hàng bị hư hỏng", "Hàng hóa bị hư hỏng trong quá trình vận chuyển" };
             case "lost":
-                return new String[]{"Hàng bị thất lạc", "Hàng hóa bị thất lạc"};
+                return new String[] { "Hàng bị thất lạc", "Hàng hóa bị thất lạc" };
             default:
-                return new String[]{"Cập nhật trạng thái", "Trạng thái: " + ghnStatus};
+                return new String[] { "Cập nhật trạng thái", "Trạng thái: " + ghnStatus };
         }
     }
-    
+
     /**
      * Append a new entry to the tracking history JSON array
      */
@@ -1610,14 +1615,14 @@ public class OrderServiceImpl implements OrderService {
                     log.warn("[GHN] Failed to parse existing tracking history, starting fresh");
                 }
             }
-            
+
             Map<String, Object> entry = new HashMap<>();
             entry.put("ts", java.time.LocalDateTime.now().toString());
             entry.put("status", status);
             entry.put("title", title);
             entry.put("description", description);
             history.add(entry);
-            
+
             sh.setTrackingHistory(objectMapper.writeValueAsString(history));
         } catch (Exception e) {
             log.error("[GHN] Failed to append tracking history: {}", e.getMessage());
@@ -1625,7 +1630,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public void handleLocationUpdate(String ghnOrderCode, String status, Double lat, Double lng, String shipperId, String note, String timestamp) {
+    public void handleLocationUpdate(String ghnOrderCode, String status, Double lat, Double lng, String shipperId,
+            String note, String timestamp) {
         if (ghnOrderCode == null || ghnOrderCode.isBlank()) {
             log.warn("[TRACK] handleLocationUpdate missing ghnOrderCode");
             return;
@@ -1688,7 +1694,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void scheduleAutoComplete(String orderId, long seconds) {
-        if (orderId == null || orderId.isBlank()) return;
+        if (orderId == null || orderId.isBlank())
+            return;
         scheduler.schedule(() -> {
             try {
                 Order o = orderRepository.findById(orderId).orElse(null);

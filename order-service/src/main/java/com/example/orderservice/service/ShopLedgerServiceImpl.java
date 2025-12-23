@@ -124,25 +124,45 @@ public class ShopLedgerServiceImpl implements ShopLedgerService {
     public CommissionResult calculateCommission(String shopOwnerId, Order order, List<OrderItem> shopItems) {
         // 1. Get Subscription
         ShopSubscriptionDTO sub = getSubscription(shopOwnerId);
-        SubscriptionType type = sub != null ? sub.getSubscriptionType() : SubscriptionType.NONE;
-
         // 2. Calculate Gross for THIS shop
         double grossDouble = shopItems.stream().mapToDouble(OrderItem::getTotalPrice).sum();
         BigDecimal grossAmount = BigDecimal.valueOf(grossDouble);
 
-        // 3. Constants
-        // Default to match PAYOUT_LEDGER_SYSTEM.md
-        BigDecimal ratePayment = sub != null && sub.getCommissionPaymentRate() != null ? sub.getCommissionPaymentRate()
-                : new BigDecimal("0.04"); // 4%
-        BigDecimal rateFixed = sub != null && sub.getCommissionFixedRate() != null ? sub.getCommissionFixedRate()
-                : new BigDecimal("0.04"); // 4% (Fixed fee)
-        BigDecimal rateFreeship = sub != null && sub.getCommissionFreeshipRate() != null
-                ? sub.getCommissionFreeshipRate()
-                : new BigDecimal("0.08"); // 8%
-        BigDecimal rateVoucher = sub != null && sub.getCommissionVoucherRate() != null ? sub.getCommissionVoucherRate()
-                : new BigDecimal("0.05"); // 5%
-        BigDecimal maxVoucherFee = sub != null && sub.getVoucherMaxPerItem() != null ? sub.getVoucherMaxPerItem()
-                : new BigDecimal("50000");
+        // 3. Determine Rates and Flags
+        BigDecimal ratePayment = new BigDecimal("0.04"); // Default 4%
+        BigDecimal rateFixed = new BigDecimal("0.04"); // Default 4%
+        BigDecimal rateFreeship = BigDecimal.ZERO;
+        BigDecimal rateVoucher = BigDecimal.ZERO;
+        BigDecimal maxVoucherFee = new BigDecimal("50000"); // Default max 50k
+
+        Boolean freeshipEnabled = false;
+        Boolean voucherEnabled = false;
+
+        if (sub != null && sub.getSubscriptionType() != SubscriptionType.NONE) {
+            // If subscription exists and is not NONE, use its rates explicitly
+            if (sub.getCommissionPaymentRate() != null)
+                ratePayment = sub.getCommissionPaymentRate();
+            if (sub.getCommissionFixedRate() != null)
+                rateFixed = sub.getCommissionFixedRate();
+            if (sub.getCommissionFreeshipRate() != null)
+                rateFreeship = sub.getCommissionFreeshipRate();
+            if (sub.getCommissionVoucherRate() != null)
+                rateVoucher = sub.getCommissionVoucherRate();
+            if (sub.getVoucherMaxPerItem() != null)
+                maxVoucherFee = sub.getVoucherMaxPerItem();
+
+            if (sub.getFreeshipEnabled() != null)
+                freeshipEnabled = sub.getFreeshipEnabled();
+            if (sub.getVoucherEnabled() != null)
+                voucherEnabled = sub.getVoucherEnabled();
+
+            log.info(
+                    "Using Subscription Rates for shop {}: Type={}, P={}, F={}, Free={}, V={} (FreeEnabled={}, VoucherEnabled={})",
+                    shopOwnerId, sub.getSubscriptionType(), ratePayment, rateFixed, rateFreeship, rateVoucher,
+                    freeshipEnabled, voucherEnabled);
+        } else {
+            log.info("No active subscription for shop {}, using default 8% (4% P + 4% F)", shopOwnerId);
+        }
 
         // 4. Calculate
         // Base commission (Payment + Fixed)
@@ -150,13 +170,19 @@ public class ShopLedgerServiceImpl implements ShopLedgerService {
         BigDecimal commFixed = grossAmount.multiply(rateFixed);
 
         BigDecimal commFreeship = BigDecimal.ZERO;
-        if (type == SubscriptionType.FREESHIP_XTRA || type == SubscriptionType.BOTH) {
+        // Apply Freeship fee if Enabled AND Rate > 0
+        if (Boolean.TRUE.equals(freeshipEnabled) && rateFreeship.compareTo(BigDecimal.ZERO) > 0) {
             commFreeship = grossAmount.multiply(rateFreeship);
         }
 
         BigDecimal commVoucher = BigDecimal.ZERO;
-        // Only charge Voucher Xtra fee if order actually has a voucher applied
-        if ((type == SubscriptionType.VOUCHER_XTRA || type == SubscriptionType.BOTH) && order.getVoucherId() != null) {
+        // Apply Voucher fee if Enabled (Flag OR Type) AND Rate > 0 (Flat fee regardless
+        // of usage)
+        boolean isVoucherFeeApplicable = Boolean.TRUE.equals(voucherEnabled) ||
+                (sub != null && (sub.getSubscriptionType() == SubscriptionType.VOUCHER_XTRA
+                        || sub.getSubscriptionType() == SubscriptionType.BOTH));
+
+        if (isVoucherFeeApplicable && rateVoucher.compareTo(BigDecimal.ZERO) > 0) {
             for (OrderItem item : shopItems) {
                 BigDecimal itemVal = BigDecimal.valueOf(item.getTotalPrice());
                 BigDecimal fee = itemVal.multiply(rateVoucher);
@@ -333,7 +359,8 @@ public class ShopLedgerServiceImpl implements ShopLedgerService {
                 });
 
         if (ledger.getBalanceAvailable().compareTo(request.getAmount()) < 0) {
-            throw new RuntimeException("Số dư ví không đủ. Cần: " + request.getAmount() + ", Hiện có: " + ledger.getBalanceAvailable());
+            throw new RuntimeException(
+                    "Số dư ví không đủ. Cần: " + request.getAmount() + ", Hiện có: " + ledger.getBalanceAvailable());
         }
 
         BigDecimal balanceBefore = ledger.getBalanceAvailable();
