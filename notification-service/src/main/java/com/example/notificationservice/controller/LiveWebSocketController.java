@@ -18,7 +18,9 @@ import org.springframework.stereotype.Controller;
 import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -47,8 +49,8 @@ public class LiveWebSocketController {
     private final LiveChatRedisService liveChatRedisService;
     private final SimpMessagingTemplate messagingTemplate;
     
-    // Track viewers per room (in-memory, có thể dùng Redis cho production)
-    private final Map<String, AtomicInteger> roomViewers = new ConcurrentHashMap<>();
+    // Track unique viewers per room using Set (prevents duplicate counting on refresh)
+    private final Map<String, Set<String>> roomViewerSets = new ConcurrentHashMap<>();
     
     /**
      * Xử lý tin nhắn chat từ client
@@ -65,14 +67,24 @@ public class LiveWebSocketController {
         Principal principal = headerAccessor.getUser();
         String userId = principal != null ? principal.getName() : "anonymous";
         
-        // Lấy thêm thông tin từ session attributes
+        // Ưu tiên username từ request (frontend gửi), fallback session attributes
         Map<String, Object> sessionAttrs = headerAccessor.getSessionAttributes();
-        String username = sessionAttrs != null ? 
-                (String) sessionAttrs.getOrDefault("username", "User") : "User";
-        String avatarUrl = sessionAttrs != null ? 
-                (String) sessionAttrs.get("avatarUrl") : null;
+        String username = request.getUsername();
+        if (username == null || username.isEmpty()) {
+            username = sessionAttrs != null ? 
+                    (String) sessionAttrs.getOrDefault("username", "User") : "User";
+        }
         
-        log.debug("Chat received in room {}: {} from {}", roomId, request.getMessage(), userId);
+        // Ưu tiên avatarUrl từ request
+        String avatarUrl = request.getAvatarUrl();
+        if (avatarUrl == null && sessionAttrs != null) {
+            avatarUrl = (String) sessionAttrs.get("avatarUrl");
+        }
+        
+        // isOwner từ request
+        Boolean isOwner = request.getIsOwner() != null ? request.getIsOwner() : false;
+        
+        log.info("Chat in room {}: {} from {} (isOwner: {})", roomId, request.getMessage(), username, isOwner);
         
         // Tạo chat DTO và broadcast
         LiveChatDto chatDto = LiveChatDto.builder()
@@ -82,6 +94,7 @@ public class LiveWebSocketController {
                 .avatarUrl(avatarUrl)
                 .message(request.getMessage())
                 .type(LiveChatType.CHAT)
+                .isOwner(isOwner)
                 .createdAt(LocalDateTime.now())
                 .build();
         
@@ -110,9 +123,16 @@ public class LiveWebSocketController {
         
         log.info("User {} joined live room {}", userId, roomId);
         
-        // Tăng viewer count
-        AtomicInteger viewers = roomViewers.computeIfAbsent(roomId, k -> new AtomicInteger(0));
-        int currentViewers = viewers.incrementAndGet();
+        // Add user to viewer set (automatically deduplicates on refresh)
+        Set<String> viewers = roomViewerSets.computeIfAbsent(roomId, k -> new ConcurrentSkipListSet<>());
+        boolean isNewViewer = viewers.add(userId);
+        int currentViewers = viewers.size();
+        
+        if (isNewViewer) {
+            log.info("New viewer {} joined room {} (total: {})", userId, roomId, currentViewers);
+        } else {
+            log.info("Viewer {} rejoined room {} (no count increase, total: {})", userId, roomId, currentViewers);
+        }
         
         // Broadcast viewer count
         broadcastViewerCount(roomId, currentViewers);
@@ -148,10 +168,15 @@ public class LiveWebSocketController {
         
         log.info("User {} left live room {}", userId, roomId);
         
-        // Giảm viewer count
-        AtomicInteger viewers = roomViewers.get(roomId);
+        // Remove user from viewer set
+        Set<String> viewers = roomViewerSets.get(roomId);
         if (viewers != null) {
-            int currentViewers = Math.max(0, viewers.decrementAndGet());
+            boolean wasRemoved = viewers.remove(userId);
+            int currentViewers = viewers.size();
+            
+            if (wasRemoved) {
+                log.info("Viewer {} left room {} (total: {})", userId, roomId, currentViewers);
+            }
             
             // Broadcast viewer count
             broadcastViewerCount(roomId, currentViewers);
@@ -203,18 +228,18 @@ public class LiveWebSocketController {
         messagingTemplate.convertAndSend("/topic/live/" + roomId + "/chat", orderMsg);
     }
     
-    /**
-     * Get current viewer count for a room
-     */
-    public int getViewerCount(String roomId) {
-        AtomicInteger viewers = roomViewers.get(roomId);
-        return viewers != null ? viewers.get() : 0;
-    }
-    
-    /**
-     * Reset viewer count when live ends
-     */
-    public void resetViewerCount(String roomId) {
-        roomViewers.remove(roomId);
-    }
+//    /**
+//     * Get current viewer count for a room
+//     */
+//    public int getViewerCount(String roomId) {
+//        AtomicInteger viewers = roomViewers.get(roomId);
+//        return viewers != null ? viewers.get() : 0;
+//    }
+//
+//    /**
+//     * Reset viewer count when live ends
+//     */
+//    public void resetViewerCount(String roomId) {
+//        roomViewers.remove(roomId);
+//    }
 }

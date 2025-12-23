@@ -60,16 +60,24 @@ function ScrollToTop() {
   return null;
 }
 
-// Global Chat Widget - only show on client pages (not admin or shop-owner)
+// Global Chat Widget - only show on client pages 
 function GlobalChatWidget() {
   const { pathname } = useLocation();
 
   // Don't show chat on admin or shop-owner routes
   const isAdminRoute = pathname.startsWith('/admin');
   const isShopOwnerRoute = pathname.startsWith('/shop-owner');
-  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/auth') || pathname.startsWith('/forgot') || pathname.startsWith('/verify-otp') || pathname.startsWith('/reset-password');
+  const isLiveRoute = pathname.startsWith('/live');
+  const isAuthRoute = pathname.startsWith('/login')
+    || pathname.startsWith('/register')
+    || pathname.startsWith('/auth')
+    || pathname.startsWith('/forgot')
+    || pathname.startsWith('/verify-otp')
+    || pathname.startsWith('/reset-password')
+    || pathname.startsWith('/cart')
+    || pathname.startsWith('/checkout');
 
-  if (isAdminRoute || isShopOwnerRoute || isAuthRoute) {
+  if (isAdminRoute || isShopOwnerRoute || isLiveRoute || isAuthRoute) {
     return null;
   }
 

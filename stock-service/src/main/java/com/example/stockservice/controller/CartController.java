@@ -3,15 +3,18 @@ package com.example.stockservice.controller;
 import com.example.stockservice.dto.CartDto;
 import com.example.stockservice.dto.CartItemDto;
 import com.example.stockservice.dto.ProductDto;
+import com.example.stockservice.dto.RedisCartItemDto;
 import com.example.stockservice.dto.SizeDto;
 import com.example.stockservice.jwt.JwtUtil;
 import com.example.stockservice.model.Cart;
 import com.example.stockservice.model.CartItem;
 import com.example.stockservice.request.RemoveCartItemByUserIdRequest;
 import com.example.stockservice.request.cart.AddCartItemRequest;
+import com.example.stockservice.request.cart.AddLiveCartItemRequest;
 import com.example.stockservice.request.cart.RemoveCartItemRequest;
 import com.example.stockservice.request.cart.UpdateCartItemRequest;
 import com.example.stockservice.service.cart.CartItemService;
+import com.example.stockservice.service.cart.CartRedisService;
 import com.example.stockservice.service.cart.CartService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ import java.util.Map;
 public class CartController {
    private final CartService cartService;
    private final CartItemService cartItemService;
+   private final CartRedisService cartRedisService;
    private final ModelMapper modelMapper;
    private final JwtUtil jwtUtil;
 
@@ -37,6 +41,28 @@ public class CartController {
        CartItem cartItem = cartItemService.addCartItem(request,userId);
        CartItemDto cartItemDto = mapToDto(cartItem);
        return ResponseEntity.ok(cartItemDto);
+   }
+
+   /**
+    * Thêm sản phẩm từ Live Stream vào giỏ hàng (Redis) với giá live
+    */
+   @PostMapping("/item/add-live")
+   ResponseEntity<RedisCartItemDto> addLiveItemToCart(
+           @RequestBody AddLiveCartItemRequest request, 
+           HttpServletRequest httpRequest
+   ) {
+       String userId = jwtUtil.ExtractUserId(httpRequest);
+       RedisCartItemDto cartItem = cartRedisService.addLiveItemToCart(
+               userId,
+               request.getProductId(),
+               request.getSizeId(),
+               request.getQuantity(),
+               request.getLiveRoomId(),
+               request.getLiveProductId(),
+               request.getLivePrice(),
+               request.getOriginalPrice()
+       );
+       return ResponseEntity.ok(cartItem);
    }
 
    @PutMapping("/item/update")

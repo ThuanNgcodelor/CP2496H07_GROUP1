@@ -97,6 +97,76 @@ public class CartRedisService {
         return cartItem;
     }
 
+    /**
+     * Thêm product từ Live Stream vào giỏ hàng với giá live
+     * @param userId User ID
+     * @param productId Product ID
+     * @param sizeId Size ID (optional)
+     * @param quantity Số lượng
+     * @param liveRoomId ID phòng live
+     * @param liveProductId ID trong bảng live_products
+     * @param livePrice Giá live tại thời điểm thêm
+     * @param originalPrice Giá gốc (để hiển thị)
+     */
+    public RedisCartItemDto addLiveItemToCart(
+            String userId, 
+            String productId, 
+            String sizeId, 
+            int quantity,
+            String liveRoomId,
+            String liveProductId,
+            Double livePrice,
+            Double originalPrice
+    ) {
+        RedisCartDto cart = getOrCreateCart(userId);
+        Product product = productService.getProductById(productId);
+        if (product == null) throw new RuntimeException("Product not found");
+        
+        // Key bao gồm liveRoomId để phân biệt với item mua bình thường
+        String itemKey = productId + ":live:" + liveRoomId + (sizeId != null && !sizeId.isEmpty() ? ":" + sizeId : "");
+        
+        String sizeName = null;
+        double finalLivePrice = livePrice != null ? livePrice : product.getPrice();
+        
+        if (sizeId != null && !sizeId.isEmpty()) {
+            Size size = sizeRepository.findById(sizeId)
+                    .orElseThrow(() -> new RuntimeException("Size not found with id: " + sizeId));
+            finalLivePrice = livePrice != null ? livePrice + size.getPriceModifier() : product.getPrice() + size.getPriceModifier();
+            sizeName = size.getName();
+        }
+
+        RedisCartItemDto cartItem = cart.getItems().getOrDefault(itemKey, null);
+        if (cartItem != null) {
+            cartItem.setQuantity(cartItem.getQuantity() + quantity);
+        } else {
+            cartItem = RedisCartItemDto.builder()
+                    .cartItemId(UUID.randomUUID().toString())
+                    .productId(productId)
+                    .sizeId(sizeId)
+                    .sizeName(sizeName)
+                    .quantity(quantity)
+                    .unitPrice(finalLivePrice)  // Dùng giá live
+                    .productName(product.getName())
+                    .imageId(product.getImageId())
+                    // Live commerce fields
+                    .liveRoomId(liveRoomId)
+                    .liveProductId(liveProductId)
+                    .livePrice(livePrice)
+                    .originalPrice(originalPrice != null ? originalPrice : product.getPrice())
+                    .isFromLive(true)
+                    .build();
+        }
+
+        cartItem.setTotalPrice(cartItem.getQuantity() * cartItem.getUnitPrice());
+        cart.getItems().put(itemKey, cartItem);
+
+        cart.calculateTotalAmount();
+        saveCart(userId, cart);
+        log.info("Added live item to cart: userId={}, productId={}, liveRoomId={}, livePrice={}", 
+                userId, productId, liveRoomId, livePrice);
+        return cartItem;
+    }
+
     // Cập nhật số lượng của một item trong giỏ hàng
     public RedisCartItemDto updateCartItem(String userId, String productId, String sizeId, int quantity) {
         RedisCartDto cart = getCartByUserId(userId); // Lấy giỏ hàng từ Redis

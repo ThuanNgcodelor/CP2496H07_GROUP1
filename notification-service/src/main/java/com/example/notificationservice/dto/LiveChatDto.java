@@ -21,6 +21,7 @@ public class LiveChatDto {
     private String message;
     private LiveChatType type;
     private Boolean isPinned;
+    private Boolean isOwner; // True if message is from shop owner
     private String productId;
     private String productName;
     private LocalDateTime createdAt;

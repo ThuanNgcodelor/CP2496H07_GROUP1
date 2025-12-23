@@ -233,3 +233,22 @@ export const getWebSocketUrl = () => {
 export const getStreamUrl = (streamKey) => {
     return `http://localhost:8088/hls/${streamKey}.m3u8`;
 };
+
+// ==================== LIVE CART (stock-service) ====================
+
+const stockApi = createApiInstance(`${getApiBaseUrl()}/v1/stock/cart`);
+
+/**
+ * Thêm sản phẩm từ Live vào giỏ hàng với giá live
+ * @param {Object} data - { productId, sizeId, quantity, liveRoomId, liveProductId, livePrice, originalPrice }
+ * @returns {Promise<Object>} - RedisCartItemDto
+ */
+export const addLiveItemToCart = async (data) => {
+    try {
+        const response = await stockApi.post('/item/add-live', data);
+        return response.data;
+    } catch (error) {
+        console.error('Error adding live item to cart:', error);
+        throw error;
+    }
+};

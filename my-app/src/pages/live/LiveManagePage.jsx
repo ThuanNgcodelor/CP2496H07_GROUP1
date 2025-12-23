@@ -10,10 +10,13 @@ import {
     startLive,
     endLive,
     getLiveRoomDetails,
-    getStreamUrl
+    getStreamUrl,
+    addProductToLive,
+    getLiveProducts
 } from '../../api/live';
 import { getProducts, searchProducts } from '../../api/shopOwner';
 import { fetchProductImageById } from '../../api/product';
+import { getShopOwnerInfo } from '../../api/user';
 import { LOCAL_BASE_URL } from '../../config/config';
 import imgFallback from '../../assets/images/shop/6.png';
 
@@ -41,6 +44,9 @@ export default function LiveManagePage() {
     const [productPage, setProductPage] = useState(1);
     const [productTotalPages, setProductTotalPages] = useState(0);
     const [productImageUrls, setProductImageUrls] = useState({});
+    const [productPrices, setProductPrices] = useState({}); // Map of productId -> livePrice
+    const [liveProducts, setLiveProducts] = useState([]); // Products already added to live room
+    const [addingProducts, setAddingProducts] = useState(false);
 
     // Chat and viewer states
     const [viewerCount, setViewerCount] = useState(0);
@@ -49,8 +55,13 @@ export default function LiveManagePage() {
     const [chatInput, setChatInput] = useState('');
     const stompClientRef = useRef(null);
 
+    // Shop owner info for chat
+    const [shopInfo, setShopInfo] = useState(null);
+
     useEffect(() => {
         fetchRooms();
+        // Fetch shop owner info for chat
+        getShopOwnerInfo().then(setShopInfo).catch(console.error);
     }, []);
 
     // Setup HLS when streaming
@@ -127,7 +138,9 @@ export default function LiveManagePage() {
             destination: `/app/live/${currentRoom.id}/chat`,
             body: JSON.stringify({
                 message: chatInput.trim(),
-                type: 'CHAT'
+                username: shopInfo?.shopName || shopInfo?.ownerName || 'Shop',
+                avatarUrl: shopInfo?.avatarUrl || null,
+                isOwner: true // Shop owner is always owner
             })
         });
         setChatInput('');
@@ -202,9 +215,42 @@ export default function LiveManagePage() {
         });
     };
 
-    // Confirm product selection
-    const handleConfirmProducts = () => {
-        setShowProductModal(false);
+    // Confirm product selection - call API to add products to live room
+    const handleConfirmProducts = async () => {
+        if (!currentRoom?.id || selectedProducts.length === 0) {
+            setShowProductModal(false);
+            return;
+        }
+
+        setAddingProducts(true);
+        try {
+            // Add each selected product to live room
+            for (const product of selectedProducts) {
+                const livePrice = productPrices[product.id] || product.price;
+                await addProductToLive(currentRoom.id, {
+                    productId: product.id,
+                    livePrice: parseFloat(livePrice),
+                    quantityLimit: null,
+                    displayOrder: 0
+                });
+            }
+
+            // Fetch updated live products
+            const updatedProducts = await getLiveProducts(currentRoom.id);
+            setLiveProducts(updatedProducts || []);
+
+            // Clear selection
+            setSelectedProducts([]);
+            setProductPrices({});
+            setShowProductModal(false);
+
+            alert(`Đã thêm ${selectedProducts.length} sản phẩm vào live stream!`);
+        } catch (error) {
+            console.error('Error adding products:', error);
+            alert('Lỗi khi thêm sản phẩm: ' + (error.message || 'Unknown error'));
+        } finally {
+            setAddingProducts(false);
+        }
     };
 
     // Search products with debounce
@@ -824,10 +870,28 @@ export default function LiveManagePage() {
                                 ) : (
                                     chatMessages.map((chat, idx) => (
                                         <div key={idx} style={{ marginBottom: '10px', fontSize: '13px' }}>
-                                            <span style={{ fontWeight: '600', color: chat.isOwner ? '#ee4d2d' : '#333' }}>
-                                                {chat.username || 'Khách'}:
-                                            </span>{' '}
-                                            <span style={{ color: '#666' }}>{chat.message}</span>
+                                            <span style={{
+                                                fontWeight: '600',
+                                                color: chat.isOwner ? '#ee4d2d' : '#333'
+                                            }}>
+                                                {chat.username || 'Khách'}
+                                            </span>
+                                            {chat.isOwner && (
+                                                <span style={{
+                                                    background: '#ee4d2d',
+                                                    color: 'white',
+                                                    fontSize: '10px',
+                                                    padding: '1px 6px',
+                                                    borderRadius: '3px',
+                                                    marginLeft: '6px',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    CHỦ SHOP
+                                                </span>
+                                            )}
+                                            <span style={{ color: '#666', display: 'block', marginTop: '2px' }}>
+                                                {chat.message}
+                                            </span>
                                         </div>
                                     ))
                                 )}
@@ -1074,6 +1138,83 @@ export default function LiveManagePage() {
                             </div>
                         </div>
 
+                        {/* Selected Products with Price Input */}
+                        {selectedProducts.length > 0 && (
+                            <div style={{
+                                padding: '15px 20px',
+                                borderTop: '1px solid #eee',
+                                background: '#fafafa',
+                                maxHeight: '200px',
+                                overflow: 'auto'
+                            }}>
+                                <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: '#333' }}>
+                                    Sản phẩm đã chọn ({selectedProducts.length}) - Nhập giá Live:
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {selectedProducts.map(product => (
+                                        <div key={product.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            background: 'white',
+                                            padding: '8px 12px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #eee'
+                                        }}>
+                                            <img
+                                                src={productImageUrls[product.id] || imgFallback}
+                                                alt={product.name}
+                                                style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                                            />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {product.name}
+                                                </div>
+                                                <div style={{ fontSize: '11px', color: '#888' }}>
+                                                    Giá gốc: ₫{product.price?.toLocaleString() || '0'}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ fontSize: '12px', color: '#ee4d2d', fontWeight: '600' }}>Giá Live:</span>
+                                                <input
+                                                    type="number"
+                                                    value={productPrices[product.id] || product.price || ''}
+                                                    onChange={(e) => setProductPrices(prev => ({
+                                                        ...prev,
+                                                        [product.id]: e.target.value
+                                                    }))}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    placeholder="Nhập giá"
+                                                    style={{
+                                                        width: '120px',
+                                                        padding: '6px 10px',
+                                                        border: '1px solid #ddd',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px'
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleProductSelection(product);
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#999',
+                                                        cursor: 'pointer',
+                                                        fontSize: '16px'
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Modal Footer */}
                         <div style={{
                             padding: '15px 20px',
@@ -1120,17 +1261,18 @@ export default function LiveManagePage() {
                                 </button>
                                 <button
                                     onClick={handleConfirmProducts}
+                                    disabled={addingProducts || selectedProducts.length === 0}
                                     style={{
                                         padding: '8px 20px',
                                         border: 'none',
                                         borderRadius: '4px',
-                                        background: '#ee4d2d',
+                                        background: addingProducts || selectedProducts.length === 0 ? '#ccc' : '#ee4d2d',
                                         color: 'white',
-                                        cursor: 'pointer',
+                                        cursor: addingProducts || selectedProducts.length === 0 ? 'not-allowed' : 'pointer',
                                         fontSize: '14px'
                                     }}
                                 >
-                                    Đồng ý
+                                    {addingProducts ? 'Đang thêm...' : `Thêm ${selectedProducts.length} sản phẩm`}
                                 </button>
                             </div>
                         </div>

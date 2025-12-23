@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import Hls from 'hls.js';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
+import Cookies from 'js-cookie';
 import Header from '../../components/client/Header';
 import Footer from '../../components/client/Footer';
-import { getLiveRoom, getRecentChats } from '../../api/live';
+import { getLiveRoom, getRecentChats, getLiveProducts, addLiveItemToCart } from '../../api/live';
+import { getUser } from '../../api/user';
 import { LOCAL_BASE_URL } from '../../config/config.js';
 
 export default function LiveWatchPage() {
@@ -19,12 +21,24 @@ export default function LiveWatchPage() {
     const [error, setError] = useState(null);
     const [viewerCount, setViewerCount] = useState(0);
     const [isConnected, setIsConnected] = useState(false);
+    const [chatInput, setChatInput] = useState('');
+    const [userInfo, setUserInfo] = useState(null);
+    const [products, setProducts] = useState([]);
+    const [addingToCart, setAddingToCart] = useState(null);
 
-    // Fetch room data
+    // Check if user is logged in via cookie
+    const token = Cookies.get('accessToken');
+    const isLoggedIn = !!token;
+
+    // Fetch room data and user info
     useEffect(() => {
         fetchRoom();
         fetchChats();
-    }, [roomId]);
+        // Fetch user info if logged in
+        if (isLoggedIn) {
+            getUser().then(setUserInfo).catch(console.error);
+        }
+    }, [roomId, isLoggedIn]);
 
     // WebSocket connection
     useEffect(() => {
@@ -62,6 +76,13 @@ export default function LiveWatchPage() {
                             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
                         }, 100);
                     }
+                });
+
+                // Subscribe to product updates
+                client.subscribe(`/topic/live/${roomId}/product`, (message) => {
+                    const productData = JSON.parse(message.body);
+                    console.log('Product update:', productData);
+                    setProducts(Array.isArray(productData) ? productData : [productData]);
                 });
 
                 // Join room to increment viewer count
@@ -151,6 +172,73 @@ export default function LiveWatchPage() {
         } catch (err) {
             console.error('Error fetching chats:', err);
         }
+    };
+
+    // Fetch live products on mount
+    const fetchProducts = async () => {
+        try {
+            const prods = await getLiveProducts(roomId);
+            setProducts(prods || []);
+        } catch (err) {
+            console.error('Error fetching products:', err);
+        }
+    };
+
+    // Call fetchProducts when room is loaded
+    useEffect(() => {
+        if (room) {
+            fetchProducts();
+        }
+    }, [room]);
+
+    // Handle add to cart
+    const handleAddToCart = async (product) => {
+        if (!isLoggedIn) {
+            alert('Vui lòng đăng nhập để mua hàng');
+            return;
+        }
+
+        setAddingToCart(product.id);
+        try {
+            await addLiveItemToCart({
+                productId: product.productId,
+                sizeId: null,
+                quantity: 1,
+                liveRoomId: roomId,
+                liveProductId: product.id,
+                livePrice: product.livePrice,
+                originalPrice: product.originalPrice
+            });
+            alert('Đã thêm vào giỏ hàng với giá live!');
+        } catch (err) {
+            console.error('Error adding to cart:', err);
+            alert('Không thể thêm vào giỏ hàng');
+        } finally {
+            setAddingToCart(null);
+        }
+    };
+
+    // Send chat message
+    const sendChat = () => {
+        if (!chatInput.trim() || !stompClientRef.current?.connected || !isLoggedIn) return;
+
+        stompClientRef.current.publish({
+            destination: `/app/live/${roomId}/chat`,
+            body: JSON.stringify({
+                message: chatInput.trim(),
+                username: userInfo?.userDetails?.fullName || userInfo?.username || 'Người xem',
+                avatarUrl: userInfo?.userDetails?.avatarUrl || null,
+                isOwner: false // Regular viewer
+            })
+        });
+        setChatInput('');
+
+        // Auto scroll after sending
+        setTimeout(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            }
+        }, 100);
     };
 
     if (loading) {
@@ -337,6 +425,132 @@ export default function LiveWatchPage() {
                                 </p>
                             )}
                         </div>
+
+                        {/* Live Products Section */}
+                        {products.length > 0 && (
+                            <div style={{
+                                background: '#2a2a2a',
+                                borderRadius: '8px',
+                                padding: '15px',
+                                marginTop: '15px'
+                            }}>
+                                <h3 style={{ color: 'white', fontSize: '16px', margin: '0 0 15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    🛍️ Sản phẩm đang Live
+                                    <span style={{ background: '#ee4d2d', color: 'white', fontSize: '11px', padding: '2px 8px', borderRadius: '10px' }}>
+                                        {products.length}
+                                    </span>
+                                </h3>
+                                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '10px' }}>
+                                    {products.map(product => (
+                                        <div
+                                            key={product.id}
+                                            style={{
+                                                minWidth: '160px',
+                                                background: '#333',
+                                                borderRadius: '8px',
+                                                overflow: 'hidden',
+                                                flexShrink: 0,
+                                                border: product.isFeatured ? '2px solid #ffc107' : 'none'
+                                            }}
+                                        >
+                                            {/* Product Image */}
+                                            <div style={{
+                                                height: '120px',
+                                                background: '#444',
+                                                position: 'relative',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}>
+                                                {product.productImageUrl ? (
+                                                    <img
+                                                        src={product.productImageUrl}
+                                                        alt={product.productName}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                    />
+                                                ) : (
+                                                    <span style={{ color: '#666', fontSize: '30px' }}>📦</span>
+                                                )}
+                                                {product.isFeatured && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '5px',
+                                                        left: '5px',
+                                                        background: '#ffc107',
+                                                        color: '#333',
+                                                        fontSize: '10px',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '3px',
+                                                        fontWeight: '600'
+                                                    }}>
+                                                        HOT
+                                                    </div>
+                                                )}
+                                                {product.discountPercent > 0 && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '5px',
+                                                        right: '5px',
+                                                        background: '#ee4d2d',
+                                                        color: 'white',
+                                                        fontSize: '10px',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '3px',
+                                                        fontWeight: '600'
+                                                    }}>
+                                                        -{Math.round(product.discountPercent)}%
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {/* Product Info */}
+                                            <div style={{ padding: '10px' }}>
+                                                <div style={{
+                                                    color: 'white',
+                                                    fontSize: '13px',
+                                                    marginBottom: '8px',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    {product.productName}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                                                    <span style={{ color: '#ee4d2d', fontWeight: '600', fontSize: '14px' }}>
+                                                        ₫{(product.livePrice || 0).toLocaleString()}
+                                                    </span>
+                                                    {product.originalPrice > product.livePrice && (
+                                                        <span style={{
+                                                            color: '#888',
+                                                            fontSize: '11px',
+                                                            textDecoration: 'line-through'
+                                                        }}>
+                                                            ₫{product.originalPrice.toLocaleString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => handleAddToCart(product)}
+                                                    disabled={addingToCart === product.id}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: addingToCart === product.id ? '#666' : '#ee4d2d',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        padding: '8px',
+                                                        fontSize: '12px',
+                                                        fontWeight: '600',
+                                                        cursor: addingToCart === product.id ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                >
+                                                    {addingToCart === product.id ? 'Đang thêm...' : '🛒 Thêm vào giỏ'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Chat Section */}
@@ -384,20 +598,64 @@ export default function LiveWatchPage() {
                             )}
                         </div>
 
-                        {/* Chat Input Placeholder */}
+                        {/* Chat Input */}
                         <div style={{
                             padding: '15px',
                             borderTop: '1px solid #444'
                         }}>
-                            <div style={{
-                                background: '#444',
-                                borderRadius: '20px',
-                                padding: '10px 20px',
-                                color: '#888',
-                                fontSize: '14px'
-                            }}>
-                                Đăng nhập để chat...
-                            </div>
+                            {isLoggedIn ? (
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <input
+                                        type="text"
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && sendChat()}
+                                        placeholder="Nhập bình luận..."
+                                        style={{
+                                            flex: 1,
+                                            background: '#444',
+                                            border: 'none',
+                                            borderRadius: '20px',
+                                            padding: '10px 20px',
+                                            color: 'white',
+                                            fontSize: '14px',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                    <button
+                                        onClick={sendChat}
+                                        disabled={!chatInput.trim() || !isConnected}
+                                        style={{
+                                            background: chatInput.trim() && isConnected ? '#ee4d2d' : '#666',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '20px',
+                                            padding: '10px 20px',
+                                            cursor: chatInput.trim() && isConnected ? 'pointer' : 'not-allowed',
+                                            fontSize: '14px',
+                                            fontWeight: '600'
+                                        }}
+                                    >
+                                        Gửi
+                                    </button>
+                                </div>
+                            ) : (
+                                <Link
+                                    to="/login"
+                                    style={{
+                                        display: 'block',
+                                        background: '#444',
+                                        borderRadius: '20px',
+                                        padding: '10px 20px',
+                                        color: '#888',
+                                        fontSize: '14px',
+                                        textDecoration: 'none',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    Đăng nhập để chat...
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -451,11 +709,30 @@ function ChatMessage({ message }) {
             <div style={{ flex: 1 }}>
                 {!isSystem && (
                     <div style={{
-                        color: '#ee4d2d',
-                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
                         marginBottom: '2px'
                     }}>
-                        {message.username || 'User'}
+                        <span style={{
+                            color: message.isOwner ? '#ffc107' : '#ee4d2d',
+                            fontSize: '12px',
+                            fontWeight: message.isOwner ? '600' : 'normal'
+                        }}>
+                            {message.username || 'User'}
+                        </span>
+                        {message.isOwner && (
+                            <span style={{
+                                background: '#ffc107',
+                                color: '#333',
+                                fontSize: '10px',
+                                padding: '1px 6px',
+                                borderRadius: '3px',
+                                fontWeight: '600'
+                            }}>
+                                CHỦ SHOP
+                            </span>
+                        )}
                     </div>
                 )}
                 <div style={{
