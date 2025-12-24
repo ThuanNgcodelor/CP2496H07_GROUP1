@@ -44,10 +44,14 @@ public class LedgerController {
     }
 
     @PostMapping("/internal/deduct-fee")
-    public ResponseEntity<Void> deductSubscriptionFee(
+    public ResponseEntity<?> deductSubscriptionFee(
             @RequestBody com.example.orderservice.dto.DeductSubscriptionRequestDTO request) {
-        shopLedgerService.deductSubscriptionFee(request);
-        return ResponseEntity.ok().build();
+        try {
+            shopLedgerService.deductSubscriptionFee(request);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
+        }
     }
 
     @GetMapping("/payout/history/{shopOwnerId}")

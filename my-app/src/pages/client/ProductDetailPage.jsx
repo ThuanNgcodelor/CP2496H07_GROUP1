@@ -200,7 +200,12 @@ export default function ProductDetailPage() {
                 toast.error(t("auth.loginRequired"));
                 navigate("/login");
             } else {
-                setError(e?.response?.data?.message || e.message || "Failed to add to cart");
+                let msg = e?.response?.data?.message || e.message || "Failed to add to cart";
+                if (msg.includes("INSUFFICIENT_STOCK")) {
+                    const available = msg.split(":")[1];
+                    msg = t('cart.insufficientStock', `Insufficient stock. Only ${available} items available.`);
+                }
+                setError(msg);
             }
         } finally {
             setPosting(false);
@@ -638,7 +643,12 @@ export default function ProductDetailPage() {
                                                                 toast.error(t("auth.loginRequired"));
                                                                 navigate("/login");
                                                             } else {
-                                                                setError(e?.response?.data?.message || e.message || "Failed to add to cart");
+                                                                let msg = e?.response?.data?.message || e.message || "Failed to add to cart";
+                                                                if (msg.includes("INSUFFICIENT_STOCK")) {
+                                                                    const available = msg.split(":")[1];
+                                                                    msg = t('cart.insufficientStock', `Insufficient stock. Only ${available} items available.`);
+                                                                }
+                                                                setError(msg);
                                                             }
                                                         } finally {
                                                             setPosting(false);
@@ -748,33 +758,33 @@ export default function ProductDetailPage() {
                                                     <h5 className="fw-semibold">{t('product.specifications.title', 'Product Information')}</h5>
                                                     <table className="table table-sm">
                                                         <tbody>
-                                                        {(() => {
-                                                            // Filter out attributes with empty values
-                                                            const validAttributes = product.attributes
-                                                                ? Object.entries(product.attributes).filter(([key, value]) =>
-                                                                    key && value && value.toString().trim() !== ''
-                                                                )
-                                                                : [];
+                                                            {(() => {
+                                                                // Filter out attributes with empty values
+                                                                const validAttributes = product.attributes
+                                                                    ? Object.entries(product.attributes).filter(([key, value]) =>
+                                                                        key && value && value.toString().trim() !== ''
+                                                                    )
+                                                                    : [];
 
-                                                            if (validAttributes.length === 0) {
-                                                                return (
-                                                                    <tr>
-                                                                        <td colSpan="2" className="text-muted fst-italic">
-                                                                            {t('product.specifications.noInformation', 'No additional information.')}
-                                                                        </td>
+                                                                if (validAttributes.length === 0) {
+                                                                    return (
+                                                                        <tr>
+                                                                            <td colSpan="2" className="text-muted fst-italic">
+                                                                                {t('product.specifications.noInformation', 'No additional information.')}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                }
+
+                                                                return validAttributes.map(([key, value]) => (
+                                                                    <tr key={key}>
+                                                                        <th scope="row" style={{ width: '30%' }}>
+                                                                            {translateAttributeName(key, t)}
+                                                                        </th>
+                                                                        <td>{translateAttributeValue(key, value, t)}</td>
                                                                     </tr>
-                                                                );
-                                                            }
-
-                                                            return validAttributes.map(([key, value]) => (
-                                                                <tr key={key}>
-                                                                    <th scope="row" style={{ width: '30%' }}>
-                                                                        {translateAttributeName(key, t)}
-                                                                    </th>
-                                                                    <td>{translateAttributeValue(key, value, t)}</td>
-                                                                </tr>
-                                                            ));
-                                                        })()}
+                                                                ));
+                                                            })()}
                                                         </tbody>
                                                     </table>
                                                 </div>

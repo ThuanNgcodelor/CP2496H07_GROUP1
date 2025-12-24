@@ -26,6 +26,8 @@
     "saving": "Saving...",
     "updating": "Updating...",
     "complete": "Complete",
+    "seconds": "seconds",
+    "processing": "Processing...",
     "status": {
       "title": "Status",
       "pending": "Pending",
@@ -56,7 +58,10 @@
     "myShop": "My Shop",
     "searchPlaceholder": "SUPER SALE UP TO 20% (*)",
     "findShop": "Find Shop '{{query}}'",
-    "product": "Product"
+    "product": "Product",
+    "myAccount": "My Account",
+    "myOrders": "My Orders",
+    "logout": "Logout"
   },
   "footer": {
     "customerService": "CUSTOMER SERVICE",
@@ -117,7 +122,24 @@
       "selectAddress": "Select Address",
       "emptyCart": "Empty Cart",
       "cartEmpty": "Your cart is empty. Please add products before checkout.",
-      "goShopping": "Go Shopping"
+      "goShopping": "Go Shopping",
+      "orderSuccess": "Order placed successfully!",
+      "orderProcessing": "Your order is being processed...",
+      "redirectingIn": "Redirecting to orders in",
+      "viewOrders": "View orders now"
+    },
+    "voucher": {
+      "enterCode": "Please enter voucher code",
+      "shopNotFound": "Shop information not found",
+      "applySuccess": "Voucher applied successfully!",
+      "invalid": "Invalid voucher",
+      "applyFailed": "Cannot apply voucher",
+      "removed": "Voucher removed",
+      "shopVoucherApplied": "Voucher from {{shopName}}",
+      "shopVoucher": "Shop Voucher",
+      "placeholder": "Enter voucher code",
+      "apply": "Apply",
+      "cancel": "Remove"
     },
     "address": {
       "selectDeliveryAddress": "Select Delivery Address",
@@ -139,8 +161,7 @@
       "createdAt": "Created At",
       "eta": "ETA",
       "itemsOrdered": "Items Ordered",
-      "totalAmount": "Total Amount",
-      "viewOrders": "View Orders"
+      "totalAmount": "Total Amount"
     }
   },
   "payment": {
@@ -380,7 +401,8 @@
     "totalPayment": "Total payment",
     "placeOrder": "Place Order",
     "termsAgreement": "Clicking \"Place Order\" means you agree to Shopee's Terms and Conditions",
-    "terms": "Shopee Terms"
+    "terms": "Shopee Terms",
+    "shopSubtotal": "Shop Subtotal"
   },
   "orders": {
     "myOrders": "My Orders",
@@ -426,7 +448,12 @@
     "cancelSuccessWithRefund": "Order cancelled successfully. The refund has been added to your wallet. You can withdraw to your bank account anytime.",
     "cancelError": "Failed to cancel order",
     "reviewSuccess": "Review submitted successfully!",
-    "reviewError": "User info not found. Please login again."
+    "reviewError": "User info not found. Please login again.",
+    "chat": "Chat",
+    "viewShop": "View Shop",
+    "deliverySuccessful": "Delivery successful",
+    "loadingShop": "Loading...",
+    "shopNotAvailable": "Shop info not available. Please try again."
   },
   "rating": {
     "shareWhatYouLike": "Share what you like about this product with other buyers."

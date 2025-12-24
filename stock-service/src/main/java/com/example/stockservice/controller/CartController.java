@@ -36,11 +36,16 @@ public class CartController {
    private final JwtUtil jwtUtil;
 
    @PostMapping("/item/add")
-   ResponseEntity<CartItemDto> addToCart(@RequestBody AddCartItemRequest request, HttpServletRequest httpRequest){
-       String userId = jwtUtil.ExtractUserId(httpRequest);
-       CartItem cartItem = cartItemService.addCartItem(request,userId);
-       CartItemDto cartItemDto = mapToDto(cartItem);
-       return ResponseEntity.ok(cartItemDto);
+   ResponseEntity<?> addToCart(@RequestBody AddCartItemRequest request, HttpServletRequest httpRequest){
+       try {
+           String userId = jwtUtil.ExtractUserId(httpRequest);
+           CartItem cartItem = cartItemService.addCartItem(request,userId);
+           CartItemDto cartItemDto = mapToDto(cartItem);
+           return ResponseEntity.ok(cartItemDto);
+       } catch (Exception e) {
+           e.printStackTrace();
+           return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+       }
    }
 
    /**
@@ -179,13 +184,21 @@ public class CartController {
           dto.setProduct(productDto);
       }
        
-       if (cartItem.getSize() != null) {
-           dto.setSizeId(cartItem.getSize().getId());
-           dto.setSizeName(cartItem.getSize().getName());
-           
-           SizeDto sizeDto = modelMapper.map(cartItem.getSize(), SizeDto.class);
-           dto.setSize(sizeDto);
-       }
-       return dto;
+        if (cartItem.getSize() != null) {
+            dto.setSizeId(cartItem.getSize().getId());
+            dto.setSizeName(cartItem.getSize().getName());
+            
+            SizeDto sizeDto = modelMapper.map(cartItem.getSize(), SizeDto.class);
+            dto.setSize(sizeDto);
+        }
+
+        // Manually map sync fields from transient properties
+        dto.setPriceChanged(cartItem.getPriceChanged());
+        dto.setOldPrice(cartItem.getOldPrice());
+        dto.setAvailableStock(cartItem.getAvailableStock());
+        dto.setProductAvailable(cartItem.getProductAvailable());
+        dto.setSizeAvailable(cartItem.getSizeAvailable());
+
+        return dto;
    }
 }

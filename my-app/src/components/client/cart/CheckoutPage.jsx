@@ -32,12 +32,21 @@ export function CheckoutPage({
   const [addressLoading, setAddressLoading] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [modalSelectedAddressId, setModalSelectedAddressId] = useState(null);
-  const [shippingFee, setShippingFee] = useState(shippingFeeProp);
-  const [calculatingShippingFee, setCalculatingShippingFee] = useState(false);
   const [orderLoading, setOrderLoading] = useState(false);
   const [userId, setUserId] = useState(null);
-  
-  // Voucher states
+
+  // Per-shop shipping fees: Map<shopOwnerId, number>
+  const [shopShippingFees, setShopShippingFees] = useState({});
+  const [calculatingShipping, setCalculatingShipping] = useState({});
+
+  // Per-shop voucher states: Map<shopOwnerId, voucherInfo>
+  const [shopVoucherCodes, setShopVoucherCodes] = useState({});
+  const [shopVoucherLoading, setShopVoucherLoading] = useState({});
+  const [shopAppliedVouchers, setShopAppliedVouchers] = useState({});
+
+  // Legacy states for backward compatibility
+  const [shippingFee, setShippingFee] = useState(shippingFeeProp);
+  const [calculatingShippingFee, setCalculatingShippingFee] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [voucherLoading, setVoucherLoading] = useState(false);
@@ -58,7 +67,8 @@ export function CheckoutPage({
     ) ??
     subtotalProp;
 
-  const total = subtotal + shippingFee - voucherDiscount;
+  // Total is now computed dynamically using per-shop values
+  // const total = subtotal + totalShippingFee - totalVoucherDiscount; (calculated after shop data is ready)
 
   const toast = (icon, title) =>
     Swal.fire({
@@ -102,7 +112,7 @@ export function CheckoutPage({
       return;
     }
     refreshAddresses();
-    
+
     // Get userId
     getUser().then(user => {
       setUserId(user?.id || user?.userId || null);
@@ -122,7 +132,7 @@ export function CheckoutPage({
         setShippingFee(0);
         return;
       }
-      
+
       setCalculatingShippingFee(true);
       try {
         const result = await calculateShippingFee(selectedAddressId, selectedItems);
@@ -138,7 +148,7 @@ export function CheckoutPage({
         setCalculatingShippingFee(false);
       }
     };
-    
+
     // Debounce calculation
     const timeoutId = setTimeout(calculateFee, 500);
     return () => clearTimeout(timeoutId);
@@ -171,54 +181,108 @@ export function CheckoutPage({
     if (!showAddressModal) setModalSelectedAddressId(null);
   }, [showAddressModal]);
 
-  // Handle apply voucher
-  const handleApplyVoucher = async () => {
-    if (!voucherCode.trim()) {
-      toast("warning", "Vui lòng nhập mã voucher");
+  // =========================
+  // PER-SHOP VOUCHER HANDLERS
+  // =========================
+
+  // Handle apply voucher for specific shop
+  const handleApplyShopVoucher = async (shopOwnerId, shopName) => {
+    const code = shopVoucherCodes[shopOwnerId]?.trim();
+    if (!code) {
+      toast("warning", t('cart.voucher.enterCode', 'Vui lòng nhập mã voucher'));
       return;
     }
 
-    // Lấy shopOwnerId từ item đầu tiên
-    const shopOwnerId = selectedItems[0]?.shopOwnerId;
-    if (!shopOwnerId) {
-      toast("error", "Không tìm thấy thông tin shop");
-      return;
-    }
+    // Calculate shop subtotal for validation
+    const shopItems = selectedItems.filter(item => item.shopOwnerId === shopOwnerId);
+    const shopSubtotal = shopItems.reduce((sum, it) =>
+      sum + ((it.totalPrice != null ? Number(it.totalPrice) : Number(it.unitPrice || 0) * Number(it.quantity || 0)) || 0), 0);
 
-    setVoucherLoading(true);
+    setShopVoucherLoading(prev => ({ ...prev, [shopOwnerId]: true }));
     try {
-      const response = await validateVoucher(voucherCode, shopOwnerId, subtotal);
-      
+      const response = await validateVoucher(code, shopOwnerId, shopSubtotal);
+
       if (response.valid) {
-        setVoucherDiscount(response.discount);
-        setAppliedVoucher({
-          code: response.code,
-          title: response.title,
-          discount: response.discount,
-          voucherId: response.voucherId
-        });
-        toast("success", `Áp dụng voucher thành công! Giảm ${formatVND(response.discount)}`);
+        setShopAppliedVouchers(prev => ({
+          ...prev,
+          [shopOwnerId]: {
+            code: response.code,
+            title: response.title,
+            discount: response.discount,
+            voucherId: response.voucherId,
+            shopName: shopName
+          }
+        }));
+        toast("success", t('cart.voucher.applySuccessWithAmount', {
+          amount: formatVND(response.discount),
+          defaultValue: `Voucher applied: -${formatVND(response.discount)}`
+        }));
       } else {
-        toast("error", response.message || "Voucher không hợp lệ");
-        setVoucherDiscount(0);
-        setAppliedVoucher(null);
+        toast("error", response.message || t('cart.voucher.invalid'));
       }
     } catch (error) {
       console.error("Validate voucher error:", error);
-      toast("error", error?.response?.data?.message || "Không thể áp dụng voucher");
-      setVoucherDiscount(0);
-      setAppliedVoucher(null);
+      toast("error", error?.response?.data?.message || t('cart.voucher.applyFailed'));
     } finally {
-      setVoucherLoading(false);
+      setShopVoucherLoading(prev => ({ ...prev, [shopOwnerId]: false }));
     }
   };
 
-  // Handle remove voucher
+  // Handle remove voucher for specific shop
+  const handleRemoveShopVoucher = (shopOwnerId) => {
+    setShopVoucherCodes(prev => ({ ...prev, [shopOwnerId]: "" }));
+    setShopAppliedVouchers(prev => {
+      const newState = { ...prev };
+      delete newState[shopOwnerId];
+      return newState;
+    });
+    toast("info", t('cart.voucher.removed', 'Đã hủy voucher'));
+  };
+
+  // Calculate shipping fee for specific shop
+  const calculateShopShippingFee = async (shopOwnerId, shopItems) => {
+    if (!selectedAddress || !selectedAddressId || shopItems.length === 0) {
+      return;
+    }
+
+    setCalculatingShipping(prev => ({ ...prev, [shopOwnerId]: true }));
+    try {
+      // Call API with correct parameters: addressId and selectedItems for this shop
+      const response = await calculateShippingFee(selectedAddressId, shopItems);
+      // API returns {shippingFee: number, currency: 'VND'}, extract the number
+      const fee = response?.shippingFee ?? response;
+      if (fee !== null && fee !== undefined && typeof fee === 'number') {
+        setShopShippingFees(prev => ({ ...prev, [shopOwnerId]: fee }));
+      } else {
+        // Fallback if API returns invalid data
+        setShopShippingFees(prev => ({ ...prev, [shopOwnerId]: 30000 }));
+      }
+    } catch (error) {
+      console.error(`[SHIPPING] Failed for shop ${shopOwnerId}:`, error);
+      setShopShippingFees(prev => ({ ...prev, [shopOwnerId]: 30000 })); // Default fallback
+    } finally {
+      setCalculatingShipping(prev => ({ ...prev, [shopOwnerId]: false }));
+    }
+  };
+
+  // Calculate totals from per-shop data
+  const totalShippingFee = Object.values(shopShippingFees).reduce((sum, fee) => sum + (fee || 0), 0);
+  const totalVoucherDiscount = Object.values(shopAppliedVouchers).reduce((sum, v) => sum + (v?.discount || 0), 0);
+  const total = subtotal + totalShippingFee - totalVoucherDiscount;
+
+  // Legacy handlers for backward compatibility
+  const handleApplyVoucher = async () => {
+    const shopOwnerId = selectedItems[0]?.shopOwnerId;
+    if (shopOwnerId) {
+      await handleApplyShopVoucher(shopOwnerId, selectedItems[0]?.shopOwnerName || 'Shop');
+    }
+  };
+
   const handleRemoveVoucher = () => {
-    setVoucherCode("");
-    setVoucherDiscount(0);
-    setAppliedVoucher(null);
-    toast("info", "Đã hủy voucher");
+    const shopOwnerId = selectedItems[0]?.shopOwnerId;
+    if (shopOwnerId) {
+      handleRemoveShopVoucher(shopOwnerId);
+    }
   };
 
   const handlePlaceOrder = async (e) => {
@@ -287,7 +351,7 @@ export function CheckoutPage({
         try {
           // Calculate final total with shipping and voucher discount
           const totalWithShipping = subtotal + shippingFee - voucherDiscount;
-          
+
           if (!userId) {
             throw new Error("Cannot get user ID");
           }
@@ -312,10 +376,10 @@ export function CheckoutPage({
               })),
             }),
           };
-          
+
           const payRes = await createVnpayPayment(payPayload);
           Swal.close();
-          
+
           if (payRes?.paymentUrl) {
             // Redirect to VNPay - order will be created after payment success
             window.location.href = payRes.paymentUrl;
@@ -340,20 +404,52 @@ export function CheckoutPage({
       const result = await createOrder(orderData);
       Swal.close();
 
-      toast("success", t('cart.checkout.orderCreated'));
+      // Show success modal with countdown (wait for Kafka to process order)
+      let timerInterval;
+      await Swal.fire({
+        icon: 'success',
+        title: t('cart.checkout.orderSuccess') || 'Đặt hàng thành công!',
+        html: `
+          <div style="text-align: center;">
+            <p style="margin-bottom: 16px; color: #666;">
+              ${t('cart.checkout.orderProcessing') || 'Đơn hàng của bạn đang được xử lý...'}
+            </p>
+            <p style="font-size: 14px; color: #999;">
+              ${t('cart.checkout.redirectingIn') || 'Chuyển đến danh sách đơn hàng sau'} <b></b> ${t('common.seconds') || 'giây'}
+            </p>
+          </div>
+        `,
+        timer: 3000,
+        timerProgressBar: true,
+        showConfirmButton: true,
+        confirmButtonText: t('cart.checkout.viewOrders') || 'Xem đơn hàng ngay',
+        confirmButtonColor: '#ee4d2d',
+        allowOutsideClick: false,
+        didOpen: () => {
+          const timer = Swal.getHtmlContainer().querySelector('b');
+          timerInterval = setInterval(() => {
+            const remaining = Math.ceil(Swal.getTimerLeft() / 1000);
+            timer.textContent = remaining;
+          }, 100);
+        },
+        willClose: () => {
+          clearInterval(timerInterval);
+        }
+      });
+
       navigate("/information/orders");
     } catch (err) {
       console.error("Failed to create order:", err);
       Swal.close();
-      
+
       if (err.type === 'INSUFFICIENT_STOCK') {
         const details = err.details;
         let stockMessage = err.message;
-        
+
         if (details && details.available && details.requested) {
           stockMessage = `${t('cart.checkout.insufficientStock')}. ${t('cart.checkout.available')}: ${details.available}, ${t('cart.checkout.requested')}: ${details.requested}`;
         }
-        
+
         await Swal.fire({
           icon: "warning",
           title: t('cart.checkout.insufficientStock'),
@@ -405,7 +501,33 @@ export function CheckoutPage({
     }
   };
 
-  // Group items by shop owner name
+  // Group items by shop owner ID (for per-shop logic)
+  const itemsByShopId = {};
+  selectedItems.forEach((item) => {
+    const shopOwnerId = item.shopOwnerId || 'unknown';
+    const shopName = item.shopOwnerName || item.shopName || 'Unknown Shop';
+    if (!itemsByShopId[shopOwnerId]) {
+      itemsByShopId[shopOwnerId] = {
+        shopOwnerId,
+        shopName,
+        items: []
+      };
+    }
+    itemsByShopId[shopOwnerId].items.push(item);
+  });
+
+  // Auto-calculate shipping fees when address changes
+  useEffect(() => {
+    if (selectedAddress && Object.keys(itemsByShopId).length > 0) {
+      Object.entries(itemsByShopId).forEach(([shopOwnerId, shopData]) => {
+        if (!shopShippingFees[shopOwnerId]) {
+          calculateShopShippingFee(shopOwnerId, shopData.items);
+        }
+      });
+    }
+  }, [selectedAddress, selectedItems.length]);
+
+  // Legacy grouping for backward compatibility
   const itemsByShop = {};
   selectedItems.forEach((item) => {
     const shopName = item.shopOwnerName || item.shopName || 'Unknown Shop';
@@ -810,8 +932,7 @@ export function CheckoutPage({
         <div className="checkout-header">
           <div className="checkout-header-content">
             <div className="checkout-logo">
-              <span>🛍️</span>
-              <span>Shopee</span>
+              <span>VIBE</span>
             </div>
             <div className="checkout-logo-separator"></div>
             <span style={{ color: '#ee4d2d', fontSize: '16px', fontWeight: 600 }}>Thanh Toán</span>
@@ -825,14 +946,14 @@ export function CheckoutPage({
               <div className="checkout-section">
                 <div className="checkout-section-title">
                   <span>📍</span>
-                  {t('checkoutPage.shippingAddress')}
+                  {t('checkoutPage.shippingAddress', 'Địa Chỉ Nhận Hàng')}
                   {addressLoading && (
-                    <small className="text-muted">({t('checkout.loading')})</small>
+                    <small className="text-muted">({t('checkout.loading', 'Đang tải...')})</small>
                   )}
                 </div>
                 {addressLoading ? (
                   <div style={{ color: '#666', fontSize: '14px', padding: '12px' }}>
-                    {t('checkout.loadingAddresses')}
+                    {t('checkout.loadingAddresses', 'Đang tải địa chỉ...')}
                   </div>
                 ) : addresses.length > 0 ? (
                   selectedAddress ? (
@@ -848,235 +969,185 @@ export function CheckoutPage({
                       </div>
                       <div className="checkout-address-actions">
                         {selectedAddress.isDefault && (
-                          <button className="checkout-btn-default">Mặc Định</button>
+                          <button className="checkout-btn-default">{t('cart.address.default', 'Mặc Định')}</button>
                         )}
-                        <a className="checkout-link" onClick={handleOpenAddressModal}>Thay Đổi</a>
+                        <a className="checkout-link" onClick={handleOpenAddressModal}>{t('checkoutPage.change', 'Thay Đổi')}</a>
                       </div>
                     </div>
                   ) : (
                     <div style={{ color: '#666', fontSize: '14px' }}>
-                      {t('checkout.noAddressSelected')}
+                      {t('checkout.noAddressSelected', 'Chưa chọn địa chỉ')}
                       <div style={{ marginTop: '12px' }}>
                         <a className="checkout-link" onClick={handleOpenAddressModal}>
-                          {t('checkout.selectAddress')}
+                          {t('checkout.selectAddress', 'Chọn địa chỉ')}
                         </a>
                       </div>
                     </div>
                   )
                 ) : (
                   <div style={{ color: '#666', fontSize: '14px', padding: '12px' }}>
-                    <p>{t('checkout.noAddressesFound')}</p>
+                    <p>{t('checkout.noAddressesFound', 'Không có địa chỉ. Vui lòng thêm địa chỉ.')}</p>
                     <button
                       className="btn btn-primary btn-sm"
                       type="button"
                       onClick={() => navigate("/information/address")}
                       style={{ marginTop: '8px' }}
                     >
-                      {t('checkout.addAddress')}
+                      {t('checkout.addAddress', 'Thêm địa chỉ')}
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Products */}
-              {selectedItems.length > 0 && (
-                <div className="checkout-section">
-                  <div className="checkout-section-title">{t('checkoutPage.products')}</div>
-                  
-                  {Object.entries(itemsByShop).map(([shopName, shopItems]) => (
-                    <div key={shopName}>
-                      {/* Product Header with Favorite badge */}
-                      <div className="checkout-product-header">
-                        <span className="checkout-favorite-badge">Yêu thích+</span>
-                        <span className="checkout-shop-name">{shopName}</span>
-                        <button className="checkout-chat-btn">
-                          💬 Chat ngay
-                        </button>
-                      </div>
+              {/* Products - Per Shop Sections */}
+              {Object.entries(itemsByShopId).map(([shopOwnerId, shopData]) => {
+                const shopItems = shopData.items;
+                const shopName = shopData.shopName;
+                const shopSubtotal = shopItems.reduce((sum, it) =>
+                  sum + ((it.totalPrice != null ? Number(it.totalPrice) : Number(it.unitPrice || 0) * Number(it.quantity || 0)) || 0), 0);
+                const shopShipping = shopShippingFees[shopOwnerId] || 0;
+                const shopVoucher = shopAppliedVouchers[shopOwnerId];
+                const shopVoucherDiscount = shopVoucher?.discount || 0;
+                const shopTotal = shopSubtotal + shopShipping - shopVoucherDiscount;
 
-                      {shopItems.map((item) => {
-                        const pid = item.productId ?? item.id;
-                        const img = imageUrls[pid] ?? imgFallback;
-                        return (
-                          <div key={pid} className="checkout-product-item">
-                            <img
-                              src={img || imgFallback}
-                              alt={productNames[pid] || item.productName || "Product"}
-                              className="checkout-product-image"
-                              onError={(e) => (e.currentTarget.src = imgFallback)}
-                            />
-                            <div className="checkout-product-info">
-                              <div className="checkout-product-name">
-                                {productNames[pid] || item.productName || pid}
+                return (
+                  <div key={shopOwnerId} className="checkout-section" style={{ marginBottom: '16px' }}>
+                    {/* Shop Header */}
+                    <div className="checkout-product-header">
+                      <span className="checkout-shop-name">{shopName}</span>
+                      <button
+                        className="checkout-chat-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Dispatch event to open chat with shop (handled by ChatBotWidget)
+                          window.dispatchEvent(new CustomEvent('open-chat-with-product', {
+                            detail: { shopOwnerId: shopOwnerId, productId: null }
+                          }));
+                        }}
+                      >
+                        💬 {t('checkoutPage.chatNow', 'Chat ngay')}
+                      </button>
+                    </div>
+
+                    {/* Shop Products */}
+                    {shopItems.map((item) => {
+                      const pid = item.productId ?? item.id;
+                      const img = imageUrls[pid] ?? imgFallback;
+                      return (
+                        <div key={pid} className="checkout-product-item">
+                          <img
+                            src={img || imgFallback}
+                            alt={productNames[pid] || item.productName || "Product"}
+                            className="checkout-product-image"
+                            onError={(e) => (e.currentTarget.src = imgFallback)}
+                          />
+                          <div className="checkout-product-info">
+                            <div className="checkout-product-name">
+                              {productNames[pid] || item.productName || pid}
+                            </div>
+                            <div className="checkout-product-details">
+                              <div className="checkout-product-detail-item">
+                                <span className="checkout-product-detail-label">{t('checkoutPage.classification', 'Phân loại hàng')}</span>
+                                <span className="checkout-product-detail-value">{item.sizeName || 'N/A'}</span>
                               </div>
-                              <div className="checkout-product-details">
-                                <div className="checkout-product-detail-item">
-                                  <span className="checkout-product-detail-label">{t('checkoutPage.classification')}</span>
-                                  <span className="checkout-product-detail-value">{item.sizeName || 'N/A'}</span>
-                                </div>
-                                <div className="checkout-product-detail-item">
-                                  <span className="checkout-product-detail-label">{t('checkoutPage.unitPrice')}</span>
-                                  <span className="checkout-product-detail-value">{formatVND(item.unitPrice || item.price || 0)}</span>
-                                </div>
-                                <div className="checkout-product-detail-item">
-                                  <span className="checkout-product-detail-label">{t('checkoutPage.quantity')}</span>
-                                  <span className="checkout-product-detail-value">{item.quantity}</span>
-                                </div>
-                                <div className="checkout-product-detail-item">
-                                  <span className="checkout-product-detail-label">{t('checkoutPage.subtotal')}</span>
-                                  <span className="checkout-product-detail-value" style={{ color: '#ee4d2d' }}>
-                                    {formatVND((item.unitPrice || item.price || 0) * item.quantity)}
-                                  </span>
-                                </div>
+                              <div className="checkout-product-detail-item">
+                                <span className="checkout-product-detail-label">{t('checkoutPage.unitPrice', 'Đơn giá')}</span>
+                                <span className="checkout-product-detail-value">{formatVND(item.unitPrice || item.price || 0)}</span>
+                              </div>
+                              <div className="checkout-product-detail-item">
+                                <span className="checkout-product-detail-label">{t('checkoutPage.quantity', 'Số lượng')}</span>
+                                <span className="checkout-product-detail-value">{item.quantity}</span>
+                              </div>
+                              <div className="checkout-product-detail-item">
+                                <span className="checkout-product-detail-label">{t('checkoutPage.subtotal', 'Thành tiền')}</span>
+                                <span className="checkout-product-detail-value" style={{ color: '#ee4d2d' }}>
+                                  {formatVND((item.unitPrice || item.price || 0) * item.quantity)}
+                                </span>
                               </div>
                             </div>
                           </div>
-                        );
-                      })}
-                      
-                      {/* Device Insurance */}
-                      <div className="checkout-insurance">
-                        <input type="checkbox" className="checkout-insurance-checkbox" />
-                        <div className="checkout-insurance-content">
-                          <div className="checkout-insurance-title">
-                            {t('checkoutPage.deviceInsurance')}
-                          </div>
-                          <div className="checkout-insurance-desc">
-                            {t('checkoutPage.insuranceDescription')}
-                          </div>
-                          <div className="checkout-insurance-price">
-                            13.999₫ | {t('checkoutPage.quantity')}: 1 | {t('checkoutPage.subtotal')}: 13.999₫
-                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      );
+                    })}
 
-              {/* Shipping Method */}
-              <div className="checkout-section">
-                <div className="checkout-shipping-label">
-                  {t('checkoutPage.shippingMethod')}: <span style={{ color: '#ee4d2d', fontWeight: 600 }}>Nhanh</span>
-                </div>
-                <div className="checkout-shipping-method">
-                  <div className="checkout-shipping-info">
-                    <div className="checkout-shipping-badge">
-                      🚚 {t('checkoutPage.deliveryEstimate')} 18 Th12 - 19 Th12
+                    {/* Shop Voucher Input */}
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <span>🎫</span>
+                        <span style={{ fontSize: '14px', color: '#666' }}>{t('cart.voucher.shopVoucher', 'Voucher của Shop')}</span>
+                        <input
+                          type="text"
+                          value={shopVoucherCodes[shopOwnerId] || ''}
+                          onChange={(e) => setShopVoucherCodes(prev => ({ ...prev, [shopOwnerId]: e.target.value.toUpperCase() }))}
+                          placeholder={t('cart.voucher.placeholder', 'Nhập mã voucher')}
+                          disabled={!!shopVoucher}
+                          style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            backgroundColor: shopVoucher ? '#f5f5f5' : '#fff'
+                          }}
+                        />
+                        {!shopVoucher ? (
+                          <button
+                            onClick={() => handleApplyShopVoucher(shopOwnerId, shopName)}
+                            disabled={shopVoucherLoading[shopOwnerId] || !shopVoucherCodes[shopOwnerId]?.trim()}
+                            style={{
+                              padding: '8px 16px',
+                              background: (shopVoucherLoading[shopOwnerId] || !shopVoucherCodes[shopOwnerId]?.trim()) ? '#ccc' : '#ee4d2d',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              cursor: (shopVoucherLoading[shopOwnerId] || !shopVoucherCodes[shopOwnerId]?.trim()) ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {shopVoucherLoading[shopOwnerId] ? t('common.processing', 'Đang xử lý...') : t('cart.voucher.apply', 'Áp dụng')}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRemoveShopVoucher(shopOwnerId)}
+                            style={{
+                              padding: '8px 16px',
+                              background: '#fff',
+                              color: '#ee4d2d',
+                              border: '1px solid #ee4d2d',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {t('cart.voucher.cancel', 'Hủy')}
+                          </button>
+                        )}
+                      </div>
+                      {shopVoucher && (
+                        <div style={{ background: '#e8f5e9', padding: '8px 12px', borderRadius: '4px', fontSize: '13px', color: '#4caf50' }}>
+                          ✓ {shopVoucher.title}: -{formatVND(shopVoucher.discount)}
+                        </div>
+                      )}
                     </div>
-                    <div className="checkout-shipping-details">
-                      Nhận Voucher trị giá 15.000₫ nếu đơn hàng được giao đến bạn sau ngày 19 Tháng 12 2025. :)
-                    </div>
-                    <a className="checkout-link" style={{ marginTop: '8px', display: 'inline-block' }}>
-                      {t('checkoutPage.change')}
-                    </a>
-                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input type="checkbox" style={{ width: '18px', height: '18px' }} />
-                      <span style={{ fontSize: '14px', color: '#666' }}>
-                        {t('checkoutPage.inspectOnDelivery')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="checkout-shipping-fee">
-                    {calculatingShippingFee ? (
-                      <small className="text-muted">{t('checkout.calculating')}</small>
-                    ) : (
-                      formatVND(shippingFee)
-                    )}
-                  </div>
-                </div>
-                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#333' }}>
-                    <span>{t('checkoutPage.totalAmount')} ({selectedItems.length} {t('checkoutPage.products')}):</span>
-                    <span style={{ color: '#ee4d2d', fontWeight: 600, fontSize: '16px' }}>
-                      {formatVND(subtotal + shippingFee)}
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Voucher Section */}
-              <div className="checkout-section">
-                <div className="checkout-section-title">
-                  <span>🎫</span>
-                  Mã Voucher
-                </div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    value={voucherCode}
-                    onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                    placeholder="Nhập mã voucher (VD: HEHE)"
-                    disabled={!!appliedVoucher}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      border: '1px solid #ddd',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      backgroundColor: appliedVoucher ? '#f5f5f5' : '#fff'
-                    }}
-                  />
-                  {!appliedVoucher ? (
-                    <button
-                      onClick={handleApplyVoucher}
-                      disabled={voucherLoading || !voucherCode.trim()}
-                      style={{
-                        padding: '12px 24px',
-                        background: voucherLoading || !voucherCode.trim() ? '#ccc' : '#ee4d2d',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        cursor: voucherLoading || !voucherCode.trim() ? 'not-allowed' : 'pointer',
-                        minWidth: '120px'
-                      }}
-                    >
-                      {voucherLoading ? 'Đang kiểm tra...' : 'Áp dụng'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleRemoveVoucher}
-                      style={{
-                        padding: '12px 24px',
-                        background: '#fff',
-                        color: '#ee4d2d',
-                        border: '1px solid #ee4d2d',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        minWidth: '120px'
-                      }}
-                    >
-                      Hủy voucher
-                    </button>
-                  )}
-                </div>
-                {appliedVoucher && (
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '12px 16px',
-                    background: '#e8f5e9',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    <span style={{ color: '#4caf50', fontSize: '18px' }}>✓</span>
-                    <div>
-                      <div style={{ fontWeight: 600, color: '#2e7d32' }}>
-                        {appliedVoucher.code} - {appliedVoucher.title}
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#4caf50' }}>
-                        Giảm {formatVND(appliedVoucher.discount)}
+                    {/* Shop Shipping */}
+                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #eee' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#666' }}>
+                        <span>🚚 {t('checkoutPage.shippingMethod', 'Phương thức vận chuyển')}: <span style={{ color: '#ee4d2d' }}>{t('checkoutPage.fast', 'Nhanh')}</span></span>
+                        <span style={{ fontWeight: 500 }}>
+                          {calculatingShipping[shopOwnerId] ? t('common.processing', 'Đang xử lý...') : formatVND(shopShipping)}
+                        </span>
                       </div>
                     </div>
+
+                    {/* Shop Total */}
+                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#666' }}>{t('checkoutPage.shopSubtotal')} ({shopItems.length} {t('cart.items', 'sản phẩm')}):</span>
+                      <span style={{ color: '#ee4d2d', fontWeight: 600, fontSize: '16px' }}>{formatVND(shopTotal)}</span>
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })}
 
               {/* Payment Method - Only COD and VNPAY */}
               <div className="checkout-section">
@@ -1147,24 +1218,24 @@ export function CheckoutPage({
               <div className="checkout-summary-row">
                 <span className="checkout-summary-label">{t('checkoutPage.totalShippingFee')}</span>
                 <span className="checkout-summary-value">
-                  {calculatingShippingFee ? (
-                    <small className="text-muted">{t('checkout.calculating')}</small>
+                  {Object.values(calculatingShipping).some(v => v) ? (
+                    <small className="text-muted">{t('common.processing')}</small>
                   ) : (
-                    formatVND(shippingFee)
+                    formatVND(totalShippingFee)
                   )}
                 </span>
               </div>
               <div className="checkout-summary-row">
                 <span className="checkout-summary-label">{t('checkoutPage.totalVoucherDiscount')}</span>
                 <span className="checkout-summary-value" style={{ color: '#ee4d2d' }}>
-                  -{formatVND(voucherDiscount)}
+                  -{formatVND(totalVoucherDiscount)}
                 </span>
               </div>
               <div className="checkout-summary-row total">
                 <span className="checkout-summary-label">{t('checkoutPage.totalPayment')}</span>
                 <span className="checkout-summary-value total">{formatVND(total)}</span>
               </div>
-              <button 
+              <button
                 className="checkout-place-order"
                 onClick={handlePlaceOrder}
                 disabled={orderLoading || selectedItems.length === 0 || !selectedAddressId}
@@ -1172,29 +1243,24 @@ export function CheckoutPage({
                   selectedItems.length === 0
                     ? t('checkout.pleaseSelectAtLeastOneItem')
                     : !selectedAddressId
-                    ? t('checkout.pleaseSelectDeliveryAddress')
-                    : ""
+                      ? t('checkout.pleaseSelectDeliveryAddress')
+                      : ""
                 }
               >
                 {orderLoading ? t('checkout.creatingOrder') : t('checkoutPage.placeOrder')}
               </button>
-              <div className="checkout-terms">
-                {t('checkoutPage.termsAgreement')}{' '}
-                <a href="#" className="checkout-terms-link">
-                  {t('checkoutPage.terms')}
-                </a>
-              </div>
             </div>
           </div>
-        </div>
+        </div >
 
         {/* Floating Chat Button */}
-        <button className="checkout-chat-float">
+        < button className="checkout-chat-float" >
           💬 Chat
-        </button>
+        </button >
 
         {/* Address Selection Modal */}
-        {showAddressModal &&
+        {
+          showAddressModal &&
           ReactDOM.createPortal(
             <div
               className="modal show d-block"
@@ -1207,36 +1273,41 @@ export function CheckoutPage({
               aria-modal="true"
               role="dialog"
             >
-              <div className="modal-dialog modal-lg" role="document">
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <h5 className="modal-title">{t('cart.address.selectDeliveryAddress')}</h5>
-                    <div className="d-flex gap-2">
-                      <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={refreshAddresses}
-                        disabled={addressLoading}
-                        title={t('cart.address.refresh')}
-                      >
-                        <i
-                          className={`fa fa-refresh ${
-                            addressLoading ? "fa-spin" : ""
-                          }`}
-                        ></i>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-close"
-                        onClick={() => setShowAddressModal(false)}
-                        aria-label="Close"
-                      />
-                    </div>
+              <div className="modal-dialog modal-lg" role="document" style={{ maxWidth: '600px' }}>
+                <div className="modal-content" style={{ borderRadius: '4px' }}>
+                  {/* Modal Header - Shopee style */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '16px 20px',
+                    borderBottom: '1px solid #e8e8e8',
+                    backgroundColor: '#fff'
+                  }}>
+                    <h5 style={{ margin: 0, fontWeight: 600, fontSize: '18px', color: '#333' }}>
+                      {t('checkoutPage.myAddresses', 'Địa Chỉ Của Tôi')}
+                    </h5>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddressModal(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontSize: '24px',
+                        color: '#999',
+                        cursor: 'pointer',
+                        padding: '0',
+                        lineHeight: '1'
+                      }}
+                      aria-label="Close"
+                    >
+                      ×
+                    </button>
                   </div>
 
-                  <div className="modal-body">
+                  <div className="modal-body" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0 }}>
                     {addresses.length === 0 ? (
-                      <div className="text-center">
+                      <div className="text-center p-4">
                         <p className="text-muted mb-3">
                           {t('cart.address.noAddressesFound')}
                         </p>
@@ -1252,45 +1323,72 @@ export function CheckoutPage({
                         </button>
                       </div>
                     ) : (
-                      <div className="row">
-                        {addresses.map((a) => (
-                          <div key={a.id} className="col-md-6 mb-3">
-                            <div
-                              className={`card h-100 ${
-                                modalSelectedAddressId === a.id
-                                  ? "border-primary"
-                                  : ""
-                              }`}
-                              onClick={() => handleAddressSelect(a.id)}
-                              style={{ cursor: "pointer" }}
-                            >
-                              <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-start">
-                                  <h6 className="card-title">
-                                    {a.addressName || t('cart.address.unnamedAddress')}
-                                  </h6>
-                                  {a.isDefault && (
-                                    <span className="badge bg-primary">
-                                      {t('cart.address.default')}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="card-text">
-                                  <strong>{a.recipientName}</strong>
-                                  <br />
-                                  {a.streetAddress}
-                                  <br />
-                                  {a.province}
-                                  <br />
-                                  Phone: {a.recipientPhone}
-                                </p>
-                                {modalSelectedAddressId === a.id && (
-                                  <div className="text-primary">
-                                    <i className="fa fa-check-circle"></i>{" "}
-                                    {t('cart.address.selected')}
-                                  </div>
-                                )}
+                      <div>
+                        {addresses.map((a, index) => (
+                          <div
+                            key={a.id}
+                            onClick={() => handleAddressSelect(a.id)}
+                            style={{
+                              padding: '16px 20px',
+                              borderBottom: index < addresses.length - 1 ? '1px solid #f0f0f0' : 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              gap: '16px',
+                              alignItems: 'flex-start',
+                              backgroundColor: modalSelectedAddressId === a.id ? '#fff8f6' : '#fff'
+                            }}
+                          >
+                            {/* Radio Button */}
+                            <div style={{ paddingTop: '4px' }}>
+                              <input
+                                type="radio"
+                                checked={modalSelectedAddressId === a.id}
+                                onChange={() => handleAddressSelect(a.id)}
+                                style={{ width: '18px', height: '18px', accentColor: '#ee4d2d' }}
+                              />
+                            </div>
+
+                            {/* Address Info */}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <span style={{ fontWeight: 600, color: '#333' }}>{a.recipientName}</span>
+                                <span style={{ color: '#999' }}>|</span>
+                                <span style={{ color: '#666' }}>(+84) {a.recipientPhone?.replace('+84', '').replace(/^0/, '')}</span>
                               </div>
+                              <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.5 }}>
+                                {a.streetAddress}
+                                <br />
+                                {a.province}
+                              </div>
+                              {a.isDefault && (
+                                <span style={{
+                                  display: 'inline-block',
+                                  marginTop: '8px',
+                                  padding: '2px 6px',
+                                  border: '1px solid #ee4d2d',
+                                  color: '#ee4d2d',
+                                  fontSize: '11px',
+                                  borderRadius: '2px'
+                                }}>
+                                  {t('cart.address.default', 'Mặc định')}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Update Link */}
+                            <div>
+                              <a
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowAddressModal(false);
+                                  navigate(`/information/address?edit=${a.id}`);
+                                }}
+                                style={{ color: '#1890ff', fontSize: '13px', textDecoration: 'none' }}
+                              >
+                                {t('checkoutPage.update', 'Cập nhật')}
+                              </a>
                             </div>
                           </div>
                         ))}
@@ -1298,31 +1396,37 @@ export function CheckoutPage({
                     )}
                   </div>
 
-                  <div className="modal-footer">
+                  <div className="modal-footer" style={{ justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid #e8e8e8' }}>
                     <button
                       type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setShowAddressModal(false)}
+                      onClick={() => {
+                        setShowAddressModal(false);
+                        navigate("/information/address");
+                      }}
+                      style={{
+                        padding: '10px 24px',
+                        background: '#ee4d2d',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
                     >
-                      {t('common.cancel')}
+                      + {t('checkoutPage.addNewAddress', 'Thêm Địa Chỉ Mới')}
                     </button>
-                    {addresses.length > 0 && (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={handleConfirmSelection}
-                        disabled={!modalSelectedAddressId}
-                      >
-                        {t('cart.address.confirmSelection')}
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
             </div>,
             document.body
-          )}
-      </div>
+          )
+        }
+      </div >
     </>
   );
 }

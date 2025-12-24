@@ -33,15 +33,11 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.example.orderservice.service.TrackingEmitterService;
+
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.Optional;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
 import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
 
@@ -575,6 +571,35 @@ public class OrderServiceImpl implements OrderService {
         return base + modifier;
     }
 
+    /**
+     * Group selected items by shop owner ID.
+     * Each shop will have its own order when checking out.
+     * 
+     * @param selectedItems List of items to group
+     * @return Map of shopOwnerId -> List of items belonging to that shop
+     */
+    private Map<String, List<SelectedItemDto>> groupItemsByShopOwner(List<SelectedItemDto> selectedItems) {
+        Map<String, List<SelectedItemDto>> itemsByShop = new LinkedHashMap<>();
+        
+        for (SelectedItemDto item : selectedItems) {
+            try {
+                ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
+                String shopOwnerId = (product != null && product.getUserId() != null) 
+                    ? product.getUserId() 
+                    : "unknown";
+                itemsByShop.computeIfAbsent(shopOwnerId, k -> new ArrayList<>()).add(item);
+            } catch (Exception e) {
+                log.error("[GROUP-BY-SHOP] Failed to get shop owner for product {}: {}", 
+                    item.getProductId(), e.getMessage());
+                // Put in "unknown" group if we can't determine shop
+                itemsByShop.computeIfAbsent("unknown", k -> new ArrayList<>()).add(item);
+            }
+        }
+        
+        log.info("[GROUP-BY-SHOP] Grouped {} items into {} shops", selectedItems.size(), itemsByShop.size());
+        return itemsByShop;
+    }
+
     private void cleanupCartItemsBySelected(String userId, List<SelectedItemDto> selectedItems) {
         if (selectedItems == null || selectedItems.isEmpty()) {
             log.warn("[CONSUMER] selectedItems is null or empty - skipping cart cleanup");
@@ -611,11 +636,28 @@ public class OrderServiceImpl implements OrderService {
     private void notifyOrderPlaced(Order order) {
         // Since 1 user = 1 shop, set both userId and shopId to order.getUserId()
         // This is a notification for the user (who placed the order), not shop owner
+        
+        // Format order ID to show only first 8 characters for better readability
+        String shortOrderId = order.getId().length() > 8 
+            ? order.getId().substring(0, 8).toUpperCase() 
+            : order.getId().toUpperCase();
+        
+        // Calculate total items from order
+        int totalItems = order.getOrderItems() != null 
+            ? order.getOrderItems().stream().mapToInt(OrderItem::getQuantity).sum() 
+            : 0;
+        
+        // Format user-friendly message
+        String message = String.format(
+            "Đơn hàng #%s đã được đặt thành công! %d sản phẩm với tổng giá trị %.0f₫",
+            shortOrderId, totalItems, order.getTotalPrice()
+        );
+        
         SendNotificationRequest noti = SendNotificationRequest.builder()
                 .userId(order.getUserId())
                 .shopId(order.getUserId())
                 .orderId(order.getId())
-                .message("Order placed successfully with ID: " + order.getId())
+                .message(message)
                 .isShopOwnerNotification(false) // false = user notification
                 .build();
         // kafkaTemplateSend.send(notificationTopic.name(), noti);
@@ -1034,7 +1076,7 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Address not found for ID: " + addressId);
         }
 
-        // Validate stock
+        // Validate stock and ensure unitPrice is populated
         for (SelectedItemDto item : selectedItems) {
             if (item.getSizeId() == null || item.getSizeId().isBlank()) {
                 throw new RuntimeException("Size ID is required for product: " + item.getProductId());
@@ -1063,61 +1105,106 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        // Create order with PENDING status (payment is successful, but order needs shop
-        // confirmation)
-        Order order = Order.builder()
-                .userId(userId)
-                .addressId(addressId)
-                .orderStatus(OrderStatus.PENDING) // Payment successful, but order pending shop confirmation
-                .totalPrice(0.0) // sẽ set lại sau khi tính items + ship - voucher
-                .shippingFee(shippingFee != null ? shippingFee : BigDecimal.ZERO) // Lưu shipping fee đã thanh toán
-                                                                                  // trong payment
-                .paymentMethod("VNPAY") // Orders created from payment are VNPay
-                .voucherId(voucherId)
-                .voucherDiscount(voucherDiscount != null ? BigDecimal.valueOf(voucherDiscount) : null)
-                .build();
-        order = orderRepository.save(order);
+        // ==================== ORDER SPLITTING BY SHOP ====================
+        Map<String, List<SelectedItemDto>> itemsByShop = groupItemsByShopOwner(selectedItems);
+        int totalShops = itemsByShop.size();
+        log.info("[PAYMENT-ORDER] Splitting order into {} separate orders by shop", totalShops);
 
-        // Add items and decrease stock
-        List<OrderItem> items = toOrderItemsFromSelected(selectedItems, order);
-        order.setOrderItems(items);
-        // Tính tổng cuối cùng: items + ship - voucher
-        double itemsTotal = calculateTotalPrice(items);
-        double ship = order.getShippingFee() != null ? order.getShippingFee().doubleValue() : 0.0;
-        double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
-        order.setTotalPrice(itemsTotal + ship - voucher);
-        orderRepository.save(order);
+        // Calculate shipping fee per shop (divide equally if multiple shops)
+        double shippingFeeValue = shippingFee != null ? shippingFee.doubleValue() : 0.0;
+        double shippingFeePerShop = shippingFeeValue / totalShops;
 
-        // Apply voucher if present
-        if (order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
+        // Determine which shop the voucher belongs to (if any)
+        String voucherShopOwnerId = null;
+        if (voucherId != null && !voucherId.isBlank()) {
+            voucherShopOwnerId = voucherService.getVoucherShopOwnerId(voucherId);
+            log.info("[PAYMENT-ORDER] Voucher {} belongs to shop: {}", voucherId, voucherShopOwnerId);
+        }
+
+        List<Order> createdOrders = new ArrayList<>();
+        boolean voucherApplied = false;
+        Order firstOrder = null;
+
+        for (Map.Entry<String, List<SelectedItemDto>> entry : itemsByShop.entrySet()) {
+            String shopOwnerId = entry.getKey();
+            List<SelectedItemDto> shopItems = entry.getValue();
+
+            log.info("[PAYMENT-ORDER] Creating order for shop {} with {} items", shopOwnerId, shopItems.size());
+
+            // Create order with PENDING status
+            Order order = Order.builder()
+                    .userId(userId)
+                    .addressId(addressId)
+                    .orderStatus(OrderStatus.PENDING)
+                    .totalPrice(0.0)
+                    .shippingFee(BigDecimal.valueOf(shippingFeePerShop))
+                    .paymentMethod("VNPAY")
+                    .build();
+
+            // Set voucher data ONLY if this shop owns the voucher
+            boolean shouldApplyVoucher = voucherId != null &&
+                    voucherShopOwnerId != null &&
+                    voucherShopOwnerId.equals(shopOwnerId) &&
+                    !voucherApplied;
+
+            if (shouldApplyVoucher) {
+                order.setVoucherId(voucherId);
+                order.setVoucherDiscount(voucherDiscount != null ? BigDecimal.valueOf(voucherDiscount) : null);
+                log.info("[PAYMENT-ORDER] Applying voucher {} to order for shop {}", voucherId, shopOwnerId);
+            }
+
+            order = orderRepository.save(order);
+
+            // Add items and decrease stock
+            List<OrderItem> items = toOrderItemsFromSelected(shopItems, order);
+            order.setOrderItems(items);
+
+            // Calculate total: items + ship - voucher
+            double itemsTotal = calculateTotalPrice(items);
+            double ship = order.getShippingFee() != null ? order.getShippingFee().doubleValue() : 0.0;
+            double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
+            order.setTotalPrice(itemsTotal + ship - voucher);
+            orderRepository.save(order);
+
+            // Apply voucher if this order has voucher
+            if (shouldApplyVoucher && order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
+                try {
+                    voucherService.applyVoucherToOrder(
+                            order.getVoucherId(),
+                            order.getId(),
+                            order.getUserId(),
+                            order.getVoucherDiscount());
+                    voucherApplied = true;
+                } catch (Exception e) {
+                    log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
+                }
+            }
+
+            // Send notifications for this order
             try {
-                voucherService.applyVoucherToOrder(
-                        order.getVoucherId(),
-                        order.getId(),
-                        order.getUserId(),
-                        order.getVoucherDiscount());
+                notifyOrderPlaced(order);
+                notifyShopOwners(order);
             } catch (Exception e) {
-                log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
-                // Don't fail order creation if voucher application fails
+                log.error("[PAYMENT-ORDER] send notification failed for order {}: {}", order.getId(), e.getMessage(), e);
+            }
+
+            createdOrders.add(order);
+            if (firstOrder == null) {
+                firstOrder = order;
             }
         }
 
-        // Cleanup cart
+        // Cleanup cart - remove ALL items
         try {
             cleanupCartItemsBySelected(userId, selectedItems);
         } catch (Exception e) {
             log.error("[PAYMENT-ORDER] cart cleanup failed: {}", e.getMessage(), e);
         }
 
-        // Send notifications
-        try {
-            notifyOrderPlaced(order);
-            notifyShopOwners(order);
-        } catch (Exception e) {
-            log.error("[PAYMENT-ORDER] send notification failed: {}", e.getMessage(), e);
-        }
+        log.info("[PAYMENT-ORDER] Successfully created {} orders for user {}", createdOrders.size(), userId);
 
-        return order;
+        // Return first order (for payment link update)
+        return firstOrder;
     }
 
     @KafkaListener(topics = "#{@orderTopic.name}", groupId = "order-service-checkout", containerFactory = "checkoutListenerFactory")
@@ -1183,47 +1270,99 @@ public class OrderServiceImpl implements OrderService {
             throw e;
         }
 
-        // 1) Create order skeleton
-        Order order = initPendingOrder(msg.getUserId(), msg.getAddressId(),
-                msg.getPaymentMethod() != null ? msg.getPaymentMethod() : "COD");
+        // ==================== ORDER SPLITTING BY SHOP ====================
+        // Group items by shop owner - each shop gets its own order
+        Map<String, List<SelectedItemDto>> itemsByShop = groupItemsByShopOwner(msg.getSelectedItems());
+        int totalShops = itemsByShop.size();
+        log.info("[CONSUMER] Splitting order into {} separate orders by shop", totalShops);
 
-        // Set voucher data if available
-        if (msg.getVoucherId() != null) {
-            order.setVoucherId(msg.getVoucherId());
-            order.setVoucherDiscount(
-                    msg.getVoucherDiscount() != null ? BigDecimal.valueOf(msg.getVoucherDiscount()) : BigDecimal.ZERO);
+        // Calculate shipping fee per shop (divide equally if multiple shops)
+        double shippingFeePerShop = (msg.getShippingFee() != null ? msg.getShippingFee() : 0.0) / totalShops;
+
+        // Determine which shop the voucher belongs to (if any)
+        String voucherShopOwnerId = null;
+        if (msg.getVoucherId() != null && !msg.getVoucherId().isBlank()) {
+            voucherShopOwnerId = voucherService.getVoucherShopOwnerId(msg.getVoucherId());
+            log.info("[CONSUMER] Voucher {} belongs to shop: {}", msg.getVoucherId(), voucherShopOwnerId);
         }
 
-        // Set shipping fee if available
-        if (msg.getShippingFee() != null) {
-            order.setShippingFee(BigDecimal.valueOf(msg.getShippingFee()));
-        }
+        List<Order> createdOrders = new ArrayList<>();
+        boolean voucherApplied = false;
 
-        // 2) Items + decrease stock (skip decrease stock cho test products)
-        List<OrderItem> items = toOrderItemsFromSelectedForCheckout(msg.getSelectedItems(), order);
-        order.setOrderItems(items);
-        // Tính tổng cuối cùng: items + ship - voucher
-        double itemsTotal = calculateTotalPrice(items);
-        double ship = order.getShippingFee() != null ? order.getShippingFee().doubleValue() : 0.0;
-        double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
-        order.setTotalPrice(itemsTotal + ship - voucher);
-        orderRepository.save(order);
+        for (Map.Entry<String, List<SelectedItemDto>> entry : itemsByShop.entrySet()) {
+            String shopOwnerId = entry.getKey();
+            List<SelectedItemDto> shopItems = entry.getValue();
 
-        // Apply voucher if present
-        if (order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
-            try {
-                voucherService.applyVoucherToOrder(
-                        order.getVoucherId(),
-                        order.getId(),
-                        order.getUserId(),
-                        order.getVoucherDiscount());
-            } catch (Exception e) {
-                log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
-                // Don't fail order creation if voucher application fails
+            log.info("[CONSUMER] Creating order for shop {} with {} items", shopOwnerId, shopItems.size());
+
+            // 1) Create order skeleton
+            Order order = initPendingOrder(msg.getUserId(), msg.getAddressId(),
+                    msg.getPaymentMethod() != null ? msg.getPaymentMethod() : "COD");
+
+            // Set voucher data ONLY if this shop owns the voucher
+            boolean shouldApplyVoucher = msg.getVoucherId() != null &&
+                    voucherShopOwnerId != null &&
+                    voucherShopOwnerId.equals(shopOwnerId) &&
+                    !voucherApplied;
+
+            if (shouldApplyVoucher) {
+                order.setVoucherId(msg.getVoucherId());
+                order.setVoucherDiscount(
+                        msg.getVoucherDiscount() != null ? BigDecimal.valueOf(msg.getVoucherDiscount()) : BigDecimal.ZERO);
+                log.info("[CONSUMER] Applying voucher {} to order for shop {}", msg.getVoucherId(), shopOwnerId);
             }
-        }
 
-        // 3) Cleanup cart - remove items that were added to order
+            // Set shipping fee (divided equally among shops)
+            order.setShippingFee(BigDecimal.valueOf(shippingFeePerShop));
+
+            // 2) Items + decrease stock (skip decrease stock cho test products)
+            List<OrderItem> items = toOrderItemsFromSelectedForCheckout(shopItems, order);
+            order.setOrderItems(items);
+
+            // Tính tổng cuối cùng: items + ship - voucher
+            double itemsTotal = calculateTotalPrice(items);
+            double ship = order.getShippingFee() != null ? order.getShippingFee().doubleValue() : 0.0;
+            double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
+            order.setTotalPrice(itemsTotal + ship - voucher);
+            orderRepository.save(order);
+
+            // Apply voucher if this order has voucher
+            if (shouldApplyVoucher && order.getVoucherId() != null && !order.getVoucherId().isBlank()) {
+                try {
+                    voucherService.applyVoucherToOrder(
+                            order.getVoucherId(),
+                            order.getId(),
+                            order.getUserId(),
+                            order.getVoucherDiscount());
+                    voucherApplied = true;
+                } catch (Exception e) {
+                    log.error("[VOUCHER] Failed to apply voucher to order {}: {}", order.getId(), e.getMessage(), e);
+                }
+            }
+
+            // Send notifications for this order
+            try {
+                notifyOrderPlaced(order);
+                notifyShopOwners(order);
+            } catch (Exception e) {
+                log.error("[CONSUMER] send notification failed for order {}: {}", order.getId(), e.getMessage(), e);
+            }
+
+            // Create GHN shipping order (only if CONFIRMED)
+            try {
+                if (order.getOrderStatus() != null && order.getOrderStatus().name().equalsIgnoreCase("CONFIRMED")) {
+                    createShippingOrder(order);
+                } else {
+                    log.info("[CONSUMER] Order {} not CONFIRMED yet - skipping GHN creation", order.getId());
+                }
+            } catch (Exception e) {
+                log.error("[CONSUMER] Failed to create GHN shipping order for {}: {}", order.getId(), e.getMessage(), e);
+            }
+
+            createdOrders.add(order);
+        } 
+
+        // 3) Cleanup cart - remove ALL items that were added to orders
         try {
             if (msg.getSelectedItems() != null && !msg.getSelectedItems().isEmpty()) {
                 log.info("[CONSUMER] Starting cart cleanup for userId: {}, items count: {}",
@@ -1236,25 +1375,7 @@ public class OrderServiceImpl implements OrderService {
             log.error("[CONSUMER] cart cleanup failed: {}", e.getMessage(), e);
         }
 
-        try {
-            notifyOrderPlaced(order);
-            notifyShopOwners(order);
-        } catch (Exception e) {
-            log.error("[CONSUMER] send notification failed: {}", e.getMessage(), e);
-        }
-
-        // 4) Create GHN shipping order
-        try {
-            // Only create shipping order automatically when order is already CONFIRMED.
-            if (order.getOrderStatus() != null && order.getOrderStatus().name().equalsIgnoreCase("CONFIRMED")) {
-                createShippingOrder(order);
-            } else {
-                log.info("[CONSUMER] Order {} not CONFIRMED yet - skipping GHN creation", order.getId());
-            }
-        } catch (Exception e) {
-            log.error("[CONSUMER] Failed to create GHN shipping order: {}", e.getMessage(), e);
-            // Don't throw - order is already created, just log the error
-        }
+        log.info("[CONSUMER] Successfully created {} orders for user {}", createdOrders.size(), msg.getUserId());
     }
 
     @KafkaListener(topics = "#{@paymentTopic.name}", groupId = "order-service-payment", containerFactory = "paymentListenerFactory")

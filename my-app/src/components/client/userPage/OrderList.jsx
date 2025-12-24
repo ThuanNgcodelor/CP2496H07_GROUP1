@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import RatingModal from "./RatingMockModal.jsx";
 import Swal from "sweetalert2";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { getOrdersByUser, cancelOrder, confirmReceipt } from "../../../api/order.js";
 import { createReview } from "../../../api/review.js";
 import { getUser, getShopOwnerByUserId } from "../../../api/user.js";
@@ -98,6 +98,7 @@ function getPageNumbers(current, total) {
 export default function OrderList() {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const location = useLocation(); // Used to detect navigation and trigger re-fetch
     const [searchParams] = useSearchParams();
     const [orders, setOrders] = useState([]);
     const [page, setPage] = useState(1);
@@ -155,6 +156,16 @@ export default function OrderList() {
                 }
             }));
         } else {
+            // Show toast notification if shop info not available
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'info',
+                title: t('orders.shopNotAvailable') || 'Shop info not available. Please try again.',
+                showConfirmButton: false,
+                timer: 2500,
+                timerProgressBar: true
+            });
             console.warn('Shop owner ID not available for this order');
         }
     };
@@ -192,7 +203,7 @@ export default function OrderList() {
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [location.key]); // Re-fetch when navigating to this page
 
     // Load images for order items
     useEffect(() => {
@@ -495,15 +506,21 @@ export default function OrderList() {
             </div>
 
             <div style={{ background: 'white', minHeight: '400px', width: '100%', margin: 0 }}>
-                {/* Status Tabs - Shopee Style */}
+                {/* Status Tabs - Shopee Style - Fixed Layout */}
                 <div style={{
                     background: 'white',
                     borderBottom: '1px solid #f0f0f0',
                     position: 'sticky',
                     top: 0,
-                    zIndex: 10
+                    zIndex: 10,
+                    width: '100%',
+                    minWidth: '700px'
                 }}>
-                    <div className="d-flex" style={{ overflowX: 'auto', padding: '0 24px' }}>
+                    <div className="d-flex" style={{
+                        padding: '0 16px',
+                        justifyContent: 'flex-start',
+                        gap: '0'
+                    }}>
                         {[
                             { id: 'ALL', label: t('orders.all') },
                             { id: 'TO_PAY', label: t('orders.toPay'), statuses: ['PENDING'] },
@@ -520,7 +537,7 @@ export default function OrderList() {
                                     setPage(1);
                                 }}
                                 style={{
-                                    padding: '16px 20px',
+                                    padding: '16px 12px',
                                     border: 'none',
                                     background: 'transparent',
                                     color: activeTab === tab.id ? '#ee4d2d' : '#555',
@@ -528,8 +545,11 @@ export default function OrderList() {
                                     fontWeight: activeTab === tab.id ? 500 : 400,
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
-                                    fontSize: '14px',
-                                    whiteSpace: 'nowrap'
+                                    fontSize: '13px',
+                                    whiteSpace: 'nowrap',
+                                    flex: '1 1 auto',
+                                    textAlign: 'center',
+                                    minWidth: 'fit-content'
                                 }}
                             >
                                 {tab.label}
@@ -626,7 +646,7 @@ export default function OrderList() {
                                                     e.currentTarget.style.color = '#ee4d2d';
                                                 }}
                                             >
-                                                <i className="fa fa-comment me-1"></i> Chat
+                                                <i className="fa fa-comment me-1"></i> {t('orders.chat')}
                                             </button>
                                             <button
                                                 className="btn btn-sm"
@@ -650,7 +670,7 @@ export default function OrderList() {
                                                     e.currentTarget.style.color = '#555';
                                                 }}
                                             >
-                                                View Shop
+                                                {t('orders.viewShop')}
                                             </button>
                                         </div>
                                         <button
@@ -663,7 +683,7 @@ export default function OrderList() {
                                         <div className="d-flex align-items-center gap-2">
                                             {(normalizeStatus(order.orderStatus) === 'COMPLETED' || normalizeStatus(order.orderStatus) === 'DELIVERED') && (
                                                 <span style={{ fontSize: '12px', color: '#26aa99' }}>
-                                                    <i className="fa fa-truck me-1"></i> Delivery successful
+                                                    <i className="fa fa-truck me-1"></i> {t('orders.deliverySuccessful')}
                                                 </span>
                                             )}
                                             {getStatusBadge(order.orderStatus)}

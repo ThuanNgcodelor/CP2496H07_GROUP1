@@ -369,140 +369,166 @@ export function Cart({
                 </div>
               </div>
 
-              {/* Render items grouped by shop */}
-              {Object.entries(itemsByShop).map(([shopName, shopItems]) => (
-                <div key={shopName} className="cart2-table">
-                  {/* Shop Header */}
-                  <div className="cart2-favorite-section">
-                    <input
-                      type="checkbox"
-                      className="cart2-checkbox"
-                      checked={shopItems.every((item) => {
-                        const pid = item.productId ?? item.id;
-                        const key = `${pid}:${item.sizeId || 'no-size'}`;
-                        return selected.has(key);
-                      })}
-                      onChange={(e) => {
-                        shopItems.forEach((item) => {
+              {/* Render items grouped by shop - sorted alphabetically to prevent jumping */}
+              {Object.entries(itemsByShop)
+                .sort(([shopNameA], [shopNameB]) => shopNameA.localeCompare(shopNameB))
+                .map(([shopName, shopItems]) => (
+                  <div key={shopName} className="cart2-table">
+                    {/* Shop Header */}
+                    <div className="cart2-favorite-section">
+                      <input
+                        type="checkbox"
+                        className="cart2-checkbox"
+                        checked={shopItems.every((item) => {
                           const pid = item.productId ?? item.id;
                           const key = `${pid}:${item.sizeId || 'no-size'}`;
-                          onToggle(key, e.target.checked);
-                        });
-                      }}
-                    />
-                    <span style={{ fontWeight: 600, marginLeft: '8px' }}>{shopName}</span>
-                    <button
-                      onClick={() => openChatWithShop(shopIdMap[shopName], shopItems[0]?.productId)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#333',
-                        cursor: 'pointer',
-                        marginLeft: 'auto',
-                        fontSize: '13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px'
-                      }}
-                    >
-                      💬 Chat ngay
-                    </button>
-                  </div>
+                          return selected.has(key);
+                        })}
+                        onChange={(e) => {
+                          shopItems.forEach((item) => {
+                            const pid = item.productId ?? item.id;
+                            const key = `${pid}:${item.sizeId || 'no-size'}`;
+                            onToggle(key, e.target.checked);
+                          });
+                        }}
+                      />
+                      <span style={{ fontWeight: 600, marginLeft: '8px' }}>{shopName}</span>
+                      <button
+                        onClick={() => openChatWithShop(shopIdMap[shopName], shopItems[0]?.productId)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#333',
+                          cursor: 'pointer',
+                          marginLeft: 'auto',
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 8px'
+                        }}
+                      >
+                        💬 Chat ngay
+                      </button>
+                    </div>
 
-                  {/* Deal Shock Section */}
-                  <div style={{ padding: '12px 20px', background: '#fff5f0', borderBottom: '1px solid #f0f0f0' }}>
-                    <span className="cart2-deal-shock">{t('cart2.dealShock')}</span>
-                    <span style={{ fontSize: '13px', color: '#666' }}>{t('cart2.buyWithDeal')}</span>
-                  </div>
+                    {/* Deal Shock Section */}
+                    <div style={{ padding: '12px 20px', background: '#fff5f0', borderBottom: '1px solid #f0f0f0' }}>
+                      <span className="cart2-deal-shock">{t('cart2.dealShock')}</span>
+                      <span style={{ fontSize: '13px', color: '#666' }}>{t('cart2.buyWithDeal')}</span>
+                    </div>
 
-                  {/* Products in this shop */}
-                  {shopItems.map((item) => {
-                    const pid = item.productId ?? item.id;
-                    const uniqueKey = `${pid}:${item.sizeId || 'no-size'}`;
-                    const img = imageUrls[pid] ?? imgFallback;
-                    const isSelected = selected.has(uniqueKey);
+                    {/* Products in this shop */}
+                    {shopItems.map((item) => {
+                      const pid = item.productId ?? item.id;
+                      const uniqueKey = `${pid}:${item.sizeId || 'no-size'}`;
+                      const img = imageUrls[pid] ?? imgFallback;
+                      const isSelected = selected.has(uniqueKey);
 
-                    return (
-                      <div key={uniqueKey} className="cart2-item">
-                        <div>
-                          <input
-                            type="checkbox"
-                            className="cart2-checkbox"
-                            checked={isSelected}
-                            onChange={(e) => onToggle(uniqueKey, e.target.checked)}
-                          />
-                        </div>
-                        <div className="cart2-product">
-                          <div className="cart2-product-image-wrapper">
-                            <img
-                              src={img || imgFallback}
-                              alt={productNames[pid] || item.productName || "Product"}
-                              className="cart2-product-image"
-                              onError={(e) => (e.currentTarget.src = imgFallback)}
-                            />
-                          </div>
-                          <div className="cart2-product-info">
-                            <div className="cart2-product-name">
-                              {productNames[pid] || item.productName || pid}
-                            </div>
-                            <div className="cart2-product-classification">
-                              {t('cart2.classification')}: {item.sizeName || 'N/A'}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="cart2-price">
-                          {item.originalPrice && item.originalPrice > item.unitPrice && (
-                            <span className="cart2-price-original">
-                              {formatVND(item.originalPrice)}
-                            </span>
-                          )}
-                          <span className="cart2-price-current">
-                            {formatVND(item.unitPrice || item.price || 0)}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="cart2-quantity">
-                            <button
-                              className="cart2-quantity-btn"
-                              onClick={() => onQuantityChange(item, Math.max(1, item.quantity - 1))}
-                            >
-                              -
-                            </button>
+                      return (
+                        <div key={uniqueKey} className="cart2-item">
+                          <div>
                             <input
-                              type="number"
-                              className="cart2-quantity-input"
-                              value={item.quantity}
-                              min="1"
-                              onChange={(e) => {
-                                const newQty = parseInt(e.target.value) || 1;
-                                onQuantityChange(item, newQty);
-                              }}
+                              type="checkbox"
+                              className="cart2-checkbox"
+                              checked={isSelected}
+                              onChange={(e) => onToggle(uniqueKey, e.target.checked)}
+                              disabled={!item.productAvailable || !item.sizeAvailable || item.availableStock === 0}
                             />
-                            <button
-                              className="cart2-quantity-btn"
-                              onClick={() => onQuantityChange(item, item.quantity + 1)}
+                          </div>
+                          <div className="cart2-product">
+                            <div className="cart2-product-image-wrapper">
+                              <img
+                                src={img || imgFallback}
+                                alt={productNames[pid] || item.productName || "Product"}
+                                className="cart2-product-image"
+                                onError={(e) => (e.currentTarget.src = imgFallback)}
+                              />
+                            </div>
+                            <div className="cart2-product-info">
+                              <div className="cart2-product-name">
+                                {productNames[pid] || item.productName || pid}
+                              </div>
+                              <div className="cart2-product-classification">
+                                {t('cart2.classification')}: {item.sizeName || 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="cart2-price">
+                            {item.priceChanged && (
+                              <div style={{ fontSize: '11px', color: '#ffad0d', marginBottom: '4px' }}>
+                                ⚠️ Giá thay đổi
+                              </div>
+                            )}
+                            {item.originalPrice && item.originalPrice > item.unitPrice && (
+                              <span className="cart2-price-original">
+                                {formatVND(item.originalPrice)}
+                              </span>
+                            )}
+                            {item.priceChanged && item.oldPrice && (
+                              <span className="cart2-price-original" style={{ textDecoration: 'line-through', color: '#888' }}>
+                                {formatVND(item.oldPrice)}
+                              </span>
+                            )}
+                            <span className="cart2-price-current">
+                              {formatVND(item.unitPrice || item.price || 0)}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="cart2-quantity">
+                              <button
+                                className="cart2-quantity-btn"
+                                onClick={() => onQuantityChange(item, Math.max(1, item.quantity - 1))}
+                                disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                className="cart2-quantity-input"
+                                value={item.quantity}
+                                min="1"
+                                onChange={(e) => {
+                                  const newQty = parseInt(e.target.value) || 1;
+                                  onQuantityChange(item, newQty);
+                                }}
+                                disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
+                              />
+                              <button
+                                className="cart2-quantity-btn"
+                                onClick={() => onQuantityChange(item, item.quantity + 1)}
+                                disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
+                              >
+                                +
+                              </button>
+                            </div>
+                            {(item.productAvailable === false || item.sizeAvailable === false) && (
+                              <div style={{ color: '#ff424f', fontSize: '11px', marginTop: '4px' }}>
+                                Sản phẩm ngừng kinh doanh
+                              </div>
+                            )}
+                            {item.productAvailable !== false && item.sizeAvailable !== false && item.availableStock < item.quantity && (
+                              <div style={{ color: '#ffad0d', fontSize: '11px', marginTop: '4px' }}>
+                                Chỉ còn {item.availableStock} sp
+                              </div>
+                            )}
+                          </div>
+                          <div className="cart2-amount">
+                            {formatVND((item.unitPrice || item.price || 0) * item.quantity)}
+                          </div>
+                          <div className="cart2-actions">
+                            <a
+                              className="cart2-action-link"
+                              onClick={() => onRemove(item.id, pid)}
                             >
-                              +
-                            </button>
+                              {t('cart2.delete')}
+                            </a>
                           </div>
                         </div>
-                        <div className="cart2-amount">
-                          {formatVND((item.unitPrice || item.price || 0) * item.quantity)}
-                        </div>
-                        <div className="cart2-actions">
-                          <a
-                            className="cart2-action-link"
-                            onClick={() => onRemove(item.id, pid)}
-                          >
-                            {t('cart2.delete')}
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      );
+                    })}
+                  </div>
+                ))}
 
               <div className="cart2-voucher-section">
                 <span style={{ fontWeight: 600 }}>{t('cart2.shopeeVoucher')}</span>

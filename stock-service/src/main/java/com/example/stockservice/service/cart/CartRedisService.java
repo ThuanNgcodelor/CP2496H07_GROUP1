@@ -56,6 +56,120 @@ public class CartRedisService {
         return (RedisCartDto) redisTemplate.opsForValue().get(key);
     }
 
+    /**
+     * Lấy giỏ hàng và refresh data từ database (Refresh on View strategy)
+     * - Cập nhật giá sản phẩm mới nhất
+     * - Cập nhật số lượng tồn kho
+     * - Đánh dấu nếu sản phẩm/size đã bị xóa
+     */
+    public RedisCartDto getCartWithRefresh(String userId) {
+        RedisCartDto cart = getCartByUserId(userId);
+        if (cart == null || cart.getItems() == null || cart.getItems().isEmpty()) {
+            return cart;
+        }
+
+        boolean cartUpdated = false;
+
+        for (RedisCartItemDto item : cart.getItems().values()) {
+            // Default to available for legacy data or if checks fail
+            if (item.getProductAvailable() == null) item.setProductAvailable(true);
+            if (item.getSizeAvailable() == null) item.setSizeAvailable(true);
+            if (item.getAvailableStock() == null) item.setAvailableStock(Integer.MAX_VALUE);
+
+            // Skip live items - they keep their live price and availability (simplified for now)
+            if (Boolean.TRUE.equals(item.getIsFromLive())) {
+                continue;
+            }
+
+            try {
+                Product product = productService.getProductById(item.getProductId());
+                
+                if (product == null) {
+                    // Sản phẩm đã bị xóa
+                    item.setProductAvailable(false);
+                    item.setAvailableStock(0);
+                    cartUpdated = true;
+                    log.warn("Product {} no longer exists", item.getProductId());
+                    continue;
+                }
+
+                // Check active status
+                if (product.getStatus() == com.example.stockservice.enums.ProductStatus.BANNED || 
+                    product.getStatus() == com.example.stockservice.enums.ProductStatus.SUSPENDED) {
+                    item.setProductAvailable(false);
+                    item.setAvailableStock(0);
+                    cartUpdated = true;
+                    log.warn("Product {} is {}", item.getProductId(), product.getStatus());
+                    continue;
+                }
+
+                // Cập nhật thông tin sản phẩm mới nhất
+                item.setProductName(product.getName());
+                item.setImageId(product.getImageId());
+                item.setProductAvailable(true);
+
+                double currentPrice = product.getPrice();
+                int currentStock = 0;
+
+                if (item.getSizeId() != null && !item.getSizeId().isEmpty()) {
+                    // Có size - lấy thông tin size
+                    Size size = sizeRepository.findById(item.getSizeId()).orElse(null);
+                    
+                    if (size == null) {
+                        // Size đã bị xóa
+                        item.setSizeAvailable(false);
+                        item.setAvailableStock(0);
+                        cartUpdated = true;
+                        log.warn("Size {} no longer exists for product {}", item.getSizeId(), item.getProductId());
+                        continue;
+                    }
+                    
+                    item.setSizeAvailable(true);
+                    item.setSizeName(size.getName());
+                    currentPrice = product.getPrice() + size.getPriceModifier();
+                    currentStock = size.getStock();
+                } else {
+                    // Không có size - tính tổng stock của tất cả sizes
+                    if (product.getSizes() != null && !product.getSizes().isEmpty()) {
+                        currentStock = product.getSizes().stream()
+                                .mapToInt(Size::getStock)
+                                .sum();
+                    }
+                    item.setSizeAvailable(true);
+                }
+
+                // Cập nhật stock
+                item.setAvailableStock(currentStock);
+
+                // Kiểm tra giá có thay đổi không
+                if (Math.abs(item.getUnitPrice() - currentPrice) > 0.01) {
+                    item.setOldPrice(item.getUnitPrice());
+                    item.setUnitPrice(currentPrice);
+                    item.setPriceChanged(true);
+                    item.setTotalPrice(currentPrice * item.getQuantity());
+                    cartUpdated = true;
+                    log.info("Price changed for product {}: {} -> {}", 
+                            item.getProductId(), item.getOldPrice(), currentPrice);
+                } else {
+                    item.setPriceChanged(false);
+                    item.setOldPrice(null);
+                }
+
+            } catch (Exception e) {
+                log.error("Error refreshing cart item {}: {}", item.getProductId(), e.getMessage());
+                // Giữ nguyên item nếu có lỗi, đảm bảo available=true (đã set ở trên) để không chặn user
+            }
+        }
+
+        // Lưu lại cart nếu có thay đổi
+        if (cartUpdated) {
+            cart.calculateTotalAmount();
+            saveCart(userId, cart);
+        }
+
+        return cart;
+    }
+
     // Thêm product vào giỏ hàng
     public RedisCartItemDto addItemToCart(String userId, String productId, String sizeId, int quantity) {
         RedisCartDto cart = getOrCreateCart(userId); // Lấy giỏ hàng hoặc tạo mới nếu chưa có
@@ -63,19 +177,33 @@ public class CartRedisService {
         if (product == null) throw new RuntimeException("Product not found");
         String itemKey = productId + (sizeId != null && !sizeId.isEmpty() ? ":" + sizeId : ""); // Tạo key duy nhất cho item dựa trên productId và sizeId
 
-        // Calculate price with size modifier
+        // Calculate price with size modifier and get stock
         double unitPrice = product.getPrice();
         String sizeName = null;
+        int availableStock = 0;
         if (sizeId != null && !sizeId.isEmpty()) {
             Size size = sizeRepository.findById(sizeId)
                     .orElseThrow(() -> new RuntimeException("Size not found with id: " + sizeId));
             unitPrice = product.getPrice() + size.getPriceModifier();
             sizeName = size.getName();
+            availableStock = size.getStock();
+        } else if (product.getSizes() != null && !product.getSizes().isEmpty()) {
+            availableStock = product.getSizes().stream()
+                    .mapToInt(Size::getStock)
+                    .sum();
         }
 
         RedisCartItemDto cartItem = cart.getItems().getOrDefault(itemKey, null); // Kiểm tra item đã có trong giỏ hàng chưa
+        int currentQuantity = cartItem != null ? cartItem.getQuantity() : 0;
+        int newTotalQuantity = currentQuantity + quantity;
+
+        // Validate stock
+        if (newTotalQuantity > availableStock) {
+            throw new RuntimeException("INSUFFICIENT_STOCK:" + availableStock);
+        }
+
         if (cartItem != null) {
-            cartItem.setQuantity(cartItem.getQuantity() + quantity); // Cập nhật số lượng nếu đã có
+            cartItem.setQuantity(newTotalQuantity); // Cập nhật số lượng nếu đã có
         } else {
             cartItem = RedisCartItemDto.builder() // Tạo mới item nếu chưa có
                     .cartItemId(UUID.randomUUID().toString())
@@ -183,6 +311,27 @@ public class CartRedisService {
         
         if (item == null) {
             throw new RuntimeException("Item not found in cart for key: " + itemKey);
+        }
+
+        // Validate stock before updating quantity
+        int availableStock = 0;
+        if (sizeId != null && !sizeId.isEmpty()) {
+            Size size = sizeRepository.findById(sizeId).orElse(null);
+            if (size != null) {
+                availableStock = size.getStock();
+            }
+        } else {
+            // If no size, check product's first size or product stock
+            Product product = productService.getProductById(productId);
+            if (product != null && product.getSizes() != null && !product.getSizes().isEmpty()) {
+                availableStock = product.getSizes().stream()
+                        .mapToInt(Size::getStock)
+                        .sum();
+            }
+        }
+
+        if (quantity > availableStock) {
+            throw new RuntimeException("INSUFFICIENT_STOCK:" + availableStock);
         }
 
         item.setQuantity(quantity); // Cập nhật số lượng

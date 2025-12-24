@@ -360,7 +360,7 @@ public class ShopLedgerServiceImpl implements ShopLedgerService {
 
         if (ledger.getBalanceAvailable().compareTo(request.getAmount()) < 0) {
             throw new RuntimeException(
-                    "Số dư ví không đủ. Cần: " + request.getAmount() + ", Hiện có: " + ledger.getBalanceAvailable());
+                    "INSUFFICIENT_BALANCE:" + request.getAmount() + ":" + ledger.getBalanceAvailable());
         }
 
         BigDecimal balanceBefore = ledger.getBalanceAvailable();

@@ -135,7 +135,23 @@ export default function SubscriptionPage() {
             alert(t('shopOwner.subscription.subscribeSuccess'));
             fetchData(); // Reload all data
         } catch (error) {
-            alert(error.message || t('shopOwner.subscription.subscribeError'));
+            console.error("Subscription error:", error);
+            let msg = error.response?.data?.message || error.message || t('shopOwner.subscription.subscribeError');
+
+            if (msg && msg.includes("INSUFFICIENT_BALANCE")) {
+                const parts = msg.split(":");
+                if (parts.length >= 3) {
+                    const needed = parseFloat(parts[1]);
+                    const available = parseFloat(parts[2]);
+                    msg = t('shopOwner.subscription.insufficientBalance', {
+                        needed: formatCurrency(needed),
+                        available: formatCurrency(available),
+                        defaultValue: `Số dư ví không đủ. Cần: ${formatCurrency(needed)}, Hiện có: ${formatCurrency(available)}`
+                    });
+                }
+            }
+
+            alert(msg);
             setLoading(false);
         }
     };

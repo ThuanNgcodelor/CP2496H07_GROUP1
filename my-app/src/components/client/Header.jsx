@@ -7,7 +7,7 @@ import Cookies from "js-cookie";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useCart } from "../../contexts/CartContext.jsx";
 import { getCart, getUser } from "../../api/user.js";
-import { getUserRole, isAuthenticated } from "../../api/auth.js";
+import { getUserRole, isAuthenticated, logout } from "../../api/auth.js";
 import { getNotificationsByUserId, markNotificationAsRead } from "../../api/notification.js";
 import { fetchProducts } from "../../api/product.js";
 
@@ -330,10 +330,135 @@ export default function Header() {
               </Link>
               <LanguageSwitcher />
               {isAuthenticated() ? (
-                <Link to="/information" style={{ color: 'white', textDecoration: 'none', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <i className="fa fa-user-circle"></i>
-                  <span className="d-none d-md-inline">{userData?.username || t('header.account')}</span>
-                </Link>
+                <div className="account-dropdown-container" style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      color: 'white',
+                      textDecoration: 'none',
+                      opacity: 0.9,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <i className="fa fa-user-circle"></i>
+                    <span className="d-none d-md-inline">{userData?.username || t('header.account')}</span>
+                  </div>
+                  <div
+                    className="account-dropdown-menu"
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      minWidth: '180px',
+                      background: 'white',
+                      borderRadius: '2px',
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                      zIndex: 1000,
+                      marginTop: '10px',
+                      opacity: 0,
+                      visibility: 'hidden',
+                      transition: 'opacity 0.2s, visibility 0.2s',
+                      paddingTop: '8px',
+                      paddingBottom: '8px'
+                    }}
+                  >
+                    {/* Arrow */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '-6px',
+                      right: '20px',
+                      width: 0,
+                      height: 0,
+                      borderLeft: '6px solid transparent',
+                      borderRight: '6px solid transparent',
+                      borderBottom: '6px solid white'
+                    }}></div>
+
+                    <Link
+                      to="/information"
+                      style={{
+                        display: 'block',
+                        padding: '10px 16px',
+                        color: '#333',
+                        textDecoration: 'none',
+                        fontSize: '14px',
+                        transition: 'background 0.2s, color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#fafafa';
+                        e.currentTarget.style.color = '#ee4d2d';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#333';
+                      }}
+                    >
+                      {t('header.myAccount') || 'Tài Khoản Của Tôi'}
+                    </Link>
+
+                    <Link
+                      to="/information/orders"
+                      style={{
+                        display: 'block',
+                        padding: '10px 16px',
+                        color: '#333',
+                        textDecoration: 'none',
+                        fontSize: '14px',
+                        transition: 'background 0.2s, color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#fafafa';
+                        e.currentTarget.style.color = '#ee4d2d';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#333';
+                      }}
+                    >
+                      {t('header.myOrders') || 'Đơn Mua'}
+                    </Link>
+
+                    <button
+                      onClick={() => {
+                        logout();
+                        navigate('/login');
+                        window.location.reload();
+                      }}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '10px 16px',
+                        color: '#333',
+                        textDecoration: 'none',
+                        fontSize: '14px',
+                        background: 'transparent',
+                        border: 'none',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s, color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#fafafa';
+                        e.currentTarget.style.color = '#ee4d2d';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#333';
+                      }}
+                    >
+                      {t('header.logout') || 'Đăng Xuất'}
+                    </button>
+                  </div>
+
+                  <style>{`
+                    .account-dropdown-container:hover .account-dropdown-menu {
+                      opacity: 1 !important;
+                      visibility: visible !important;
+                    }
+                  `}</style>
+                </div>
               ) : (
                 <>
                   <Link to="/register" style={{ color: 'white', textDecoration: 'none', opacity: 0.9 }}>

@@ -68,6 +68,18 @@ public class VoucherService {
     }
 
     /**
+     * Get shopOwnerId from voucherId
+     * Returns null if voucher not found (for platform vouchers, handle separately)
+     */
+    public String getVoucherShopOwnerId(String voucherId) {
+        if (voucherId == null || voucherId.isBlank()) {
+            return null;
+        }
+        ShopVoucher voucher = shopVoucherRepository.findById(voucherId).orElse(null);
+        return voucher != null ? voucher.getShopOwnerId() : null;
+    }
+
+    /**
      * Validate ShopVoucher và tính số tiền giảm cho đơn hàng
      */
     public VoucherValidateResponse validateShopVoucher(String code, String shopOwnerId, BigDecimal orderAmount) {

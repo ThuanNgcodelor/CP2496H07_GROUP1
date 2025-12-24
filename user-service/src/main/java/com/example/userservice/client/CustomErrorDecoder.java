@@ -20,10 +20,14 @@ public class CustomErrorDecoder implements ErrorDecoder {
         try (InputStream body = response.body().asInputStream()) {
             Map<String, String> errors =
                     mapper.readValue(IOUtils.toString(body, StandardCharsets.UTF_8), Map.class);
+            String msg = errors.get("message");
+            if (msg == null) {
+                msg = errors.get("error");
+            }
             return GenericErrorResponse
                     .builder()
                     .httpStatus(HttpStatus.valueOf(response.status()))
-                    .message(errors.get("error"))
+                    .message(msg)
                     .build();
 
         } catch (IOException exception) {

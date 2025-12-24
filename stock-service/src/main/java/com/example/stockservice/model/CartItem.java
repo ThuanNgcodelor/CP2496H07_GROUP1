@@ -31,4 +31,15 @@ public class CartItem extends BaseEntity {
     public void setTotalPrice() {
         this.totalPrice = this.unitPrice * this.quantity;
     }
+
+    @Transient
+    private Boolean priceChanged;
+    @Transient
+    private Double oldPrice;
+    @Transient
+    private Integer availableStock;
+    @Transient
+    private Boolean productAvailable;
+    @Transient
+    private Boolean sizeAvailable;
 }

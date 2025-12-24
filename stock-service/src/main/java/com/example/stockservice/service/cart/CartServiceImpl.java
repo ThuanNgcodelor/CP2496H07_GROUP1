@@ -23,7 +23,8 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public Cart getCartByUserId(String userId) {
-        RedisCartDto redisCart = cartRedisService.getCartByUserId(userId);
+        // Use getCartWithRefresh to sync cart data with DB (Refresh on View strategy)
+        RedisCartDto redisCart = cartRedisService.getCartWithRefresh(userId);
         if (redisCart == null) {
             return null;
         }
@@ -96,6 +97,13 @@ public class CartServiceImpl implements CartService {
             if (item.getCartItemId() != null) {
                 cartItem.setId(item.getCartItemId());
             }
+
+            // Map sync fields
+            cartItem.setPriceChanged(item.getPriceChanged());
+            cartItem.setOldPrice(item.getOldPrice());
+            cartItem.setAvailableStock(item.getAvailableStock());
+            cartItem.setProductAvailable(item.getProductAvailable());
+            cartItem.setSizeAvailable(item.getSizeAvailable());
             
             cart.getItems().add(cartItem);
         });

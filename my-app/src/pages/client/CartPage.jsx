@@ -97,14 +97,14 @@ export default function CartPage() {
       const ownerIds = {}; // Store shopOwnerId
       const productCache = new Map();
       const shopOwnerCache = new Map();
-      
+
       await Promise.all(
         cart.items.map(async (item) => {
           const pid = item.productId ?? item.id;
           if (!pid) return;
           let imageId = item.imageId;
           let shopOwnerId = null;
-          
+
           // ALWAYS fetch product info to get userId (shop owner)
           try {
             let prod = productCache.get(pid);
@@ -119,9 +119,9 @@ export default function CartPage() {
           } catch {
             // ignore
           }
-          
+
           if (item.productName) names[pid] = item.productName;
-          
+
           // Fetch shop owner info using userId from product
           if (shopOwnerId) {
             try {
@@ -140,7 +140,7 @@ export default function CartPage() {
           } else {
             owners[pid] = item.shopOwnerName || item.shopName || 'Unknown Shop';
           }
-          
+
           // Fetch image
           if (imageId) {
             try {
@@ -157,7 +157,7 @@ export default function CartPage() {
           }
         })
       );
-      
+
       if (!revoked) {
         setImageUrls(urls);
         setProductNames((prev) => ({ ...prev, ...names }));
@@ -169,6 +169,32 @@ export default function CartPage() {
       revoked = true;
       blobUrls.forEach((u) => URL.revokeObjectURL(u));
     };
+  }, [cart]);
+
+  // Clean up selection when items become unavailable
+  useEffect(() => {
+    if (!cart?.items) return;
+
+    setSelected((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+
+      cart.items.forEach((item) => {
+        const pid = item.productId ?? item.id;
+        const key = `${pid}:${item.sizeId || "no-size"}`;
+
+        // If selected but unavailable/out of stock -> deselect
+        if (next.has(key)) {
+          const isUnavailable = !item.productAvailable || !item.sizeAvailable || item.availableStock === 0 || item.quantity > item.availableStock;
+          if (isUnavailable || !item.productAvailable) { // Double check availability flags
+            next.delete(key);
+            changed = true;
+          }
+        }
+      });
+
+      return changed ? next : prev;
+    });
   }, [cart]);
 
   const items = cart?.items ?? [];
@@ -283,7 +309,34 @@ export default function CartPage() {
           const data = await getCart();
           setCart(data);
         } catch (e) {
-          Swal.fire("Error", t("cart.quantity.updateFailed"), "error");
+          // Check for INSUFFICIENT_STOCK error from backend
+          const errorMessage = e?.response?.data?.message || e?.message || '';
+          if (errorMessage.includes('INSUFFICIENT_STOCK')) {
+            const availableStock = parseInt(errorMessage.split(':')[1]) || 0;
+            Swal.fire({
+              icon: 'warning',
+              title: t('cart.quantity.onlyAvailable', { count: availableStock }),
+              text: t('cart.checkout.reduceQuantity'),
+              confirmButtonColor: '#ee4d2d'
+            });
+            // Reset to max available quantity
+            setCart((prev) => {
+              if (!prev?.items) return prev;
+              return {
+                ...prev,
+                items: prev.items.map((it) =>
+                  (it.productId || it.id) === productId && it.sizeId === sizeId
+                    ? { ...it, quantity: availableStock, totalPrice: (it.unitPrice || it.price) * availableStock }
+                    : it
+                ),
+              };
+            });
+          } else {
+            Swal.fire("Error", t("cart.quantity.updateFailed"), "error");
+          }
+          // Refresh cart from server to get correct state
+          const data = await getCart();
+          setCart(data);
         } finally {
           setUpdatingQuantities((prev) => {
             const next = new Set(prev);

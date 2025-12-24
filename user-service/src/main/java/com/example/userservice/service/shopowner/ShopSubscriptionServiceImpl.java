@@ -5,6 +5,8 @@ import com.example.userservice.dto.DeductSubscriptionRequestDTO;
 import com.example.userservice.dto.ShopSubscriptionDTO;
 import com.example.userservice.model.ShopSubscription;
 import com.example.userservice.repository.ShopSubscriptionRepository;
+import com.example.userservice.request.subscription.CreateShopSubscriptionRequest;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,9 +34,9 @@ public class ShopSubscriptionServiceImpl implements ShopSubscriptionService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ShopSubscriptionDTO subscribe(String shopOwnerId,
-            com.example.userservice.request.subscription.CreateShopSubscriptionRequest request) {
+            CreateShopSubscriptionRequest request) {
         // 1. Get Plan
         com.example.userservice.model.SubscriptionPlan plan = subscriptionPlanRepository.findById(request.getPlanId())
                 .orElseThrow(() -> new RuntimeException("Subscription Plan not found"));
@@ -59,7 +61,37 @@ public class ShopSubscriptionServiceImpl implements ShopSubscriptionService {
         try {
             orderServiceClient.deductSubscriptionFee(deductRequest);
         } catch (Exception e) {
-            throw new RuntimeException("Payment failed: " + e.getMessage());
+            String errorMsg = e.getMessage();
+            
+            // Try to extract content if it's a FeignException
+            if (e instanceof feign.FeignException) {
+                feign.FeignException fe = (feign.FeignException) e;
+                String content = fe.contentUTF8();
+                System.out.println("Feign Error Content: " + content); // Debug log
+                
+                if (content != null && !content.isEmpty()) {
+                    try {
+                        com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(content);
+                        if (node.has("message")) {
+                            errorMsg = node.get("message").asText();
+                        }
+                    } catch (Exception jsonEx) {
+                        // If json parsing fails, check if content is simple text
+                        if (content.length() < 200) errorMsg = content;
+                    }
+                }
+            } else {
+                 System.out.println("Non-Feign Exception caught: " + e.getClass().getName() + " Msg: " + e.getMessage());
+            }
+            
+            // Clean up error message if it contains "Internal Server Error" generic text
+            if (errorMsg != null && errorMsg.contains("Internal Server Error")) {
+                 // Try to fallback to a better message if possible, or leave it
+            }
+
+            // Always throw 400 so frontend can handle it
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, errorMsg);
         }
 
         // 4. Deactivate current active subscription if exists

@@ -26,4 +26,15 @@ public class RedisCartItemDto {
     private Double originalPrice;   // Giá gốc (để hiển thị gạch ngang)
     private Double livePrice;       // Giá live tại thời điểm thêm
     private Boolean isFromLive;     // Flag đánh dấu item từ live
+    
+    // Data sync fields - Refresh on View
+    @Builder.Default
+    private Boolean priceChanged = false;    // Flag giá đã thay đổi so với khi thêm
+    private Double oldPrice;                  // Giá cũ (khi priceChanged = true)
+    @Builder.Default
+    private Integer availableStock = 0;       // Số lượng còn trong kho hiện tại
+    @Builder.Default
+    private Boolean productAvailable = true;  // Sản phẩm còn tồn tại không
+    @Builder.Default
+    private Boolean sizeAvailable = true;     // Size còn tồn tại không
 }

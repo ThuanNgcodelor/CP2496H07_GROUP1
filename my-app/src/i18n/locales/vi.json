@@ -26,6 +26,8 @@
     "saving": "Đang lưu...",
     "updating": "Đang cập nhật...",
     "complete": "Hoàn thành",
+    "seconds": "giây",
+    "processing": "Đang xử lý...",
     "status": {
       "title": "Trạng thái",
       "pending": "Đang chờ",
@@ -56,7 +58,10 @@
     "myShop": "Cửa hàng của tôi",
     "searchPlaceholder": "SIÊU KHUYẾN MÃI GIẢM ĐẾN 20% (*)",
     "findShop": "Tìm cửa hàng '{{query}}'",
-    "product": "Sản phẩm"
+    "product": "Sản phẩm",
+    "myAccount": "Tài Khoản Của Tôi",
+    "myOrders": "Đơn Mua",
+    "logout": "Đăng Xuất"
   },
   "footer": {
     "customerService": "CHĂM SÓC KHÁCH HÀNG",
@@ -117,7 +122,24 @@
       "selectAddress": "Chọn địa chỉ",
       "emptyCart": "Giỏ hàng trống",
       "cartEmpty": "Giỏ hàng của bạn trống. Vui lòng thêm sản phẩm trước khi thanh toán.",
-      "goShopping": "Đi mua sắm"
+      "goShopping": "Đi mua sắm",
+      "orderSuccess": "Đặt hàng thành công!",
+      "orderProcessing": "Đơn hàng của bạn đang được xử lý...",
+      "redirectingIn": "Chuyển đến danh sách đơn hàng sau",
+      "viewOrders": "Xem đơn hàng ngay"
+    },
+    "voucher": {
+      "enterCode": "Vui lòng nhập mã voucher",
+      "shopNotFound": "Không tìm thấy thông tin shop",
+      "applySuccess": "Áp dụng voucher thành công!",
+      "invalid": "Voucher không hợp lệ",
+      "applyFailed": "Không thể áp dụng voucher",
+      "removed": "Đã hủy voucher",
+      "shopVoucherApplied": "Voucher của shop {{shopName}}",
+      "shopVoucher": "Voucher của Shop",
+      "placeholder": "Nhập mã voucher",
+      "apply": "Áp dụng",
+      "cancel": "Hủy"
     },
     "address": {
       "selectDeliveryAddress": "Chọn địa chỉ giao hàng",
@@ -137,8 +159,7 @@
       "createdAt": "Ngày tạo",
       "eta": "Dự kiến giao",
       "itemsOrdered": "Số sản phẩm",
-      "totalAmount": "Tổng tiền",
-      "viewOrders": "Xem đơn hàng"
+      "totalAmount": "Tổng tiền"
     }
   },
   "payment": {
@@ -378,7 +399,8 @@
     "totalPayment": "Tổng thanh toán",
     "placeOrder": "Đặt hàng",
     "termsAgreement": "Nhấn \"Đặt hàng\" đồng nghĩa với việc bạn đồng ý tuân theo Điều khoản Shopee",
-    "terms": "Điều khoản Shopee"
+    "terms": "Điều khoản Shopee",
+    "shopSubtotal": "Tổng số tiền"
   },
   "orders": {
     "myOrders": "Đơn hàng của tôi",
@@ -424,7 +446,12 @@
     "cancelSuccessWithRefund": "Đã hủy đơn hàng thành công. Tiền đã được hoàn vào ví của bạn. Bạn có thể rút tiền về tài khoản ngân hàng bất cứ lúc nào.",
     "cancelError": "Hủy đơn hàng thất bại",
     "reviewSuccess": "Đã gửi đánh giá thành công!",
-    "reviewError": "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại."
+    "reviewError": "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.",
+    "chat": "Chat",
+    "viewShop": "Xem Shop",
+    "deliverySuccessful": "Giao hàng thành công",
+    "loadingShop": "Đang tải...",
+    "shopNotAvailable": "Thông tin shop chưa sẵn sàng. Vui lòng thử lại."
   },
   "rating": {
     "shareWhatYouLike": "Chia sẻ những gì bạn thích về sản phẩm này với những người mua khác."

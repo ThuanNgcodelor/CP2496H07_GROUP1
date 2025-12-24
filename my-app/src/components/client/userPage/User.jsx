@@ -284,26 +284,7 @@ export default function User() {
                                     {t('user.myOrders')}
                                 </button>
 
-                                <button
-                                    onClick={() => handleTabClick("role-request")}
-                                    style={{
-                                        width: '100%',
-                                        padding: '14px 16px',
-                                        border: 'none',
-                                        background: activeTab === "role-request" ? '#fff5f0' : 'transparent',
-                                        color: activeTab === "role-request" ? '#ee4d2d' : '#222',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        fontSize: '14px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    <i className="fa fa-user-tie" style={{ width: '20px', textAlign: 'center' }}></i>
-                                    {t('user.roleRequest')}
-                                </button>
+
 
                                 <button
                                     onClick={() => handleTabClick("vouchers")}
@@ -384,11 +365,11 @@ export default function User() {
                                 )}
 
                                 {/* Role Request Tab */}
-                                {activeTab === "role-request" && (
+                                {/* {activeTab === "role-request" && (
                                     <div className="p-4">
                                         <RoleRequestForm />
                                     </div>
-                                )}
+                                )} */}
 
                                 {/* Notifications Tab */}
                                 {activeTab === "notifications" && (
