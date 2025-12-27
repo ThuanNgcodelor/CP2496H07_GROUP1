@@ -90,14 +90,30 @@ export default function AIChatWidget() {
     const suggestedQuestions = [
         { key: 'aiChat.suggestions.findProducts', default: 'Tìm sản phẩm' },
         { key: 'aiChat.suggestions.saleProducts', default: 'Sản phẩm đang giảm giá' },
+        { key: 'aiChat.suggestions.myOrders', default: 'Đơn hàng của tôi' },
         { key: 'aiChat.suggestions.today', default: 'Hôm nay thứ mấy?' }
     ];
 
-    // Render message content với markdown đơn giản
+    // Handle click on order link - navigate to order tracking page
+    const handleOrderClick = (orderId) => {
+        navigate(`/order/track/${orderId}`);
+        setIsOpen(false); // Close chat widget
+    };
+
+    // Handle click on product link - navigate to product detail page
+    const handleProductClick = (productId) => {
+        navigate(`/product/${productId}`);
+        setIsOpen(false); // Close chat widget
+    };
+
+    // Render message content với markdown đơn giản và clickable IDs
     const renderMessageContent = (msg) => {
         if (!msg.content) return null;
 
-        const formattedContent = msg.content
+        // UUID pattern for IDs
+        const uuidPattern = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+
+        let formattedContent = msg.content
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`(.*?)`/g, '<code>$1</code>')
@@ -105,10 +121,39 @@ export default function AIChatWidget() {
             .replace(/\n\d\. /g, (match) => '<br/>' + match.trim() + ' ')
             .replace(/\n/g, '<br/>');
 
+        // Determine if this is about orders or products based on content
+        const isOrderContext = /order|đơn hàng|đơn|trạng thái/i.test(msg.content);
+        const isProductContext = /sản phẩm|product|giá|price/i.test(msg.content) && !isOrderContext;
+
+        // Replace UUIDs with clickable links based on context
+        formattedContent = formattedContent.replace(uuidPattern, (match) => {
+            if (isOrderContext) {
+                return `<span class="ai-order-link" data-id="${match}" data-type="order">${match}</span>`;
+            } else if (isProductContext) {
+                return `<span class="ai-order-link ai-product-link" data-id="${match}" data-type="product">${match}</span>`;
+            }
+            // Default to order link for unknown context
+            return `<span class="ai-order-link" data-id="${match}" data-type="order">${match}</span>`;
+        });
+
         return (
             <div
                 className="ai-message-content"
                 dangerouslySetInnerHTML={{ __html: formattedContent }}
+                onClick={(e) => {
+                    // Check if clicked on a link
+                    if (e.target.classList.contains('ai-order-link') || e.target.classList.contains('ai-product-link')) {
+                        const id = e.target.getAttribute('data-id');
+                        const type = e.target.getAttribute('data-type');
+                        if (id) {
+                            if (type === 'product') {
+                                handleProductClick(id);
+                            } else {
+                                handleOrderClick(id);
+                            }
+                        }
+                    }
+                }}
             />
         );
     };

@@ -59,21 +59,42 @@ public class ProductTools {
     @Description("Search products by name or keyword. Use this when user wants to find products.")
     public Function<SearchRequest, SearchResponse> searchProducts() {
         return request -> {
-            log.info("Tool called: searchProducts({})", request.keyword());
+            log.info("=== Tool called: searchProducts(keyword='{}') ===", request.keyword());
             try {
                 Page<Product> results = productService.searchProductByKeyword(request.keyword(), 1, 5);
+                log.info("Database returned {} products", results.getTotalElements());
+                
                 List<ProductInfo> products = results.getContent().stream()
                         .map(this::toProductInfo)
                         .collect(Collectors.toList());
 
-                String message = products.isEmpty()
-                        ? "Không tìm thấy sản phẩm nào với từ khóa '" + request.keyword() + "'"
-                        : "Tìm thấy " + products.size() + " sản phẩm";
+                // Log each product found
+                for (ProductInfo p : products) {
+                    log.info("  - Product: {} | ID: {} | Price: {} | Discount: {}", 
+                            p.name(), p.id(), p.price(), p.discountPercent());
+                }
 
-                return new SearchResponse(products, message);
+                // Build formatted message with IDs for AI to use directly
+                StringBuilder message = new StringBuilder();
+                if (products.isEmpty()) {
+                    message.append("Không tìm thấy sản phẩm nào với từ khóa '").append(request.keyword()).append("'");
+                } else {
+                    message.append("Tìm thấy ").append(products.size()).append(" sản phẩm:\n\n");
+                    for (ProductInfo p : products) {
+                        message.append("• **").append(p.name()).append("**\n");
+                        message.append("  - Giá: ").append(p.price()).append("\n");
+                        if (p.discountPercent() != null) {
+                            message.append("  - Giảm giá: ").append(p.discountPercent()).append("\n");
+                        }
+                        message.append("  - ID: ").append(p.id()).append("\n\n");
+                    }
+                }
+
+                log.info("Returning {} products to AI", products.size());
+                return new SearchResponse(products, message.toString());
             } catch (Exception e) {
                 log.error("Error searching products: ", e);
-                return new SearchResponse(List.of(), "Lỗi khi tìm kiếm sản phẩm");
+                return new SearchResponse(List.of(), "Lỗi khi tìm kiếm sản phẩm: " + e.getMessage());
             }
         };
     }

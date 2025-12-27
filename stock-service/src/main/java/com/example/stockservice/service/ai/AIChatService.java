@@ -38,18 +38,23 @@ public class AIChatService {
         - Thời gian hiện tại: {current_time}
         - Ngày: {current_date} ({day_of_week})
         - Ngôn ngữ ưu tiên: {language}
+        - User ID: {user_id}
         
-        QUAN TRỌNG - CÁCH SỬ DỤNG TOOLS:
-        1. Khi user hỏi về sản phẩm, tìm kiếm, giá cả → BẮT BUỘC gọi tool searchProducts hoặc getProductPrice
-        2. Khi user hỏi về sale, giảm giá, khuyến mãi → BẮT BUỘC gọi tool getDiscountedProducts
-        3. KHÔNG BAO GIỜ tự bịa dữ liệu sản phẩm
-        4. Nếu user nói "tìm X", "sản phẩm X", "có X không" → Gọi searchProducts(keyword=X)
+        CẢNH BÁO QUAN TRỌNG - ĐỌC KỸ
         
-        QUY TẮC TRẢ LỜI:
-        - KHÔNG hiển thị ID sản phẩm
-        - Chỉ hiển thị: tên, giá, % giảm giá (nếu có)
-        - Tối đa 5 sản phẩm
-        - Format: **Tên SP** - Giá: XXX₫ (Giảm X%)
+        BẠN TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ BỊA DỮ LIỆU!
+        - KHÔNG được tự nghĩ ra tên sản phẩm
+        - KHÔNG được tự nghĩ ra giá tiền  
+        - KHÔNG được tự nghĩ ra ID sản phẩm
+        - KHÔNG được tự nghĩ ra đơn hàng
+        
+        BẠN BẮT BUỘC PHẢI GỌI TOOL VÀ COPY CHÍNH XÁC KẾT QUẢ:
+        
+        1. Khi user tìm sản phẩm → GỌI searchProducts → COPY NGUYÊN VĂN message từ tool
+        2. Khi user hỏi đơn hàng → GỌI getMyOrders → COPY NGUYÊN VĂN message từ tool
+        
+        QUAN TRỌNG: Message từ tool đã được format sẵn, bạn CHỈ CẦN COPY và hiển thị.
+        KHÔNG ĐƯỢC thêm sản phẩm, KHÔNG ĐƯỢC bớt sản phẩm, KHÔNG ĐƯỢC thay đổi ID.
         
         QUY TẮC NGÔN NGỮ:
         - Tiếng Việt → trả lời tiếng Việt
@@ -62,13 +67,17 @@ public class AIChatService {
     public AIChatService(ChatModel chatModel, LanguageFilter languageFilter, ProductTools productTools) {
         this.languageFilter = languageFilter;
 
-        // Build ChatClient với các tools
+        // Build ChatClient với các tools (Product + Order)
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultFunctions(
+                        // Product tools
                         "searchProducts",
                         "getProductPrice", 
                         "getDiscountedProducts",
-                        "getProductDetails"
+                        "getProductDetails",
+                        // Order tools
+                        "getMyOrders",
+                        "getOrderStatus"
                 )
                 .build();
     }
@@ -125,15 +134,20 @@ public class AIChatService {
                 }
             }
 
+            // 6. Get userId from request
+            String userId = request.getUserId();
+            if (userId == null) userId = "not_logged_in";
+
             String systemPrompt = SYSTEM_PROMPT
                     .replace("{current_time}", currentTime)
                     .replace("{current_date}", currentDate)
                     .replace("{day_of_week}", dayOfWeek)
                     .replace("{language}", language)
+                    .replace("{user_id}", userId)
                     .replace("{conversation_history}", historyBuilder.toString());
 
-            log.info("Processing: '{}' (ConvId: {}, History: {} msgs)", 
-                    userMessage, conversationId.substring(0, 8), history.size());
+            log.info("Processing: '{}' (ConvId: {}, UserId: {}, History: {} msgs)", 
+                    userMessage, conversationId.substring(0, 8), userId, history.size());
 
             // 6. Call AI with Function Calling
             String aiResponse = chatClient.prompt()

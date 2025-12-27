@@ -9,6 +9,7 @@ import com.example.orderservice.model.Order;
 import com.example.orderservice.repository.ShippingOrderRepository;
 import com.example.orderservice.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -887,16 +888,7 @@ public class OrderController {
      */
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderDto> getOrderByIdForClient(@PathVariable String orderId) {
-        try {
-            Order order = orderService.getOrderById(orderId);
-            OrderDto dto = enrichOrderDto(order);
-            return ResponseEntity.ok(dto);
-        } catch (RuntimeException e) {
-            if (e.getMessage().toLowerCase().contains("not found")) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-            }
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return getOrderDtoResponseEntity(orderId);
     }
 
     @GetMapping("/shop-owner/dashboard-stats")
@@ -907,6 +899,47 @@ public class OrderController {
             return ResponseEntity.ok(stats);
         } catch (Exception e) {
             e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    // ============ Internal Endpoints for AI Chat Service ============
+    
+    /**
+     * Get orders by userId - for AI chat to query user's orders
+     * Internal endpoint - no authentication required (called from stock-service)
+     */
+    @GetMapping("/internal/user-orders/{userId}")
+    public ResponseEntity<List<OrderDto>> getOrdersByUserIdInternal(@PathVariable String userId) {
+        try {
+            List<Order> orders = orderService.getUserOrders(userId);
+            List<OrderDto> orderDtos = enrichOrderDtos(orders);
+            return ResponseEntity.ok(orderDtos);
+        } catch (Exception e) {
+            log.error("Error getting orders for userId {}: {}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+    
+    /**
+     * Get order by ID - for AI chat to query order details
+     * Internal endpoint - no authentication required (called from stock-service)
+     */
+    @GetMapping("/internal/orders/{orderId}")
+    public ResponseEntity<OrderDto> getOrderByIdInternal(@PathVariable String orderId) {
+        return getOrderDtoResponseEntity(orderId);
+    }
+
+    @NonNull
+    private ResponseEntity<OrderDto> getOrderDtoResponseEntity(@PathVariable String orderId) {
+        try {
+            Order order = orderService.getOrderById(orderId);
+            OrderDto dto = enrichOrderDto(order);
+            return ResponseEntity.ok(dto);
+        } catch (RuntimeException e) {
+            if (e.getMessage().toLowerCase().contains("not found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+            }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }

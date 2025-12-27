@@ -1,5 +1,6 @@
 package com.example.stockservice.config;
 
+import com.example.stockservice.service.ai.OrderTools;
 import com.example.stockservice.service.ai.ProductTools;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,11 +15,15 @@ import java.util.function.Function;
 public class AiFunctionConfig {
 
     private final ProductTools productTools;
+    private final OrderTools orderTools;
 
-    public AiFunctionConfig(ProductTools productTools) {
+    public AiFunctionConfig(ProductTools productTools, OrderTools orderTools) {
         this.productTools = productTools;
+        this.orderTools = orderTools;
     }
 
+    // ============ Product Tools ============
+    
     @Bean
     @Description("Search products by name or keyword. Use this when user wants to find products.")
     public Function<ProductTools.SearchRequest, ProductTools.SearchResponse> searchProducts() {
@@ -41,5 +46,19 @@ public class AiFunctionConfig {
     @Description("Get detailed information of a product by its ID.")
     public Function<ProductTools.ProductDetailRequest, ProductTools.ProductDetailResponse> getProductDetails() {
         return productTools.getProductDetails();
+    }
+    
+    // ============ Order Tools ============
+    
+    @Bean
+    @Description("MUST USE when user asks about orders, my orders, order history, order status, đơn hàng, đơn của tôi, xem đơn, check order. Returns list of user's orders with status. Parameter: userId (string)")
+    public Function<OrderTools.GetMyOrdersRequest, OrderTools.GetMyOrdersResponse> getMyOrders() {
+        return orderTools.getMyOrders();
+    }
+    
+    @Bean
+    @Description("Get details of a specific order by its ID. Use when user provides an order ID to check. Parameter: orderId (string)")
+    public Function<OrderTools.GetOrderStatusRequest, OrderTools.GetOrderStatusResponse> getOrderStatus() {
+        return orderTools.getOrderStatus();
     }
 }

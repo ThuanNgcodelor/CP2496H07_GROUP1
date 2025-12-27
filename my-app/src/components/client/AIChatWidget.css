@@ -458,3 +458,32 @@
 .ai-message-content p:last-child {
     margin-bottom: 0;
 }
+
+/* Clickable Order ID Links */
+.ai-order-link {
+    color: #667eea;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.ai-order-link:hover {
+    color: #764ba2;
+    background: rgba(102, 126, 234, 0.2);
+    text-decoration: none;
+}
+
+/* Product link - green color to differentiate from orders */
+.ai-product-link {
+    color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
+}
+
+.ai-product-link:hover {
+    color: #1e7e34;
+    background: rgba(40, 167, 69, 0.2);
+}
