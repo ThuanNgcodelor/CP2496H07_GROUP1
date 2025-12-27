@@ -1,5 +1,6 @@
 package com.example.orderservice.service;
 
+import com.example.orderservice.dto.SelectedItemDto;
 import org.springframework.data.domain.Page;
 import com.example.orderservice.dto.AddressDto;
 import com.example.orderservice.dto.FrontendOrderRequest;
@@ -7,7 +8,9 @@ import com.example.orderservice.dto.UpdateOrderRequest;
 import com.example.orderservice.model.Order;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 public interface OrderService {
     com.example.orderservice.dto.AnalyticsDto getAnalytics(String shopOwnerId, java.time.LocalDate startDate,
@@ -15,9 +18,9 @@ public interface OrderService {
 
     byte[] exportAnalytics(String shopOwnerId, java.time.LocalDate startDate, java.time.LocalDate endDate);
 
-    Order returnOrder(String orderId, String reason);//
+    Order returnOrder(String orderId, String reason);
 
-    java.util.Map<String, Object> getShopStats(String shopOwnerId);//
+    java.util.Map<String, Object> getShopStats(String shopOwnerId);
 
     Page<Order> getOrdersByShopOwner(String shopOwnerId, List<String> status, Integer pageNo, Integer pageSize);
 
@@ -27,16 +30,9 @@ public interface OrderService {
 
     List<Order> getUserOrders(String userId);
 
-    // CRUD methods
-    List<Order> getAllOrders(String status);
-
     Order updateOrder(String orderId, UpdateOrderRequest request);
 
     Order updateOrderStatus(String orderId, String status);
-
-    void deleteOrder(String orderId);
-
-    List<Order> searchOrders(String userId, String status, String startDate, String endDate);
 
     // Address methods
     List<AddressDto> getUserAddresses(HttpServletRequest request);
@@ -46,9 +42,15 @@ public interface OrderService {
     // Frontend order creation
     void orderByKafka(FrontendOrderRequest orderRequest, HttpServletRequest request);
 
+    /**
+     * Tạo order từ payment service với raw Map data
+     * Xử lý parsing và conversion trong Service thay vì Controller
+     */
+    Order createOrderFromPaymentData(Map<String, Object> orderData);
+
     Order createOrderFromPayment(String userId, String addressId,
-            List<com.example.orderservice.dto.SelectedItemDto> selectedItems, java.math.BigDecimal shippingFee,
-            String voucherId, Double voucherDiscount);
+                                 List<SelectedItemDto> selectedItems, BigDecimal shippingFee,
+                                 String voucherId, Double voucherDiscount);
 
     Order cancelOrder(String orderId, String reason);
 
@@ -66,4 +68,14 @@ public interface OrderService {
 
     // Client confirms receipt -> COMPLETE
     Order confirmOrder(String orderId);
+
+    /**
+     * Bulk update order status via Kafka (async processing)
+     * @param shopOwnerId ID của shop owner
+     * @param orderIds Danh sách order IDs cần update
+     * @param newStatus Trạng thái mới
+     * @return Map chứa accepted, rejected counts và message
+     */
+    Map<String, Object> bulkUpdateOrderStatus(String shopOwnerId, List<String> orderIds, String newStatus);
 }
+

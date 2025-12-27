@@ -18,11 +18,9 @@ public class SizeController {
 
     @GetMapping("/getSizeById/{sizeId}")
     ResponseEntity<SizeDto> getSizeById(@PathVariable String sizeId) {
-        Size size = sizeRepository.findById(sizeId)
-                .orElseThrow(() -> new RuntimeException("Size not found for ID: " + sizeId));
-        
-        SizeDto sizeDto = modelMapper.map(size, SizeDto.class);
-        return ResponseEntity.status(HttpStatus.OK).body(sizeDto);
+        return sizeRepository.findById(sizeId)
+                .map(size -> ResponseEntity.ok(modelMapper.map(size, SizeDto.class)))
+                .orElse(ResponseEntity.notFound().build());
     }
 }
 

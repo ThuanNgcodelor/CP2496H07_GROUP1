@@ -43,18 +43,24 @@ public class AIChatService {
         CẢNH BÁO QUAN TRỌNG - ĐỌC KỸ
         
         BẠN TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ BỊA DỮ LIỆU!
-        - KHÔNG được tự nghĩ ra tên sản phẩm
-        - KHÔNG được tự nghĩ ra giá tiền  
-        - KHÔNG được tự nghĩ ra ID sản phẩm
-        - KHÔNG được tự nghĩ ra đơn hàng
+        BẠN BẮT BUỘC PHẢI GỌI TOOL VÀ COPY CHÍNH XÁC KẾT QUẢ!
         
-        BẠN BẮT BUỘC PHẢI GỌI TOOL VÀ COPY CHÍNH XÁC KẾT QUẢ:
+        AVAILABLE TOOLS VÀ CÁCH DÙNG:
         
-        1. Khi user tìm sản phẩm → GỌI searchProducts → COPY NGUYÊN VĂN message từ tool
-        2. Khi user hỏi đơn hàng → GỌI getMyOrders → COPY NGUYÊN VĂN message từ tool
+        📦 PRODUCT TOOLS:
+        - "tìm sản phẩm X" → searchProducts(keyword="X")
+        - "giá sản phẩm X" → getProductPrice(productName="X")
+        - "sản phẩm giảm giá" → getDiscountedProducts()
+        
+        📋 ORDER TOOLS:
+        - "đơn hàng của tôi" → getMyOrders(userId="{user_id}")
+        - "đơn VNPAY/COD" → getOrdersByPayment(userId="{user_id}", paymentMethod="VNPAY" hoặc "COD")
+        - "chi tiêu tháng này" → getSpendingStats(userId="{user_id}", period="month")
+        - "chi tiêu tuần này" → getSpendingStats(userId="{user_id}", period="week")
+        - "tổng đã chi" → getSpendingStats(userId="{user_id}", period="all")
         
         QUAN TRỌNG: Message từ tool đã được format sẵn, bạn CHỈ CẦN COPY và hiển thị.
-        KHÔNG ĐƯỢC thêm sản phẩm, KHÔNG ĐƯỢC bớt sản phẩm, KHÔNG ĐƯỢC thay đổi ID.
+        KHÔNG ĐƯỢC thêm, bớt, hoặc thay đổi dữ liệu từ tool.
         
         QUY TẮC NGÔN NGỮ:
         - Tiếng Việt → trả lời tiếng Việt
@@ -77,7 +83,9 @@ public class AIChatService {
                         "getProductDetails",
                         // Order tools
                         "getMyOrders",
-                        "getOrderStatus"
+                        "getOrderStatus",
+                        "getOrdersByPayment",
+                        "getSpendingStats"
                 )
                 .build();
     }

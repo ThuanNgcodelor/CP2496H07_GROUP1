@@ -295,3 +295,21 @@ export const getAllShopOwnerOrders = async (status = null) => {
         throw new Error("Failed to fetch all shop owner orders");
     }
 };
+
+/**
+ * Bulk update order status via Kafka (async processing)
+ * @param {Array<string>} orderIds - List of order IDs to update
+ * @param {string} newStatus - New status (e.g., 'CONFIRMED', 'CANCELLED')
+ * @returns {Promise} - Promise with accepted count and message
+ */
+export const bulkUpdateOrderStatus = async (orderIds, newStatus) => {
+    try {
+        const response = await api.post("/shop-owner/orders/bulk-update-status", {
+            orderIds,
+            newStatus
+        });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.error || "Failed to bulk update orders");
+    }
+};

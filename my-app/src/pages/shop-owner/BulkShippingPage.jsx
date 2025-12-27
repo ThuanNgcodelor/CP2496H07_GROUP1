@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders, getShippingByOrderId } from '../../api/order';
+import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders, getShippingByOrderId, bulkUpdateOrderStatus } from '../../api/order';
 import { getUserById } from '../../api/user';
 import { useTranslation } from 'react-i18next';
 import '../../components/shop-owner/ShopOwnerLayout.css';
@@ -178,19 +178,29 @@ export default function BulkShippingPage() {
         }
 
         try {
-            const updatePromises = Array.from(selectedOrders).map(orderId =>
-                updateOrderStatusForShopOwner(orderId, bulkStatus)
+            // Use Kafka bulk API for async processing (high throughput)
+            const response = await bulkUpdateOrderStatus(
+                Array.from(selectedOrders),
+                bulkStatus
             );
 
-            await Promise.all(updatePromises);
-            alert(t('shopOwner.manageOrder.successBulkUpdate', { count: selectedOrders.size }));
+            // Show processing message (async - results come via notification)
+            const message = response.message || `Đang xử lý ${response.accepted} đơn hàng...`;
+            if (response.rejected > 0) {
+                alert(`${message}\n${response.rejected} đơn bị từ chối.`);
+            } else {
+                alert(message);
+            }
+
             setSelectedOrders(new Set());
             setBulkStatus('');
-            loadOrders(); // Reload orders
+
+            // Reload after short delay (processing is async)
+            setTimeout(() => loadOrders(), 2000);
         } catch (err) {
             console.error('Error updating bulk order status:', err);
-            alert('Failed to update some orders');
-            loadOrders(); // Reload to refresh status
+            alert(err.message || 'Failed to update orders');
+            loadOrders();
         }
     };
 
@@ -435,7 +445,6 @@ export default function BulkShippingPage() {
                             >
                                 <option value="">{t('shopOwner.manageOrder.allStatus')}</option>
                                 <option value="PENDING">{t('common.status.pending')}</option>
-                                <option value="PROCESSING">{t('common.status.processing')}</option>
                                 <option value="SHIPPED">{t('common.status.shipped')}</option>
                                 <option value="DELIVERED">{t('common.status.delivered')}</option>
                                 <option value="CANCELLED">{t('common.status.cancelled')}</option>
@@ -452,7 +461,7 @@ export default function BulkShippingPage() {
                                     style={{ width: '150px' }}
                                 >
                                     <option value="">{t('shopOwner.manageOrder.selectStatus')}</option>
-                                    <option value="CONFIRMED">{t('common.status.processing')}</option>
+                                    <option value="CONFIRMED">{t('common.status.confirmed')}</option>
                                     <option value="CANCELLED">{t('common.status.cancelled')}</option>
                                     <option value="RETURNED">{t('common.status.returned')}</option>
                                 </select>

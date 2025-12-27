@@ -61,4 +61,17 @@ public class AiFunctionConfig {
     public Function<OrderTools.GetOrderStatusRequest, OrderTools.GetOrderStatusResponse> getOrderStatus() {
         return orderTools.getOrderStatus();
     }
+    
+    @Bean
+    @Description("Filter orders by payment method. Use when user asks 'đơn VNPAY', 'đơn COD', 'orders paid by VNPAY'. Parameters: userId, paymentMethod (VNPAY/COD/WALLET)")
+    public Function<OrderTools.GetOrdersByPaymentRequest, OrderTools.GetOrdersByPaymentResponse> getOrdersByPayment() {
+        return orderTools.getOrdersByPayment();
+    }
+    
+    @Bean
+    @Description("Calculate spending statistics. Use when user asks 'chi tiêu tháng này', 'tuần này bao nhiêu', 'tổng đã chi', 'total spent'. Parameters: userId, period (week/month/all)")
+    public Function<OrderTools.GetSpendingStatsRequest, OrderTools.GetSpendingStatsResponse> getSpendingStats() {
+        return orderTools.getSpendingStats();
+    }
 }
+

@@ -40,10 +40,28 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
+    private final OrderRepository orderRepository;
+    private final StockServiceClient stockServiceClient;
+    private final UserServiceClient userServiceClient;
+    private final GhnApiClient ghnApiClient;
+    private final PaymentServiceClient paymentServiceClient;
+    private final ShippingOrderRepository shippingOrderRepository;
+    private final VoucherService voucherService;
+    private final ShopLedgerService shopLedgerService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final NewTopic orderTopic;
+    private final NewTopic notificationTopic;
+    private final NewTopic updateStatusOrderTopic;
+    private final KafkaTemplate<String, CheckOutKafkaRequest> kafkaTemplate;
+    private final KafkaTemplate<String, SendNotificationRequest> kafkaTemplateSend;
+    private final KafkaTemplate<String, UpdateStatusOrderRequest> updateStatusKafkaTemplate;
+    private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
+
     @Override
     public Order returnOrder(String orderId, String reason) {
         return orderRepository.findById(orderId).map(order -> {
@@ -277,19 +295,6 @@ public class OrderServiceImpl implements OrderService {
         return stats;
     }
 
-    private final OrderRepository orderRepository;
-    private final StockServiceClient stockServiceClient;
-    private final UserServiceClient userServiceClient;
-    private final GhnApiClient ghnApiClient;
-    private final PaymentServiceClient paymentServiceClient;
-    private final ShippingOrderRepository shippingOrderRepository;
-    private final VoucherService voucherService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final NewTopic orderTopic;
-    private final NewTopic notificationTopic;
-    private final KafkaTemplate<String, CheckOutKafkaRequest> kafkaTemplate;
-    private final KafkaTemplate<String, SendNotificationRequest> kafkaTemplateSend;
-    private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
     // Scheduler for auto-complete after DELIVERED
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final TrackingEmitterService trackingEmitterService;
@@ -403,7 +408,7 @@ public class OrderServiceImpl implements OrderService {
                 } else {
                     log.warn("[CANCEL] Payment response is null for order {}, skipping refund", orderId);
                 }
-            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            } catch (HttpClientErrorException.NotFound e) {
                 // Payment không tồn tại - có thể là COD hoặc payment chưa được tạo
                 log.warn(
                         "[CANCEL] Payment not found for order {} (may be COD or payment not created yet), skipping refund",
@@ -464,15 +469,6 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
-    // CRUD Implementation
-    @Override
-    public List<Order> getAllOrders(String status) {
-        if (status != null && !status.isEmpty()) {
-            OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
-            return orderRepository.findByOrderStatus(orderStatus);
-        }
-        return orderRepository.findAll();
-    }
 
     @Override
     @Transactional
@@ -495,14 +491,6 @@ public class OrderServiceImpl implements OrderService {
 
         order.setOrderStatus(OrderStatus.valueOf(status.toUpperCase()));
         return orderRepository.save(order);
-    }
-
-    @Override
-    @Transactional
-    public void deleteOrder(String orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found for ID: " + orderId));
-        orderRepository.delete(order);
     }
 
     @Override
@@ -540,20 +528,6 @@ public class OrderServiceImpl implements OrderService {
         order.setOrderStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
         log.info("[ROLLBACK] Order {} rolled back and cancelled", orderId);
-    }
-
-    @Override
-    public List<Order> searchOrders(String userId, String status, String startDate, String endDate) {
-        if (userId != null && !userId.isEmpty()) {
-            return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        }
-
-        if (status != null && !status.isEmpty()) {
-            OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
-            return orderRepository.findByOrderStatus(orderStatus);
-        }
-
-        return orderRepository.findAll();
     }
 
     // Address-related methods
@@ -672,7 +646,6 @@ public class OrderServiceImpl implements OrderService {
             } catch (Exception e) {
                 log.error("[GROUP-BY-SHOP] Failed to get shop owner for product {}: {}",
                         item.getProductId(), e.getMessage());
-                // Put in "unknown" group if we can't determine shop
                 itemsByShop.computeIfAbsent("unknown", k -> new ArrayList<>()).add(item);
             }
         }
@@ -1146,6 +1119,72 @@ public class OrderServiceImpl implements OrderService {
         kafkaTemplate.send(orderTopic.name(), kafkaRequest);
     }
 
+    /**
+     * Tạo order từ payment service với raw Map data
+     * Di chuyển logic parsing từ Controller vào đây để đảm bảo clean architecture
+     */
+    @Override
+    @Transactional
+    public Order createOrderFromPaymentData(Map<String, Object> orderData) {
+        // 1. Extract required fields
+        String userId = (String) orderData.get("userId");
+        String addressId = (String) orderData.get("addressId");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> selectedItemsRaw = (List<Map<String, Object>>) orderData.get("selectedItems");
+
+        if (userId == null || addressId == null || selectedItemsRaw == null) {
+            throw new RuntimeException("Missing required fields: userId, addressId, selectedItems");
+        }
+
+        // 2. Parse shippingFee (handle multiple types)
+        BigDecimal shippingFee = null;
+        if (orderData.containsKey("shippingFee")) {
+            Object shippingFeeObj = orderData.get("shippingFee");
+            if (shippingFeeObj != null) {
+                if (shippingFeeObj instanceof Number) {
+                    shippingFee = BigDecimal.valueOf(((Number) shippingFeeObj).doubleValue());
+                } else if (shippingFeeObj instanceof String) {
+                    try {
+                        shippingFee = new BigDecimal((String) shippingFeeObj);
+                    } catch (NumberFormatException e) {
+                        log.warn("[PAYMENT-ORDER] Invalid shippingFee format: {}", shippingFeeObj);
+                    }
+                }
+            }
+        }
+
+        // 3. Parse voucher data
+        String voucherId = (String) orderData.get("voucherId");
+        Double voucherDiscount = null;
+        if (orderData.containsKey("voucherDiscount")) {
+            Object voucherDiscountObj = orderData.get("voucherDiscount");
+            if (voucherDiscountObj instanceof Number) {
+                voucherDiscount = ((Number) voucherDiscountObj).doubleValue();
+            }
+        }
+
+        // 4. Convert Map to SelectedItemDto
+        List<SelectedItemDto> selectedItems = selectedItemsRaw.stream()
+                .map(item -> {
+                    SelectedItemDto dto = new SelectedItemDto();
+                    dto.setProductId((String) item.get("productId"));
+                    dto.setSizeId((String) item.get("sizeId"));
+                    dto.setQuantity(((Number) item.get("quantity")).intValue());
+                    Object unitPriceObj = item.get("unitPrice");
+                    if (unitPriceObj != null) {
+                        dto.setUnitPrice(((Number) unitPriceObj).doubleValue());
+                    }
+                    return dto;
+                })
+                .collect(java.util.stream.Collectors.toList());
+
+        log.info("[PAYMENT-ORDER] Creating order - userId: {}, addressId: {}, items: {}, shippingFee: {}, voucherId: {}",
+                userId, addressId, selectedItems.size(), shippingFee, voucherId);
+
+        // 5. Delegate to existing method
+        return createOrderFromPayment(userId, addressId, selectedItems, shippingFee, voucherId, voucherDiscount);
+    }
+
     @Override
     @Transactional
     public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems,
@@ -1302,11 +1341,13 @@ public class OrderServiceImpl implements OrderService {
                 if (item.getSizeId() == null || item.getSizeId().isBlank()) {
                     throw new RuntimeException("Size ID is required for product: " + item.getProductId());
                 }
+
                 // Để test throughput mà không cần gọi Stock Service
                 if (item.getProductId() != null && item.getProductId().startsWith("test-product-")) {
                     log.info("[CONSUMER] Skipping validation for test product: {}", item.getProductId());
                     continue; // Skip validation, tiếp tục với product tiếp theo
                 }
+                // Để test throughput mà không cần gọi Stock Service
 
                 ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
                 if (product == null) {
@@ -1924,4 +1965,198 @@ public class OrderServiceImpl implements OrderService {
         order.setOrderStatus(OrderStatus.COMPLETED);
         return orderRepository.save(order);
     }
+
+    // ==================== BULK UPDATE STATUS PRODUCER ====================
+    
+    @Override
+    public Map<String, Object> bulkUpdateOrderStatus(String shopOwnerId, List<String> orderIds, String newStatus) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            throw new IllegalArgumentException("Order IDs are required");
+        }
+        
+        if (newStatus == null || newStatus.isBlank()) {
+            throw new IllegalArgumentException("New status is required");
+        }
+        
+        // Get shop owner's product IDs for validation
+        List<String> shopProductIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
+        if (shopProductIds == null || shopProductIds.isEmpty()) {
+            throw new RuntimeException("No products found for this shop owner");
+        }
+        
+        int sent = 0;
+        int rejected = 0;
+        List<String> rejectedOrderIds = new ArrayList<>();
+        
+        for (String orderId : orderIds) {
+            try {
+                Order order = orderRepository.findById(orderId).orElse(null);
+                if (order == null) {
+                    rejected++;
+                    rejectedOrderIds.add(orderId);
+                    continue;
+                }
+                
+                // Check if order has items from this shop
+                boolean belongsToShop = order.getOrderItems().stream()
+                        .anyMatch(item -> shopProductIds.contains(item.getProductId()));
+                
+                if (!belongsToShop) {
+                    rejected++;
+                    rejectedOrderIds.add(orderId);
+                    continue;
+                }
+                
+                // Build Kafka message
+                UpdateStatusOrderRequest msg = UpdateStatusOrderRequest.builder()
+                        .orderId(orderId)
+                        .shopOwnerId(shopOwnerId)
+                        .newStatus(newStatus)
+                        .timestamp(LocalDateTime.now())
+                        .build();
+                
+                // Send to Kafka (async, non-blocking)
+                updateStatusKafkaTemplate.send(updateStatusOrderTopic.name(), orderId, msg);
+                sent++;
+                
+            } catch (Exception e) {
+                log.error("[BULK-UPDATE] Failed to process order {}: {}", orderId, e.getMessage());
+                rejected++;
+                rejectedOrderIds.add(orderId);
+            }
+        }
+        
+        log.info("[BULK-UPDATE] Shop {} sent {} orders to Kafka, rejected {}", 
+                shopOwnerId, sent, rejected);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("accepted", sent);
+        response.put("rejected", rejected);
+        response.put("message", String.format("Đang xử lý %d đơn hàng...", sent));
+        if (!rejectedOrderIds.isEmpty()) {
+            response.put("rejectedOrderIds", rejectedOrderIds);
+        }
+        
+        return response;
+    }
+
+    // ==================== BULK UPDATE STATUS CONSUMER ====================
+    
+    /**
+     * Batch consumer for update-order-topic topic
+     * Processes multiple status updates in parallel for high throughput
+     */
+    @KafkaListener(
+            topics = "#{@updateStatusOrderTopic.name()}", 
+            groupId = "order-service-status-update", 
+            containerFactory = "updateStatusListenerFactory"
+    )
+    public void consumeBulkStatusUpdate(List<UpdateStatusOrderRequest> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+        
+        log.info("[BULK-STATUS-CONSUMER] Received batch of {} messages", messages.size());
+        
+        int success = 0;
+        int failed = 0;
+        Map<String, List<String>> resultsByShopOwner = new HashMap<>();
+        
+        for (UpdateStatusOrderRequest msg : messages) {
+            try {
+                log.info("[BULK-STATUS-CONSUMER] Processing: orderId={}, newStatus={}", 
+                        msg.getOrderId(), msg.getNewStatus());
+                
+                // 1. Get order
+                Order order = orderRepository.findById(msg.getOrderId()).orElse(null);
+                if (order == null) {
+                    log.error("[BULK-STATUS-CONSUMER] Order not found: {}", msg.getOrderId());
+                    failed++;
+                    addResult(resultsByShopOwner, msg.getShopOwnerId(), "FAILED:" + msg.getOrderId());
+                    continue;
+                }
+                
+                // 2. Update status
+                OrderStatus newStatus;
+                try {
+                    newStatus = OrderStatus.valueOf(msg.getNewStatus().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.error("[BULK-STATUS-CONSUMER] Invalid status: {}", msg.getNewStatus());
+                    failed++;
+                    addResult(resultsByShopOwner, msg.getShopOwnerId(), "FAILED:" + msg.getOrderId());
+                    continue;
+                }
+                
+                order.setOrderStatus(newStatus);
+                orderRepository.save(order);
+                
+                // 3. Side effects
+                if (newStatus == OrderStatus.CONFIRMED) {
+                    try {
+                        createShippingOrderForOrder(msg.getOrderId());
+                    } catch (Exception e) {
+                        log.warn("[BULK-STATUS-CONSUMER] Failed to create shipping for order {}: {}", 
+                                msg.getOrderId(), e.getMessage());
+                    }
+                }
+                
+                if (newStatus == OrderStatus.DELIVERED) {
+                    try {
+                        shopLedgerService.processOrderEarning(order);
+                    } catch (Exception e) {
+                        log.warn("[BULK-STATUS-CONSUMER] Failed to process ledger for order {}: {}", 
+                                msg.getOrderId(), e.getMessage());
+                    }
+                }
+                
+                success++;
+                addResult(resultsByShopOwner, msg.getShopOwnerId(), "SUCCESS:" + msg.getOrderId());
+                
+                log.info("[BULK-STATUS-CONSUMER] Successfully updated order {} to {}", 
+                        msg.getOrderId(), msg.getNewStatus());
+                
+            } catch (Exception e) {
+                log.error("[BULK-STATUS-CONSUMER] Failed to process order {}: {}", 
+                        msg.getOrderId(), e.getMessage(), e);
+                failed++;
+                addResult(resultsByShopOwner, msg.getShopOwnerId(), "FAILED:" + msg.getOrderId());
+            }
+        }
+        
+        // 4. Send notifications to shop owners
+        for (Map.Entry<String, List<String>> entry : resultsByShopOwner.entrySet()) {
+            String shopOwnerId = entry.getKey();
+            List<String> results = entry.getValue();
+            
+            long successCount = results.stream().filter(r -> r.startsWith("SUCCESS:")).count();
+            long failedCount = results.stream().filter(r -> r.startsWith("FAILED:")).count();
+            
+            String message = String.format(
+                    "Đã cập nhật %d đơn hàng thành công%s", 
+                    successCount,
+                    failedCount > 0 ? String.format(", %d đơn thất bại", failedCount) : ""
+            );
+            
+            try {
+                SendNotificationRequest notification = SendNotificationRequest.builder()
+                        .userId(shopOwnerId)
+                        .shopId(shopOwnerId)
+                        .orderId(null)
+                        .message(message)
+                        .isShopOwnerNotification(true)
+                        .build();
+                kafkaTemplateSend.send(notificationTopic.name(), shopOwnerId, notification);
+            } catch (Exception e) {
+                log.error("[BULK-STATUS-CONSUMER] Failed to send notification to {}: {}", 
+                        shopOwnerId, e.getMessage());
+            }
+        }
+        
+        log.info("[BULK-STATUS-CONSUMER] Batch completed: {} success, {} failed", success, failed);
+    }
+    
+    private void addResult(Map<String, List<String>> resultsByShopOwner, String shopOwnerId, String result) {
+        resultsByShopOwner.computeIfAbsent(shopOwnerId, k -> new ArrayList<>()).add(result);
+    }
 }
+

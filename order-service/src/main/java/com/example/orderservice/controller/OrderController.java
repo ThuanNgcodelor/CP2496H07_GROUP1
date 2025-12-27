@@ -19,10 +19,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 
 @RestController
 @RequestMapping("/v1/order")
@@ -38,6 +40,7 @@ public class OrderController {
     private final ShippingOrderRepository shippingOrderRepository;
     private final GhnApiClient ghnApiClient;
     private final com.example.orderservice.service.TrackingEmitterService trackingEmitterService;
+
 
     private OrderDto enrichOrderDto(Order order) {
         OrderDto dto = modelMapper.map(order, OrderDto.class);
@@ -274,8 +277,7 @@ public class OrderController {
 
     @PostMapping("/calculate-shipping-fee")
     ResponseEntity<?> calculateShippingFee(
-            @RequestBody com.example.orderservice.dto.CalculateShippingFeeRequest request,
-            HttpServletRequest httpRequest) {
+            @RequestBody CalculateShippingFeeRequest request) {
         try {
             // 1. Get customer address
             AddressDto customerAddress = userServiceClient.getAddressById(request.getAddressId()).getBody();
@@ -293,7 +295,7 @@ public class OrderController {
                         "Address missing GHN fields. Please update address with province, district, and ward."));
             }
 
-            // 3. Get shop owner address (FROM address)
+            // 3. Get shop owner address
             String shopOwnerId = request.getShopOwnerId();
 
             // If shop owner ID not provided, try to get from first product
@@ -375,7 +377,7 @@ public class OrderController {
                 if (servicesResponse != null && servicesResponse.getCode() == 200
                         && servicesResponse.getData() != null && !servicesResponse.getData().isEmpty()) {
 
-                    // Ưu tiên service_type_id = 2 (Hàng nhẹ) nếu có
+                    // Ưu tiên service_type_id = 2 (Hàng nhẹ)
                     GhnAvailableServicesResponse.ServiceData preferredService = null;
                     GhnAvailableServicesResponse.ServiceData fallbackService = null;
 
@@ -633,6 +635,37 @@ public class OrderController {
     }
 
     /**
+     * Bulk update order status via Kafka (async processing)
+     * Delegate to service for business logic
+     */
+    @PostMapping("/shop-owner/orders/bulk-update-status")
+    public ResponseEntity<?> bulkUpdateOrderStatus(
+            @RequestBody BulkUpdateStatusRequest request,
+            HttpServletRequest httpRequest) {
+        try {
+            String shopOwnerId = jwtUtil.ExtractUserId(httpRequest);
+            
+            Map<String, Object> result = orderService.bulkUpdateOrderStatus(
+                    shopOwnerId, 
+                    request.getOrderIds(), 
+                    request.getNewStatus()
+            );
+            
+            return ResponseEntity.accepted().body(result);
+            
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("No products found")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+            }
+            log.error("[BULK-UPDATE] Error: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "error", "Failed to process bulk update: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Simulate GHN status update (DEV only)
      */
     @PostMapping("/simulate-ghn-status/{ghnOrderCode}")
@@ -788,57 +821,7 @@ public class OrderController {
     @PostMapping("/internal/create-from-payment")
     public ResponseEntity<?> createOrderFromPayment(@RequestBody Map<String, Object> orderData) {
         try {
-            String userId = (String) orderData.get("userId");
-            String addressId = (String) orderData.get("addressId");
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> selectedItemsRaw = (List<Map<String, Object>>) orderData.get("selectedItems");
-
-            if (userId == null || addressId == null || selectedItemsRaw == null) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "error", "Missing required fields: userId, addressId, selectedItems"));
-            }
-
-            // Get shippingFee from orderData (may be null for old orders)
-            java.math.BigDecimal shippingFee = null;
-            if (orderData.containsKey("shippingFee")) {
-                Object shippingFeeObj = orderData.get("shippingFee");
-                if (shippingFeeObj != null) {
-                    if (shippingFeeObj instanceof Number) {
-                        shippingFee = java.math.BigDecimal.valueOf(((Number) shippingFeeObj).doubleValue());
-                    } else if (shippingFeeObj instanceof String) {
-                        try {
-                            shippingFee = new java.math.BigDecimal((String) shippingFeeObj);
-                        } catch (NumberFormatException e) {
-                            // Ignore invalid format
-                        }
-                    }
-                }
-            }
-
-            // Get voucher data from orderData
-            String voucherId = (String) orderData.get("voucherId");
-            Double voucherDiscount = null;
-            if (orderData.containsKey("voucherDiscount")) {
-                Object voucherDiscountObj = orderData.get("voucherDiscount");
-                if (voucherDiscountObj instanceof Number) {
-                    voucherDiscount = ((Number) voucherDiscountObj).doubleValue();
-                }
-            }
-
-            // Convert Map to SelectedItemDto
-            List<SelectedItemDto> selectedItems = selectedItemsRaw.stream()
-                    .map(item -> {
-                        SelectedItemDto dto = new SelectedItemDto();
-                        dto.setProductId((String) item.get("productId"));
-                        dto.setSizeId((String) item.get("sizeId"));
-                        dto.setQuantity(((Number) item.get("quantity")).intValue());
-                        dto.setUnitPrice(((Number) item.get("unitPrice")).doubleValue());
-                        return dto;
-                    })
-                    .collect(java.util.stream.Collectors.toList());
-
-            Order order = orderService.createOrderFromPayment(userId, addressId, selectedItems, shippingFee, voucherId,
-                    voucherDiscount);
+            Order order = orderService.createOrderFromPaymentData(orderData);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Order created successfully from payment",
@@ -959,6 +942,102 @@ public class OrderController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    // ==================== INTERNAL SHOP OWNER ENDPOINTS (for AI Chat) ====================
+
+    /**
+     * Get shop owner orders (internal)
+     */
+    @GetMapping("/internal/shop-owner/{shopOwnerId}/orders")
+    public ResponseEntity<List<OrderDto>> getShopOwnerOrdersInternal(
+            @PathVariable String shopOwnerId,
+            @RequestParam(required = false) String status) {
+        try {
+            List<Order> orders = orderService.getOrdersByShopOwner(shopOwnerId, status);
+            List<OrderDto> dtos = orders.stream()
+                    .map(this::enrichOrderDto)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(dtos);
+        } catch (Exception e) {
+            log.error("Error getting shop owner orders: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Get shop owner order statistics (internal)
+     */
+    @GetMapping("/internal/shop-owner/{shopOwnerId}/order-stats")
+    public ResponseEntity<Map<String, Object>> getShopOwnerOrderStatsInternal(
+            @PathVariable String shopOwnerId) {
+        try {
+            Map<String, Object> stats = orderService.getShopStats(shopOwnerId);
+            
+            // Build statusCounts map
+            Map<String, Long> statusCounts = new HashMap<>();
+            statusCounts.put("PENDING", ((Number) stats.getOrDefault("pending", 0)).longValue());
+            statusCounts.put("CONFIRMED", ((Number) stats.getOrDefault("processing", 0)).longValue());
+            statusCounts.put("SHIPPED", ((Number) stats.getOrDefault("shipped", 0)).longValue());
+            statusCounts.put("COMPLETED", ((Number) stats.getOrDefault("completed", 0)).longValue());
+            statusCounts.put("CANCELLED", ((Number) stats.getOrDefault("cancelled", 0)).longValue());
+            statusCounts.put("RETURNED", ((Number) stats.getOrDefault("returned", 0)).longValue());
+            
+            long total = statusCounts.values().stream().mapToLong(Long::longValue).sum();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("statusCounts", statusCounts);
+            result.put("total", total);
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error getting shop owner order stats: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Bulk confirm all pending orders (internal)
+     */
+    @PostMapping("/internal/shop-owner/{shopOwnerId}/bulk-confirm")
+    public ResponseEntity<Map<String, Object>> bulkConfirmPendingOrdersInternal(
+            @PathVariable String shopOwnerId) {
+        try {
+            // Get all pending orders
+            List<Order> pendingOrders = orderService.getOrdersByShopOwner(shopOwnerId, "PENDING");
+            int totalPending = pendingOrders.size();
+            
+            if (totalPending == 0) {
+                return ResponseEntity.ok(Map.of(
+                        "totalPending", 0,
+                        "successCount", 0,
+                        "failCount", 0,
+                        "message", "Không có đơn hàng nào đang chờ xác nhận."
+                ));
+            }
+            
+            // Use bulk update via Kafka
+            List<String> orderIds = pendingOrders.stream()
+                    .map(Order::getId)
+                    .collect(Collectors.toList());
+            
+            Map<String, Object> result = orderService.bulkUpdateOrderStatus(
+                    shopOwnerId, orderIds, "CONFIRMED");
+            
+            result.put("totalPending", totalPending);
+            result.put("successCount", result.get("accepted"));
+            result.put("failCount", result.get("rejected"));
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error bulk confirming orders: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "totalPending", 0,
+                    "successCount", 0,
+                    "failCount", 0,
+                    "message", "Lỗi: " + e.getMessage()
+            ));
         }
     }
 }

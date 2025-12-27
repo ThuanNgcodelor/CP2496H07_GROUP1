@@ -34,9 +34,9 @@ export default function LanguageSwitcher() {
       <div
         className="d-flex align-items-center gap-2"
         style={{
-          color: '#555555',
-          opacity: 0.9,
-          cursor: 'pointer',
+            color: 'white',
+            opacity: 0.9,
+            cursor: 'pointer',
           userSelect: 'none'
         }}
         onClick={() => setIsOpen(!isOpen)}

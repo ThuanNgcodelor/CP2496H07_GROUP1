@@ -137,6 +137,166 @@ public class OrderTools {
         };
     }
 
+    // ============ NEW: Filter Orders by Payment Method ============
+    
+    public record GetOrdersByPaymentRequest(String userId, String paymentMethod) {}
+    public record GetOrdersByPaymentResponse(List<OrderSummary> orders, int total, String message) {}
+
+    /**
+     * Lọc đơn hàng theo phương thức thanh toán
+     */
+    @Description("Filter orders by payment method (VNPAY, COD, WALLET). Use when user asks about orders paid with specific method.")
+    public Function<GetOrdersByPaymentRequest, GetOrdersByPaymentResponse> getOrdersByPayment() {
+        return request -> {
+            log.info("=== Tool called: getOrdersByPayment(userId={}, paymentMethod={}) ===", 
+                    request.userId(), request.paymentMethod());
+            
+            if (request.userId() == null || request.userId().isBlank()) {
+                return new GetOrdersByPaymentResponse(List.of(), 0, 
+                    "Bạn cần đăng nhập để xem đơn hàng.");
+            }
+            
+            try {
+                ResponseEntity<List<OrderDto>> response = orderServiceClient.getOrdersByUserId(request.userId());
+                
+                if (response.getBody() == null || response.getBody().isEmpty()) {
+                    return new GetOrdersByPaymentResponse(List.of(), 0, 
+                        "Bạn chưa có đơn hàng nào.");
+                }
+                
+                String paymentFilter = request.paymentMethod() != null ? request.paymentMethod().toUpperCase() : "";
+                
+                List<OrderDto> filteredOrders = response.getBody().stream()
+                    .filter(order -> {
+                        if (paymentFilter.isEmpty()) return true;
+                        String pm = order.getPaymentMethod();
+                        return pm != null && pm.toUpperCase().contains(paymentFilter);
+                    })
+                    .limit(10)
+                    .collect(Collectors.toList());
+                
+                List<OrderSummary> summaries = filteredOrders.stream()
+                    .map(this::toOrderSummary)
+                    .collect(Collectors.toList());
+                
+                // Build formatted message
+                StringBuilder message = new StringBuilder();
+                String paymentDisplay = translatePaymentMethod(paymentFilter);
+                if (summaries.isEmpty()) {
+                    message.append("Không tìm thấy đơn hàng thanh toán bằng ").append(paymentDisplay);
+                } else {
+                    message.append("Tìm thấy ").append(summaries.size())
+                           .append(" đơn hàng thanh toán bằng ").append(paymentDisplay).append(":\n\n");
+                    for (OrderSummary s : summaries) {
+                        message.append("• Đơn hàng: ").append(s.orderId()).append("\n");
+                        message.append("  - Trạng thái: ").append(s.statusDisplay()).append("\n");
+                        message.append("  - Tổng tiền: ").append(s.totalAmount()).append("\n");
+                        message.append("  - Ngày đặt: ").append(s.createdAt()).append("\n\n");
+                    }
+                }
+                
+                return new GetOrdersByPaymentResponse(summaries, summaries.size(), message.toString());
+                
+            } catch (Exception e) {
+                log.error("Error filtering orders: ", e);
+                return new GetOrdersByPaymentResponse(List.of(), 0, 
+                    "Không thể lọc đơn hàng. Vui lòng thử lại sau.");
+            }
+        };
+    }
+
+    // ============ NEW: Spending Statistics ============
+    
+    public record GetSpendingStatsRequest(String userId, String period) {} // period: "week", "month", "all"
+    public record GetSpendingStatsResponse(
+        String totalSpent,
+        int orderCount,
+        String avgOrderValue,
+        String period,
+        String message
+    ) {}
+
+    /**
+     * Tính tổng chi tiêu theo thời gian
+     */
+    @Description("Calculate spending statistics. Use when user asks about total spent, chi tiêu tháng này, tuần này, tổng đã chi.")
+    public Function<GetSpendingStatsRequest, GetSpendingStatsResponse> getSpendingStats() {
+        return request -> {
+            log.info("=== Tool called: getSpendingStats(userId={}, period={}) ===", 
+                    request.userId(), request.period());
+            
+            if (request.userId() == null || request.userId().isBlank()) {
+                return new GetSpendingStatsResponse("0₫", 0, "0₫", request.period(), 
+                    "Bạn cần đăng nhập để xem thống kê chi tiêu.");
+            }
+            
+            try {
+                ResponseEntity<List<OrderDto>> response = orderServiceClient.getOrdersByUserId(request.userId());
+                
+                if (response.getBody() == null || response.getBody().isEmpty()) {
+                    return new GetSpendingStatsResponse("0₫", 0, "0₫", request.period(), 
+                        "Bạn chưa có đơn hàng nào.");
+                }
+                
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                String period = request.period() != null ? request.period().toLowerCase() : "all";
+                
+                List<OrderDto> filteredOrders = response.getBody().stream()
+                    .filter(order -> {
+                        // Only count completed/delivered orders
+                        String status = order.getOrderStatus();
+                        if (status == null) return false;
+                        status = status.toUpperCase();
+                        if (!status.equals("COMPLETED") && !status.equals("DELIVERED")) return false;
+                        
+                        if (order.getCreatedAt() == null) return false;
+                        
+                        switch (period) {
+                            case "week":
+                                return order.getCreatedAt().isAfter(now.minusWeeks(1));
+                            case "month":
+                                return order.getCreatedAt().isAfter(now.minusMonths(1));
+                            default: // "all"
+                                return true;
+                        }
+                    })
+                    .collect(Collectors.toList());
+                
+                double totalSpent = filteredOrders.stream()
+                    .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0)
+                    .sum();
+                
+                int orderCount = filteredOrders.size();
+                double avgValue = orderCount > 0 ? totalSpent / orderCount : 0;
+                
+                String periodDisplay = switch (period) {
+                    case "week" -> "tuần này";
+                    case "month" -> "tháng này";
+                    default -> "tất cả thời gian";
+                };
+                
+                StringBuilder message = new StringBuilder();
+                message.append("📊 **Thống kê chi tiêu ").append(periodDisplay).append(":**\n\n");
+                message.append("• Tổng chi tiêu: **").append(formatPrice(totalSpent)).append("**\n");
+                message.append("• Số đơn hàng: **").append(orderCount).append(" đơn**\n");
+                message.append("• Trung bình mỗi đơn: **").append(formatPrice(avgValue)).append("**\n");
+                
+                return new GetSpendingStatsResponse(
+                    formatPrice(totalSpent),
+                    orderCount,
+                    formatPrice(avgValue),
+                    periodDisplay,
+                    message.toString()
+                );
+                
+            } catch (Exception e) {
+                log.error("Error calculating spending stats: ", e);
+                return new GetSpendingStatsResponse("0₫", 0, "0₫", request.period(), 
+                    "Không thể tính thống kê chi tiêu. Vui lòng thử lại sau.");
+            }
+        };
+    }
+
     // ============ Helper Methods ============
     
     private OrderSummary toOrderSummary(OrderDto order) {
@@ -190,8 +350,20 @@ public class OrderTools {
         };
     }
     
+    private String translatePaymentMethod(String method) {
+        if (method == null) return "Không xác định";
+        return switch (method.toUpperCase()) {
+            case "VNPAY" -> "VNPay";
+            case "COD" -> "Thanh toán khi nhận hàng (COD)";
+            case "WALLET" -> "Ví điện tử";
+            case "BANK_TRANSFER" -> "Chuyển khoản";
+            default -> method;
+        };
+    }
+    
     private String formatPrice(Double price) {
         if (price == null || price == 0) return "0₫";
         return String.format("%,.0f₫", price);
     }
 }
+
