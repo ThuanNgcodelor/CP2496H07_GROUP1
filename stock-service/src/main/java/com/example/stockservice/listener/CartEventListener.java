@@ -1,3 +1,5 @@
+package com.example.stockservice.listener;
+
 import com.example.stockservice.event.ProductUpdateKafkaEvent;
 import com.example.stockservice.service.cart.CartRedisService;
 import lombok.RequiredArgsConstructor;
