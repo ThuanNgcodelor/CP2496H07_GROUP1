@@ -1,39 +1,47 @@
-import api from '../api';
+import createApiInstance from '../createApiInstance';
+import { API_BASE_URL } from '../../config/config';
+
+const api = createApiInstance(`${API_BASE_URL}/v1/user/ads`);
 
 const adAPI = {
     createRequest: async (data) => {
         // data: { shopId, title, description, adType, imageUrl, targetUrl, durationDays }
-        const response = await api.post('/v1/user/ads/request', data);
+        const response = await api.post('/request', data);
+        return response.data;
+    },
+
+    createSystemAd: async (data) => {
+        const response = await api.post('/system', data);
         return response.data;
     },
 
     approveAd: async (id, placement) => {
-        const response = await api.put(`/v1/user/ads/${id}/approve`, null, { params: { placement } });
+        const response = await api.put(`/${id}/approve`, null, { params: { placement } });
         return response.data;
     },
 
     rejectAd: async (id, reason) => {
-        const response = await api.put(`/v1/user/ads/${id}/reject`, null, { params: { reason } });
+        const response = await api.put(`/${id}/reject`, null, { params: { reason } });
         return response.data;
     },
 
     getShopAds: async (shopId) => {
-        const response = await api.get(`/v1/user/ads/shop/${shopId}`);
+        const response = await api.get(`/shop/${shopId}`);
         return response.data;
     },
 
     getAllAds: async () => {
-        const response = await api.get('/v1/user/ads/all');
+        const response = await api.get('/all');
         return response.data;
     },
 
     getActiveAds: async (placement) => {
-        const response = await api.get('/v1/user/ads/active', { params: { placement } });
+        const response = await api.get('/active', { params: { placement } });
         return response.data;
     },
 
     deleteAd: async (id) => {
-        await api.delete(`/v1/user/ads/${id}`);
+        await api.delete(`/${id}`);
     },
 };
 

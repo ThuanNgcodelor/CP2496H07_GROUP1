@@ -142,16 +142,9 @@ export default function AdManagement() {
             // Use raw targetUrl as requested (e.g. http://localhost:5173/shop)
             // No auto-formatting to Product ID anymore.
 
-            // 1. Create Request
-            const createdAd = await adAPI.createRequest(newAd);
-
-            // 2. Auto Approve (Systems ads are auto-approved usually)
-            if (createdAd && createdAd.id) {
-                // For POPUP, we default to POPUP placement, otherwise HEADER
-                const autoPlacement = newAd.adType === 'POPUP' ? 'POPUP' : 'HEADER';
-                await adAPI.approveAd(createdAd.id, autoPlacement);
-                alert("Đã tạo và kích hoạt quảng cáo hệ thống!");
-            }
+            // 1. Create & Auto Approve
+            await adAPI.createSystemAd(newAd);
+            alert("Đã tạo và kích hoạt quảng cáo hệ thống!");
 
             setIsCreateModalOpen(false);
             setNewAd({

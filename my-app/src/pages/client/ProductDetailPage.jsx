@@ -44,6 +44,16 @@ export default function ProductDetailPage() {
     const [detailTab, setDetailTab] = useState("spec");
     const [reviewFilter, setReviewFilter] = useState("All");
     const [reviews, setReviews] = useState([]);
+    const [isFlashSale, setIsFlashSale] = useState(true);
+
+    // Sync Flash Sale state with product data
+    useEffect(() => {
+        if (product && product.flashSaleRemaining !== undefined && product.flashSaleRemaining !== null) {
+            setIsFlashSale(true);
+        } else {
+            setIsFlashSale(false);
+        }
+    }, [product]);
 
     // Note: ProductDetailPage is now public - guest can view products
     // But some actions (add to cart, buy now) require authentication
@@ -181,7 +191,8 @@ export default function ProductDetailPage() {
 
             const requestData = {
                 productId: product.id,
-                quantity: Number(qty) || 1
+                quantity: Number(qty) || 1,
+                isFlashSale: isFlashSale
             };
 
             if (selectedSizeId) {
@@ -431,9 +442,78 @@ export default function ProductDetailPage() {
                                                 </span>
                                             )}
                                         </div>
+                                        {/* Price Option Selection */}
+                                        {product.flashSaleRemaining !== undefined && product.flashSaleRemaining !== null && (
+                                            <div className="d-flex gap-2 mb-3">
+                                                <button
+                                                    className={`btn ${isFlashSale ? 'btn-danger' : 'btn-outline-danger'}`}
+                                                    onClick={() => setIsFlashSale(true)}
+                                                    style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+                                                >
+                                                    {product.flashSaleRemaining <= 0 && <div style={{ position: 'absolute', top: 0, right: 0, background: '#333', color: '#fff', fontSize: '10px', padding: '2px 6px' }}>Hết suất</div>}
+                                                    <div className="fw-bold"><i className="fas fa-bolt me-1"></i>Flash Sale</div>
+                                                    <div style={{ fontSize: '0.9em' }}>{product.price?.toLocaleString("vi-VN")}₫</div>
+                                                    <div style={{ fontSize: '0.75em' }}>Còn: {product.flashSaleRemaining}</div>
+                                                </button>
+                                                <button
+                                                    className={`btn ${!isFlashSale ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                    onClick={() => setIsFlashSale(false)}
+                                                    style={{ flex: 1 }}
+                                                >
+                                                    <div className="fw-bold">Giá Thường</div>
+                                                    <div style={{ fontSize: '0.9em' }}>{product.originalPrice?.toLocaleString("vi-VN")}₫</div>
+                                                    <div style={{ fontSize: '0.75em' }}>Có sẵn</div>
+                                                </button>
+                                            </div>
+                                        )}
+
                                         {/* Price Display */}
                                         <div className="mb-4" style={{ padding: '16px', background: '#fafafa', borderRadius: '8px' }}>
-                                            {priceDisplay}
+                                            {isFlashSale && product.flashSaleRemaining !== undefined ? (
+                                                <div>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <span className="fs-4 fw-bold text-danger">
+                                                            {product.price?.toLocaleString("vi-VN")} ₫
+                                                        </span>
+                                                        <span className="text-decoration-line-through text-muted ms-2">
+                                                            {product.originalPrice?.toLocaleString("vi-VN")} ₫
+                                                        </span>
+                                                        <span className="badge bg-danger">Flash Sale</span>
+                                                    </div>
+
+                                                    <div className="mt-2 pt-2 border-top" style={{ borderColor: '#e0e0e0' }}>
+                                                        <div className="d-flex align-items-center justify-content-between mt-1">
+                                                            <span style={{ fontSize: '0.85rem', color: '#555' }}>
+                                                                Số lượng khuyến mãi:
+                                                            </span>
+                                                            <span className="badge bg-danger rounded-pill px-3">
+                                                                Còn {product.flashSaleRemaining}
+                                                            </span>
+                                                        </div>
+                                                        <div className="progress mt-2" style={{ height: '6px' }}>
+                                                            <div
+                                                                className="progress-bar bg-danger progress-bar-striped progress-bar-animated"
+                                                                role="progressbar"
+                                                                style={{ width: '100%' }}
+                                                            ></div>
+                                                        </div>
+                                                        <small className="text-muted d-block mt-1 fst-italic" style={{ fontSize: '0.75rem' }}>
+                                                            (Giá sẽ trở về mức gốc khi hết số lượng khuyến mãi)
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <span className="fs-4 fw-bold">
+                                                            {(product.originalPrice || product.price || 0).toLocaleString("vi-VN")} ₫
+                                                        </span>
+                                                        {isFlashSale === false && product.flashSaleRemaining !== undefined && (
+                                                            <span className="text-muted" style={{ fontSize: '0.8rem' }}>(Giá gốc)</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Vouchers (Placeholder for future development) */}
@@ -620,7 +700,8 @@ export default function ProductDetailPage() {
                                                             setError(null);
                                                             const requestData = {
                                                                 productId: product.id,
-                                                                quantity: Number(qty) || 1
+                                                                quantity: Number(qty) || 1,
+                                                                isFlashSale: isFlashSale
                                                             };
                                                             if (selectedSizeId) {
                                                                 requestData.sizeId = selectedSizeId;
@@ -758,33 +839,33 @@ export default function ProductDetailPage() {
                                                     <h5 className="fw-semibold">{t('product.specifications.title', 'Product Information')}</h5>
                                                     <table className="table table-sm">
                                                         <tbody>
-                                                            {(() => {
-                                                                // Filter out attributes with empty values
-                                                                const validAttributes = product.attributes
-                                                                    ? Object.entries(product.attributes).filter(([key, value]) =>
-                                                                        key && value && value.toString().trim() !== ''
-                                                                    )
-                                                                    : [];
+                                                        {(() => {
+                                                            // Filter out attributes with empty values
+                                                            const validAttributes = product.attributes
+                                                                ? Object.entries(product.attributes).filter(([key, value]) =>
+                                                                    key && value && value.toString().trim() !== ''
+                                                                )
+                                                                : [];
 
-                                                                if (validAttributes.length === 0) {
-                                                                    return (
-                                                                        <tr>
-                                                                            <td colSpan="2" className="text-muted fst-italic">
-                                                                                {t('product.specifications.noInformation', 'No additional information.')}
-                                                                            </td>
-                                                                        </tr>
-                                                                    );
-                                                                }
-
-                                                                return validAttributes.map(([key, value]) => (
-                                                                    <tr key={key}>
-                                                                        <th scope="row" style={{ width: '30%' }}>
-                                                                            {translateAttributeName(key, t)}
-                                                                        </th>
-                                                                        <td>{translateAttributeValue(key, value, t)}</td>
+                                                            if (validAttributes.length === 0) {
+                                                                return (
+                                                                    <tr>
+                                                                        <td colSpan="2" className="text-muted fst-italic">
+                                                                            {t('product.specifications.noInformation', 'No additional information.')}
+                                                                        </td>
                                                                     </tr>
-                                                                ));
-                                                            })()}
+                                                                );
+                                                            }
+
+                                                            return validAttributes.map(([key, value]) => (
+                                                                <tr key={key}>
+                                                                    <th scope="row" style={{ width: '30%' }}>
+                                                                        {translateAttributeName(key, t)}
+                                                                    </th>
+                                                                    <td>{translateAttributeValue(key, value, t)}</td>
+                                                                </tr>
+                                                            ));
+                                                        })()}
                                                         </tbody>
                                                     </table>
                                                 </div>

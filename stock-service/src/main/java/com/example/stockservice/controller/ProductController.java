@@ -2,6 +2,7 @@ package com.example.stockservice.controller;
 
 import com.example.stockservice.dto.ProductDto;
 import com.example.stockservice.jwt.JwtUtil;
+import com.example.stockservice.model.FlashSaleProduct;
 import com.example.stockservice.model.Product;
 import com.example.stockservice.model.Size;
 import com.example.stockservice.repository.ReviewRepository;
@@ -9,7 +10,10 @@ import com.example.stockservice.request.product.DecreaseStockRequest;
 import com.example.stockservice.request.product.IncreaseStockRequest;
 import com.example.stockservice.request.product.ProductCreateRequest;
 import com.example.stockservice.request.product.ProductUpdateRequest;
+import com.example.stockservice.service.flashsale.FlashSaleService;
 import com.example.stockservice.service.product.ProductService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RequestMapping("/v1/stock/product")
@@ -32,7 +37,8 @@ public class ProductController {
     private final ModelMapper modelMapper;
     private final ReviewRepository reviewRepository;
     private final JwtUtil jwtUtil;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final FlashSaleService flashSaleService;
+    private final ObjectMapper objectMapper;
 
 
     @GetMapping("/public/shop/{shopId}/stats")
@@ -251,13 +257,35 @@ public class ProductController {
         // Deserialize attributeJson
         if (product.getAttributeJson() != null) {
             try {
-                java.util.Map<String, String> attributes = objectMapper.readValue(product.getAttributeJson(),
-                        new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() {
+                Map<String, String> attributes = objectMapper.readValue(product.getAttributeJson(),
+                        new TypeReference<>() {
                         });
                 dto.setAttributes(attributes);
             } catch (Exception e) {
                 // Ignore parsing errors or log them
             }
+        }
+
+        try {
+            FlashSaleProduct fsProduct = flashSaleService
+                    .findActiveFlashSaleProduct(product.getId());
+            if (fsProduct != null) {
+                // Check stock availability
+                int remaining = fsProduct.getFlashSaleStock() - fsProduct.getSoldCount();
+
+                if (remaining > 0) {
+                    dto.setPrice(fsProduct.getSalePrice());
+                    dto.setOriginalPrice(fsProduct.getOriginalPrice());
+                    // Calculate discount percent: (1 - sale/original) * 100
+                    if (fsProduct.getOriginalPrice() > 0) {
+                        double discount = (1 - (fsProduct.getSalePrice() / fsProduct.getOriginalPrice())) * 100;
+                        dto.setDiscountPercent(Math.round(discount * 10.0) / 10.0); // Round to 1 decimal
+                    }
+                    dto.setFlashSaleRemaining(remaining);
+                }
+            }
+        } catch (Exception e) {
+            // Ignore if flash sale check fails to avoid breaking main flow
         }
 
         return dto;

@@ -172,70 +172,70 @@ export default function ShopAdRequest() {
                 <div className="table-responsive">
                     <table className="table table-hover">
                         <thead>
-                            <tr>
-                                <th>Chiến dịch / Tiêu đề</th>
-                                <th>Hình ảnh</th>
-                                <th>Loại</th>
-                                <th>Thời gian</th>
-                                <th>Trạng thái</th>
-                                <th>Vị trí</th>
-                                <th>Hành động</th>
-                            </tr>
+                        <tr>
+                            <th>Chiến dịch / Tiêu đề</th>
+                            <th>Hình ảnh</th>
+                            <th>Loại</th>
+                            <th>Thời gian</th>
+                            <th>Trạng thái</th>
+                            <th>Vị trí</th>
+                            <th>Hành động</th>
+                        </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan="7" className="text-center p-4">
-                                        <i className="fas fa-spinner fa-spin me-2"></i> Đang tải...
+                        {loading ? (
+                            <tr>
+                                <td colSpan="7" className="text-center p-4">
+                                    <i className="fas fa-spinner fa-spin me-2"></i> Đang tải...
+                                </td>
+                            </tr>
+                        ) : ads.length === 0 ? (
+                            <tr>
+                                <td colSpan="7" className="text-center p-5">
+                                    <i className="fas fa-ad fa-3x text-muted mb-3"></i>
+                                    <p className="text-muted">Chưa có quảng cáo nào. Hãy tạo mới!</p>
+                                </td>
+                            </tr>
+                        ) : (
+                            ads.map(ad => (
+                                <tr key={ad.id}>
+                                    <td>
+                                        <div className="fw-bold">{ad.title}</div>
+                                        <small className="text-muted">{ad.description}</small>
                                     </td>
-                                </tr>
-                            ) : ads.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" className="text-center p-5">
-                                        <i className="fas fa-ad fa-3x text-muted mb-3"></i>
-                                        <p className="text-muted">Chưa có quảng cáo nào. Hãy tạo mới!</p>
+                                    <td>
+                                        {ad.imageUrl && (
+                                            <img
+                                                src={ad.imageUrl}
+                                                alt="Ad"
+                                                style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                                            />
+                                        )}
                                     </td>
-                                </tr>
-                            ) : (
-                                ads.map(ad => (
-                                    <tr key={ad.id}>
-                                        <td>
-                                            <div className="fw-bold">{ad.title}</div>
-                                            <small className="text-muted">{ad.description}</small>
-                                        </td>
-                                        <td>
-                                            {ad.imageUrl && (
-                                                <img
-                                                    src={ad.imageUrl}
-                                                    alt="Ad"
-                                                    style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
-                                                />
-                                            )}
-                                        </td>
-                                        <td>{ad.adType}</td>
-                                        <td>{ad.durationDays} ngày</td>
-                                        <td>
+                                    <td>{ad.adType}</td>
+                                    <td>{ad.durationDays} ngày</td>
+                                    <td>
                                             <span className={`badge ${ad.status === 'APPROVED' ? 'bg-success' :
                                                 ad.status === 'REJECTED' ? 'bg-danger' : 'bg-warning'
-                                                }`}>
+                                            }`}>
                                                 {ad.status}
                                             </span>
-                                            {ad.status === 'REJECTED' && <div className="text-danger small mt-1">{ad.rejectionReason}</div>}
-                                        </td>
-                                        <td>{ad.placement || '-'}</td>
-                                        <td>
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                disabled={ad.status === 'APPROVED'}
-                                                onClick={() => handleDelete(ad)}
-                                                title="Xóa yêu cầu"
-                                            >
-                                                <i className="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
+                                        {ad.status === 'REJECTED' && <div className="text-danger small mt-1">{ad.rejectionReason}</div>}
+                                    </td>
+                                    <td>{ad.placement || '-'}</td>
+                                    <td>
+                                        <button
+                                            className="btn btn-sm btn-outline-danger"
+                                            disabled={ad.status === 'APPROVED'}
+                                            onClick={() => handleDelete(ad)}
+                                            title="Xóa yêu cầu"
+                                        >
+                                            <i className="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                         </tbody>
                     </table>
                 </div>

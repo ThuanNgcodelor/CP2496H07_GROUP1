@@ -8,6 +8,7 @@ import com.example.stockservice.dto.SizeDto;
 import com.example.stockservice.jwt.JwtUtil;
 import com.example.stockservice.model.Cart;
 import com.example.stockservice.model.CartItem;
+import com.example.stockservice.model.FlashSaleProduct;
 import com.example.stockservice.request.RemoveCartItemByUserIdRequest;
 import com.example.stockservice.request.cart.AddCartItemRequest;
 import com.example.stockservice.request.cart.AddLiveCartItemRequest;
@@ -16,6 +17,7 @@ import com.example.stockservice.request.cart.UpdateCartItemRequest;
 import com.example.stockservice.service.cart.CartItemService;
 import com.example.stockservice.service.cart.CartRedisService;
 import com.example.stockservice.service.cart.CartService;
+import com.example.stockservice.service.flashsale.FlashSaleService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -33,6 +35,7 @@ public class CartController {
    private final CartItemService cartItemService;
    private final CartRedisService cartRedisService;
    private final ModelMapper modelMapper;
+   private final FlashSaleService flashSaleService;
    private final JwtUtil jwtUtil;
 
    @PostMapping("/item/add")
@@ -173,17 +176,47 @@ public class CartController {
        if (cartItem.getId() != null) {
            dto.setId(cartItem.getId());
        }
-       
-      if (cartItem.getProduct() != null) {
-          dto.setProductId(cartItem.getProduct().getId());
-          dto.setProductName(cartItem.getProduct().getName());
-          dto.setDescription(cartItem.getProduct().getDescription());
-          dto.setImageId(cartItem.getProduct().getImageId());
-          
-          ProductDto productDto = modelMapper.map(cartItem.getProduct(), ProductDto.class);
-          dto.setProduct(productDto);
-      }
-       
+
+        if (cartItem.getProduct() != null) {
+            // minhquy
+            ProductDto productDto = modelMapper.map(cartItem.getProduct(), ProductDto.class);
+
+            // Check for active Flash Sale and override price/discount
+            if (cartItem.isFlashSale()) {
+                try {
+                    FlashSaleProduct fsProduct = flashSaleService
+                            .findActiveFlashSaleProduct(cartItem.getProduct().getId());
+                    if (fsProduct != null) {
+                        // Check stock availability (Revert to original price if exceeding limit)
+                        int remaining = fsProduct.getFlashSaleStock() - fsProduct.getSoldCount();
+
+                        if (remaining > 0 && cartItem.getQuantity() <= remaining) {
+                            productDto.setPrice(fsProduct.getSalePrice());
+                            productDto.setOriginalPrice(fsProduct.getOriginalPrice());
+                            if (fsProduct.getOriginalPrice() > 0) {
+                                double discount = (1 - (fsProduct.getSalePrice() / fsProduct.getOriginalPrice())) * 100;
+                                productDto.setDiscountPercent(Math.round(discount * 10.0) / 10.0);
+                            }
+
+                            // Override CartItemDto top-level fields
+                            dto.setUnitPrice(fsProduct.getSalePrice());
+                            dto.setTotalPrice(fsProduct.getSalePrice() * cartItem.getQuantity());
+                        }
+                    }
+                } catch (Exception e) {
+                }
+            }
+
+            dto.setProduct(productDto);
+
+            dto.setProductId(cartItem.getProduct().getId());
+            dto.setProductName(cartItem.getProduct().getName());
+            dto.setDescription(cartItem.getProduct().getDescription());
+            dto.setImageId(cartItem.getProduct().getImageId());
+            // minhquy
+        }
+
+
         if (cartItem.getSize() != null) {
             dto.setSizeId(cartItem.getSize().getId());
             dto.setSizeName(cartItem.getSize().getName());

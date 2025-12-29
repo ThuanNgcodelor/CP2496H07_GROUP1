@@ -111,6 +111,17 @@ const Sidebar = () => {
                 </Link>
             </li>
 
+            {/* Flash-Sale */}
+            <li className="nav-item-ezmart">
+                <Link
+                    className={`nav-link-ezmart ${isActive("/admin/flash-sale") ? "active" : ""}`}
+                    to="/admin/flash-sale"
+                >
+                    <i className="fas fa-bolt"></i>
+                    <span>Flash Sale</span>
+                </Link>
+            </li>
+
             {/* Coin Management */}
             <li className="nav-item-ezmart">
                 <Link

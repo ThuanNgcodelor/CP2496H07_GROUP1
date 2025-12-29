@@ -1,9 +1,6 @@
 package com.example.userservice.service.shopCoin;
 
-<<<<<<< Updated upstream
 import com.example.userservice.client.StockServiceClient;
-=======
->>>>>>> Stashed changes
 import com.example.userservice.dto.ShopCoinDto;
 import com.example.userservice.exception.NotFoundException;
 import com.example.userservice.model.ShopCoin;
@@ -27,6 +24,7 @@ public class ShopCoinServiceImpl implements ShopCoinService {
     private final com.example.userservice.repository.shopCoin.MissionRepository missionRepository;
     private final com.example.userservice.repository.shopCoin.UserMissionRepository userMissionRepository;
     private final ModelMapper modelMapper;
+    private final StockServiceClient stockServiceClient;
 
     private static final Long DEFAULT_CHECKIN_POINTS = 10L;
 
@@ -140,11 +138,7 @@ public class ShopCoinServiceImpl implements ShopCoinService {
         return getOrCreateShopCoin(userId);
     }
 
-<<<<<<< Updated upstream
-    private final StockServiceClient stockServiceClient;
-=======
-    private final com.example.userservice.client.StockServiceClient stockServiceClient;
->>>>>>> Stashed changes
+
 
     @Override
     @Transactional

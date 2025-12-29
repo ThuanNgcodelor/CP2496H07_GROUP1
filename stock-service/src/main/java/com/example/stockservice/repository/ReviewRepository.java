@@ -26,9 +26,5 @@ public interface ReviewRepository extends JpaRepository<Review, String> {
     List<Review> findByShopId(@Param("shopId") String shopId);
 
     boolean existsByUserIdAndCreatedAtBetween(String userId, java.time.LocalDateTime start,
-<<<<<<< Updated upstream
                                               java.time.LocalDateTime end);
-=======
-            java.time.LocalDateTime end);
->>>>>>> Stashed changes
 }

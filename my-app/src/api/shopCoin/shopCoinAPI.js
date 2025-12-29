@@ -1,23 +1,7 @@
-import axios from 'axios';
-import Cookies from 'js-cookie';
+import createApiInstance from '../createApiInstance';
+import { API_BASE_URL } from '../../config/config';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002/v1';
-
-const api = axios.create({
-  baseURL: `${API_URL}/shop-coin`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const api = createApiInstance(`${API_BASE_URL}/v1/shop-coin`);
 
 export const shopCoinAPI = {
   // Get current user's ShopCoins
@@ -173,7 +157,6 @@ export const shopCoinAPI = {
       const response = await api.post(`/missions/action/${actionCode}`);
       return response.data;
     } catch (error) {
-      // console.error(`Error performing mission action ${actionCode}:`, error);
       // Suppress error log if it's just "already completed" or allow UI to handle it
       throw error;
     }

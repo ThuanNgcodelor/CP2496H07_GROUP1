@@ -31,4 +31,6 @@ public class ProductDto {
     private Integer totalStock;
     private LocalDateTime createdAt;
     private java.util.Map<String, String> attributes;
+
+    private Integer flashSaleRemaining;
 }

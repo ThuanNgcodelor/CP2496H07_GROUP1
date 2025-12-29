@@ -8,4 +8,5 @@ public class AddCartItemRequest {
     private String productId;
     private String sizeId;
     private int quantity;
+    private boolean isFlashSale = true;
 }

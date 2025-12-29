@@ -26,7 +26,8 @@ public class RedisCartItemDto {
     private Double originalPrice;   // Giá gốc (để hiển thị gạch ngang)
     private Double livePrice;       // Giá live tại thời điểm thêm
     private Boolean isFromLive;     // Flag đánh dấu item từ live
-    
+    @Builder.Default
+    private Boolean isFlashSale = true;
     // Data sync fields - Refresh on View
     @Builder.Default
     private Boolean priceChanged = false;    // Flag giá đã thay đổi so với khi thêm

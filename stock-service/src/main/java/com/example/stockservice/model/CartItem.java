@@ -27,7 +27,8 @@ public class CartItem extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "cart_id", nullable = false)
     private Cart cart;
-    
+    private boolean isFlashSale;
+
     public void setTotalPrice() {
         this.totalPrice = this.unitPrice * this.quantity;
     }

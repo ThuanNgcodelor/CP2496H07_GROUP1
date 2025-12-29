@@ -13,19 +13,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
 @Service
 @RequiredArgsConstructor
 public class ReviewService {
     private final ReviewRepository reviewRepository;
-<<<<<<< Updated upstream
     private final ShopCoinClient shopCoinClient;
 
 
-=======
-    private final com.example.stockservice.client.ShopCoinClient shopCoinClient;
-
->>>>>>> Stashed changes
     public ReviewDto createReview(String token, ReviewRequest request) {
         Review review = Review.builder()
                 .userId(request.getUserId())
@@ -39,17 +33,9 @@ public class ReviewService {
 
         Review saved = reviewRepository.save(review);
 
-<<<<<<< Updated upstream
         try {
             shopCoinClient.completeReviewMission(token, request.getUserId());
         } catch (Exception e) {
-=======
-        // Award ShopCoins for review (using dynamic mission system)
-        try {
-            shopCoinClient.completeReviewMission(token, request.getUserId());
-        } catch (Exception e) {
-            // Log error but don't fail the review creation
->>>>>>> Stashed changes
             System.err.println("Failed to award ShopCoins for review: " + e.getMessage());
         }
 
@@ -84,18 +70,6 @@ public class ReviewService {
 
     public long countReviewsByShopId(String shopId) {
         return reviewRepository.countReviewsByShopId(shopId);
-    }
-
-    @Transactional(readOnly = true)
-    public boolean hasUserReviewedToday(String userId) {
-        // Implement logic to check if user has a review with createdDate == Today
-        // Assuming BaseEntity has createdDate or using a custom query
-        // Let's use custom query in Repository or filter here if list is small (not
-        // ideal).
-        // Better: countByUserIdAndCreatedDateBetween
-        java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
-        java.time.LocalDateTime endOfDay = java.time.LocalDate.now().atTime(java.time.LocalTime.MAX);
-        return reviewRepository.existsByUserIdAndCreatedAtBetween(userId, startOfDay, endOfDay);
     }
 
     private ReviewDto mapToDto(Review review) {

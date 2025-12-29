@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import adAPI from '../../../api/ads/adAPI';
-<<<<<<< Updated upstream
 import './AdDisplay.css';
-=======
-import './AdDisplay.css'; // We will create this css next
->>>>>>> Stashed changes
 
 export default function AdDisplay({ placement }) {
     const [ads, setAds] = useState([]);

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getUserRole, isAuthenticated } from "../../../api/auth.js";
 import { getUser } from "../../../api/user.js";
-import shopCoinAPI from "../../../api/shopCoin/shopCoinAPI.js";
 import Address from "./Address.jsx";
 import AccountInfo from "./AccountInfo.jsx";
 import RoleRequestForm from "./RoleRequestForm.jsx";
@@ -12,11 +11,6 @@ import NotificationPage from "./NotificationPage.jsx";
 import CoinPage from "./CoinPage.jsx";
 import Loading from "../Loading.jsx";
 import { fetchImageById } from "../../../api/image.js";
-<<<<<<< Updated upstream
-=======
-import "../../../assets/admin/css/ShopCoin.css";
-import "./DailyCheckIn.css";
->>>>>>> Stashed changes
 import AdDisplay from "../ads/AdDisplay";
 
 export default function User() {
@@ -29,13 +23,6 @@ export default function User() {
     const avatarRef = useRef("");
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState("dashboard");
-    const [coins, setCoins] = useState(0);
-    const [hasCheckedIn, setHasCheckedIn] = useState(false);
-    const [consecutiveDays, setConsecutiveDays] = useState(0);
-    const [myMissions, setMyMissions] = useState([]);
-
-    // Timer state for View Product
-    const [viewProductStartTime, setViewProductStartTime] = useState(null);
 
     useEffect(() => {
         if (!isAuthenticated()) {
@@ -70,25 +57,6 @@ export default function User() {
                 } else {
                     setAvatarUrl("");
                 }
-
-                // Fetch coin balance from backend
-                try {
-                    const coinResp = await shopCoinAPI.getMyShopCoins();
-                    const currentCoins = coinResp?.points ?? 0;
-                    setCoins(currentCoins);
-                    setConsecutiveDays(coinResp?.consecutiveDays ?? 0);
-
-                    const lastCheckInStr = coinResp?.lastCheckInDate;
-                    if (lastCheckInStr) {
-                        const last = new Date(lastCheckInStr).toDateString();
-                        if (last === new Date().toDateString()) {
-                            setHasCheckedIn(true);
-                        }
-                    }
-                } catch (e) {
-                    console.error('Failed to load coin balance', e);
-                }
-
             } catch (error) {
                 console.error("Error fetching user info:", error);
             } finally {
@@ -150,131 +118,9 @@ export default function User() {
         }
     }, [location.pathname]);
 
-    useEffect(() => {
-        if (activeTab === 'coins') {
-            fetchMyMissions();
-        }
-    }, [activeTab]);
-
-    const fetchMyMissions = async () => {
-        try {
-            const data = await shopCoinAPI.getMyMissions();
-            setMyMissions(data);
-        } catch (error) {
-            console.error("Failed to fetch my missions", error);
-        }
-    };
-
-    const handleClaimDynamicMission = async (missionId, reward) => {
-        try {
-            await shopCoinAPI.claimMissionReward(missionId);
-            alert(`Chúc mừng! Bạn đã nhận được ${reward} Xu!`);
-            fetchMyMissions();
-            // refresh coins
-            const coinResp = await shopCoinAPI.getMyShopCoins();
-            setCoins(coinResp?.points ?? 0);
-        } catch (error) {
-            console.error("Claim failed", error);
-            alert(error.response?.data?.message || "Không thể nhận thưởng");
-        }
-    };
-
-    // Handler for Mission Action (Start)
-    const handleMissionAction = (mission) => {
-        if (mission.actionCode === 'VIEW_PRODUCT') {
-            // Start timer
-            const now = Date.now();
-            localStorage.setItem('mission_view_product_start', now);
-            setViewProductStartTime(now);
-            // Redirect
-            window.open(mission.targetUrl, '_blank');
-        } else if (mission.actionCode === 'REVIEW_ORDER') {
-            // Redirect to orders
-            handleTabClick('orders');
-        }
-    };
-
-    // Handler for Claim Reward
-    const handleClaimReward = async (mission) => {
-        try {
-            if (mission.actionCode === 'VIEW_PRODUCT') {
-                // Check timer
-                const startTime = localStorage.getItem('mission_view_product_start');
-                if (!startTime) {
-                    alert('Bạn chưa thực hiện nhiệm vụ xem sản phẩm!');
-                    return;
-                }
-                const elapsed = Date.now() - parseInt(startTime);
-                if (elapsed < 10000) { // 10 seconds
-                    alert(`Bạn cần xem sản phẩm đủ 10 giây! (Mới xem ${(elapsed / 1000).toFixed(1)}s)`);
-                    return;
-                }
-
-                // Call API
-                await shopCoinAPI.performViewProductMission();
-                alert('Chúc mừng! Bạn nhận được 5 Xu.');
-
-                // Refresh coins
-                const coinResp = await shopCoinAPI.getMyShopCoins();
-                setCoins(coinResp?.points ?? 0);
-
-                localStorage.removeItem('mission_view_product_start');
-
-            } else if (mission.actionCode === 'REVIEW_ORDER') {
-                // Call API (Backend validates check-today)
-                // We need userId. userData might have it.
-                if (!userData?.userId && !userData?.id) {
-                    // Fallback check
-                    console.error("User ID missing");
-                    return;
-                }
-                const uid = userData.userId || userData.id;
-                await shopCoinAPI.completeReviewMission(uid);
-                alert('Chúc mừng! Bạn nhận được 10 Xu.');
-                // Refresh coins
-                const coinResp = await shopCoinAPI.getMyShopCoins();
-                setCoins(coinResp?.points ?? 0);
-            }
-        } catch (err) {
-            console.error(err);
-            alert(err.response?.data?.message || 'Không thể nhận thưởng (Có thể bạn chưa hoàn thành hoặc đã nhận hôm nay).');
-        }
-    };
-
     const handleTabClick = (tab) => {
         setActiveTab(tab);
         navigate(`/information/${tab}`);
-    };
-
-    const handleDailyCheckIn = async () => {
-        if (hasCheckedIn) {
-            alert("Bạn đã nhận Xu hôm nay rồi. Quay lại ngày mai!");
-            return;
-        }
-
-        try {
-            const result = await shopCoinAPI.dailyCheckIn();
-            setCoins(result.points);
-            setHasCheckedIn(true);
-            setConsecutiveDays(result.consecutiveDays);
-            alert(`Chúc mừng! Bạn nhận được ${result.points} Xu!`);
-        } catch (error) {
-            console.error('Full check-in error:', error);
-
-            // Get error message from response
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Không thể nhận Xu ngay bây giờ';
-
-            console.error('Error details:', {
-                status: error.response?.status,
-                message: errorMessage,
-                data: error.response?.data
-            });
-
-            alert(errorMessage);
-        }
     };
 
     if (loading) {
@@ -548,206 +394,7 @@ export default function User() {
 
                                 {/* Coins Tab */}
                                 {activeTab === "coins" && (
-<<<<<<< Updated upstream
                                     <CoinPage />
-=======
-                                    <div className="coin-tab-container">
-                                        <div className="coin-header">
-                                            <div className="coin-balance-section">
-                                                <div className="coin-icon-wrapper">
-                                                    <span className="coin-icon-text">S</span>
-                                                </div>
-                                                <div className="coin-balance-info">
-                                                    <div className="d-flex align-items-baseline">
-                                                        <span className="coin-amount">{coins}</span>
-                                                        <div className="coin-info-text">
-                                                            <div className="xu-title">
-                                                                Xu đang có
-                                                                <i className="fa fa-question-circle" style={{ fontSize: '12px', color: '#ccc' }}></i>
-                                                            </div>
-                                                            <div className="xu-expiry">{coins} Shopee Xu sẽ hết hạn vào 31-01-2026 {">"}</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="get-more-xu" onClick={handleDailyCheckIn}>
-                                                Nhận thêm Xu! <span style={{ fontSize: '18px' }}>›</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="p-3">
-                                            <div className="daily-checkin-container">
-                                                <div className="header-text mb-3">
-                                                    <h6 style={{ fontSize: '16px', fontWeight: 'bold' }}>Điểm danh 7 ngày nhận Xu</h6>
-                                                    <small className="text-muted">Nhận xu mỗi ngày, ngày 7 nhận quà lớn</small>
-                                                </div>
-                                                <div className="checkin-grid">
-                                                    {[...Array(7)].map((_, index) => {
-                                                        const day = index + 1;
-                                                        // Calculate visual state
-                                                        // currentConsecutiveDays is from Backend.
-                                                        // if hasCheckedIn=true, consecutiveDays is TODAY's count.
-                                                        // so checked days are 1 to consecutiveDays.
-                                                        // if hasCheckedIn=false, consecutiveDays is YESTERDAY's count.
-                                                        // so checked days are 1 to consecutiveDays. Day (consecutiveDays + 1) is Today.
-
-                                                        let isChecked = false;
-                                                        let isToday = false;
-
-                                                        if (hasCheckedIn) {
-                                                            // If checked in today, days <= consecutiveDays are checked
-                                                            if (day <= consecutiveDays) isChecked = true;
-                                                            if (day === consecutiveDays) isToday = true; // Highlight current streak end as 'Today' interaction
-                                                        } else {
-                                                            // If NOT checked in today
-                                                            // Checked days are those <= consecutiveDays
-                                                            if (day <= consecutiveDays) isChecked = true;
-                                                            // Today is the next day
-                                                            if (day === consecutiveDays + 1) isToday = true;
-                                                        }
-
-                                                        return (
-                                                            <div key={day} className={`checkin-day-box ${isToday ? 'active' : ''} ${isChecked ? 'checked' : ''}`}>
-                                                                <div className="bonus-tag">+{day === 7 ? '100+' : '100'}</div>
-                                                                {isChecked ? (
-                                                                    <div className="checked-icon-circle"><i className="fa fa-check"></i></div>
-                                                                ) : (
-                                                                    <div className="coin-icon-circle">S</div>
-                                                                )}
-                                                                <div className={`day-label ${isToday ? 'today' : ''}`}>
-                                                                    {isToday ? 'Hôm nay' : `Ngày ${day}`}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                                <button
-                                                    className="checkin-btn-large"
-                                                    onClick={handleDailyCheckIn}
-                                                    disabled={hasCheckedIn}
-                                                >
-                                                    {hasCheckedIn ? 'Quay lại ngày mai để nhận Xu' : 'Nhận ngay'}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="mission-section p-3">
-                                            <h6 style={{ color: '#222', fontWeight: 600, marginBottom: '15px' }}>Danh sách nhiệm vụ</h6>
-
-                                            {myMissions.length > 0 ? (
-                                                myMissions.map((mission) => (
-                                                    <div key={mission.id} className="mission-item" style={{
-                                                        background: '#fff',
-                                                        border: '1px solid #eee',
-                                                        borderRadius: '8px',
-                                                        padding: '15px',
-                                                        marginBottom: '10px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between'
-                                                    }}>
-                                                        <div className="d-flex align-items-center gap-3">
-                                                            <div style={{
-                                                                width: '40px', height: '40px', background: mission.completed ? '#e8f5e9' : '#fff5f0',
-                                                                borderRadius: '50%', display: 'flex', alignItems: 'center',
-                                                                justifyContent: 'center', color: mission.completed ? '#28a745' : '#ee4d2d'
-                                                            }}>
-                                                                <i className={`fa ${mission.completed ? 'fa-check' : 'fa-star'}`}></i>
-                                                            </div>
-                                                            <div>
-                                                                <div style={{ fontWeight: 500, fontSize: '14px' }}>{mission.title}</div>
-                                                                <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                                                                    {mission.description} - <span style={{ color: '#ffc107', fontWeight: 'bold' }}>{mission.rewardAmount} Xu</span>
-                                                                </div>
-                                                                <div className="progress mt-1" style={{ height: '4px', maxWidth: '100px' }}>
-                                                                    <div className="progress-bar bg-warning" role="progressbar"
-                                                                        style={{ width: `${(mission.progress / mission.targetCount) * 100}%` }}
-                                                                        aria-valuenow={mission.progress} aria-valuemin="0" aria-valuemax={mission.targetCount}></div>
-                                                                </div>
-                                                                <small className="text-muted">{mission.progress}/{mission.targetCount}</small>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            {mission.claimed ? (
-                                                                <button className="btn btn-sm btn-secondary" disabled>Đã nhận</button>
-                                                            ) : mission.completed ? (
-                                                                <button
-                                                                    onClick={() => handleClaimDynamicMission(mission.missionId, mission.rewardAmount)}
-                                                                    className="btn btn-sm btn-success"
-                                                                >
-                                                                    Nhận thưởng
-                                                                </button>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (mission.actionCode === 'VIEW_PRODUCT') {
-                                                                            const startTime = localStorage.getItem('mission_view_product_start');
-                                                                            if (startTime) {
-                                                                                const elapsed = Date.now() - parseInt(startTime);
-                                                                                if (elapsed >= 10000) {
-                                                                                    shopCoinAPI.performViewProductMission()
-                                                                                        .then(() => {
-                                                                                            alert("Đã cập nhật nhiệm vụ!");
-                                                                                            fetchMyMissions();
-                                                                                            localStorage.removeItem('mission_view_product_start');
-                                                                                        })
-                                                                                        .catch(e => alert("Lỗi: " + (e.response?.data?.message || e.message)));
-                                                                                    return;
-                                                                                } else {
-                                                                                    alert(`Hãy xem sản phẩm thêm ${(10 - elapsed / 1000).toFixed(0)}s nữa!`);
-                                                                                    return;
-                                                                                }
-                                                                            }
-                                                                            // Start timer
-                                                                            localStorage.setItem('mission_view_product_start', Date.now());
-                                                                            navigate('/shop');
-                                                                        }
-                                                                        else if (mission.actionCode === 'VIEW_CART') {
-                                                                            const startTime = localStorage.getItem('mission_view_cart_start');
-                                                                            if (startTime) {
-                                                                                const elapsed = Date.now() - parseInt(startTime);
-                                                                                if (elapsed >= 5000) {
-                                                                                    shopCoinAPI.performMissionAction('VIEW_CART')
-                                                                                        .then(async () => {
-                                                                                            alert("Đã hoàn thành nhiệm vụ Xem Giỏ Hàng!");
-                                                                                            fetchMyMissions();
-                                                                                            localStorage.removeItem('mission_view_cart_start');
-                                                                                            const coinResp = await shopCoinAPI.getMyShopCoins();
-                                                                                            setCoins(coinResp?.points ?? 0);
-                                                                                        })
-                                                                                        .catch(e => alert("Lỗi: " + (e.response?.data?.message || e.message)));
-                                                                                    return;
-                                                                                } else {
-                                                                                    alert(`Hãy xem giỏ hàng thêm ${(5 - elapsed / 1000).toFixed(0)}s nữa!`);
-                                                                                    navigate('/cart');
-                                                                                    return;
-                                                                                }
-                                                                            }
-                                                                            // Start timer
-                                                                            localStorage.setItem('mission_view_cart_start', Date.now());
-                                                                            navigate('/cart');
-                                                                        }
-                                                                        else if (mission.actionCode === 'FOLLOW_SHOP') {
-                                                                            alert("Hãy tìm một shop bất kỳ và nhấn 'Theo dõi' (Follow) để hoàn thành nhiệm vụ này!");
-                                                                            navigate('/');
-                                                                        }
-                                                                        else if (mission.actionCode === 'REVIEW_ORDER') handleTabClick('orders');
-                                                                        else alert("Hãy thực hiện nhiệm vụ này!");
-                                                                    }}
-                                                                    className="btn btn-sm btn-outline-primary"
-                                                                >
-                                                                    Thực hiện
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center p-3 text-muted">Chưa có nhiệm vụ nào.</div>
-                                            )}
-                                        </div>
-                                    </div>
->>>>>>> Stashed changes
                                 )}
                             </div>
                         )}

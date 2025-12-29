@@ -7,7 +7,6 @@ import TopSearch from "../../components/client/TopSearch.jsx";
 import TodaysSuggestions from "../../components/client/TodaysSuggestions.jsx";
 import AdDisplay from "../../components/client/ads/AdDisplay.jsx";
 
-import AdDisplay from "../../components/client/ads/AdDisplay.jsx";
 
 export default function HomePage() {
   return (

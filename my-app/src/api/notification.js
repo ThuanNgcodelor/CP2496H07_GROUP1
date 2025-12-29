@@ -16,7 +16,7 @@ export const getNotificationsByUserId = async () => {
     try {
         const response = await api.get(`/getAllByUserId`);
         return response.data;
-    } catch (error) {
+    } catch {
         throw new Error("Failed to fetch notifications");
     }
 };

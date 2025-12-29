@@ -47,16 +47,14 @@ import RegisterShopOwner from "./pages/client/RegisterShopOwner.jsx";
 import ReviewManagementPage from "./pages/shop-owner/ReviewManagementPage.jsx";
 import CategoriesPage from "./pages/admin/categoeis/CategoriesPage.jsx";
 import ChatBotWidget from "./components/client/ChatBotWidget.jsx";
-<<<<<<< Updated upstream
 import AIChatWidget from "./components/client/AIChatWidget.jsx";
-
 import ShopVoucherPage from "./pages/shop-owner/VoucherManagementPage.jsx";
-import CoinManagement from "./components/admin/coins/CoinManagement.jsx";
-import AdManagement from "./components/admin/ads/AdManagement.jsx";
-=======
 import AdManagement from "./components/admin/ads/AdManagement.jsx";
 import ShopAdRequest from "./components/shop-owner/ads/ShopAdRequest.jsx";
->>>>>>> Stashed changes
+import AdminFlashSale from "./components/admin/flashsale/AdminFlashSale.jsx";
+import FlashSale from "./components/client/FlashSale.jsx";
+import ShopFlashSale from "./components/shop-owner/flashsale/ShopFlashSale.jsx";
+
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -98,13 +96,6 @@ function GlobalChatWidget() {
   );
 }
 
-function ShopOwnerVoucherManagementPage() {
-  return null;
-}
-
-function ShopAdRequest() {
-  return null;
-}
 
 export default function App() {
   return (
@@ -135,8 +126,7 @@ export default function App() {
           <Route path="/live" element={<LiveListPage />} />
           <Route path="/live/manage" element={<LiveManagePage />} />
           <Route path="/live/:roomId" element={<LiveWatchPage />} />
-
-
+          <Route path="/flash-sale" element={<FlashSale />} />
 
           {/* Admin routes */}
           {/* Admin routes */}
@@ -150,11 +140,9 @@ export default function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="tables/datatables" element={<DataTablesPage />} />
-            {/* <Route path="orders" element={<OrdersPage />} />
-                <Route path="categ  ories" element={<CategoriesPage />} /> */}
+
             <Route path="role-request" element={<RolesPage />} />
-            {/* <Route path="charts" element={<ChartAdmin />} />
-                <Route path="products" element={<ProductsPage />} /> */}
+            <Route path="flash-sale" element={<AdminFlashSale />} />
             <Route path="shop-owners" element={<ShopOwnerManagementPage />} />
             <Route path="banner" element={<BannerManagementPage />} />
             <Route path="voucher" element={<VoucherManagementPage />} />
@@ -183,6 +171,7 @@ export default function App() {
             <Route path="orders/bulk-shipping" element={<BulkShippingPage />} />
             <Route path="reviews" element={<ReviewManagementPage />} />
             <Route path="vouchers" element={<ShopVoucherPage />} />
+            <Route path="flash-sale" element={<ShopFlashSale />} />
             <Route path="ads" element={<ShopAdRequest />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="chat" element={<ChatPage />} />
