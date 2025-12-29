@@ -433,7 +433,7 @@ export function Cart({
                               className="cart2-checkbox"
                               checked={isSelected}
                               onChange={(e) => onToggle(uniqueKey, e.target.checked)}
-                              disabled={!item.productAvailable || !item.sizeAvailable || item.availableStock === 0}
+                              disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
                             />
                           </div>
                           <div className="cart2-product">

@@ -6,7 +6,7 @@ import Cookies from "js-cookie";
 import imgFallback from "../../../assets/images/shop/6.png";
 import { getAllAddress, getUser } from "../../../api/user.js";
 import { calculateShippingFee, createOrder } from "../../../api/order.js";
-import { createVnpayPayment } from "../../../api/payment.js";
+import { createVnpayPayment, createMomoPayment } from "../../../api/payment.js";
 import { validateVoucher } from "../../../api/voucher.js";
 import Swal from "sweetalert2";
 
@@ -346,8 +346,8 @@ export function CheckoutPage({
         didOpen: () => Swal.showLoading(),
       });
 
-      // If VNPay, create payment first (order will be created after payment success)
-      if (paymentMethod === "VNPAY" || paymentMethod === "CARD") {
+      // If VNPay or MoMo, create payment first (order will be created after payment success)
+      if (paymentMethod === "VNPAY" || paymentMethod === "CARD" || paymentMethod === "MOMO") {
         try {
           // Calculate final total with shipping and voucher discount
           const totalWithShipping = subtotal + shippingFee - voucherDiscount;
@@ -377,18 +377,23 @@ export function CheckoutPage({
             }),
           };
 
-          const payRes = await createVnpayPayment(payPayload);
+          let payRes;
+          if (paymentMethod === "MOMO") {
+            payRes = await createMomoPayment(payPayload);
+          } else {
+            payRes = await createVnpayPayment(payPayload);
+          }
           Swal.close();
 
           if (payRes?.paymentUrl) {
-            // Redirect to VNPay - order will be created after payment success
+            // Redirect to payment gateway - order will be created after payment success
             window.location.href = payRes.paymentUrl;
             return;
           } else {
-            throw new Error("No payment URL returned");
+            throw new Error(payRes?.message || "No payment URL returned");
           }
         } catch (payErr) {
-          console.error("Create VNPay payment failed:", payErr);
+          console.error(`Create ${paymentMethod} payment failed:`, payErr);
           Swal.close();
           await Swal.fire({
             icon: "error",
@@ -1165,6 +1170,12 @@ export function CheckoutPage({
                   >
                     {t('checkout.vnpay')}
                   </div>
+                  <div
+                    className={`checkout-payment-tab ${paymentMethod === 'MOMO' ? 'active' : ''}`}
+                    onClick={() => setPaymentMethod('MOMO')}
+                  >
+                    MoMo
+                  </div>
                 </div>
                 <div style={{ marginTop: '16px' }}>
                   <div
@@ -1202,6 +1213,25 @@ export function CheckoutPage({
                       </div>
                       <div className="checkout-payment-details">
                         {t('checkout.vnpayDescription')}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={`checkout-payment-option ${paymentMethod === 'MOMO' ? 'selected' : ''}`}
+                    onClick={() => setPaymentMethod('MOMO')}
+                  >
+                    <input
+                      type="radio"
+                      className="checkout-payment-radio"
+                      checked={paymentMethod === 'MOMO'}
+                      onChange={() => setPaymentMethod('MOMO')}
+                    />
+                    <div className="checkout-payment-info">
+                      <div className="checkout-payment-name">
+                        💜 Ví MoMo
+                      </div>
+                      <div className="checkout-payment-details">
+                        {t('checkout.momoDescription', 'Thanh toán qua ví điện tử MoMo')}
                       </div>
                     </div>
                   </div>

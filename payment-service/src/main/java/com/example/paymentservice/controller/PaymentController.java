@@ -7,6 +7,7 @@ import com.example.paymentservice.dto.PaymentUrlResponse;
 import com.example.paymentservice.enums.PaymentStatus;
 import com.example.paymentservice.model.Payment;
 import com.example.paymentservice.repository.PaymentRepository;
+import com.example.paymentservice.service.MomoPaymentService;
 import com.example.paymentservice.service.VnpayPaymentService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -24,7 +25,10 @@ import java.util.Optional;
 public class PaymentController {
 
     private final VnpayPaymentService vnpayPaymentService;
+    private final MomoPaymentService momoPaymentService;
     private final PaymentRepository paymentRepository;
+
+    // ============ VNPAY ENDPOINTS ============
 
     @PostMapping("/vnpay/create")
     public ResponseEntity<PaymentUrlResponse> createPayment(@Valid @RequestBody CreateVnpayPaymentRequest req,
@@ -40,6 +44,35 @@ public class PaymentController {
         response.put("status", status.name());
         return ResponseEntity.ok(response);
     }
+
+    // ============ MOMO ENDPOINTS ============
+
+    @PostMapping("/momo/create")
+    public ResponseEntity<PaymentUrlResponse> createMomoPayment(@RequestBody Map<String, Object> request) {
+        PaymentUrlResponse response = momoPaymentService.createPayment(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/momo/ipn")
+    public ResponseEntity<?> handleMomoIpn(@RequestBody Map<String, Object> callbackData) {
+        PaymentStatus status = momoPaymentService.handleIpnCallback(callbackData);
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", status.name());
+        // MoMo expects resultCode 0 for success acknowledgment
+        response.put("resultCode", status == PaymentStatus.PAID ? 0 : 1);
+        response.put("message", status == PaymentStatus.PAID ? "success" : "failed");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/momo/return")
+    public ResponseEntity<?> handleMomoReturn(HttpServletRequest request) {
+        PaymentStatus status = momoPaymentService.handleReturn(request.getParameterMap());
+        Map<String, String> response = new HashMap<>();
+        response.put("status", status.name());
+        return ResponseEntity.ok(response);
+    }
+
+    // ============ COMMON ENDPOINTS ============
 
     @GetMapping("/by-order/{orderId}")
     public ResponseEntity<Payment> getPaymentByOrderId(@PathVariable String orderId) {
