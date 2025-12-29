@@ -75,9 +75,10 @@ const getWebSocketUrl = () => {
  * 
  * @param {Function} onMessage - Callback được gọi khi nhận message từ conversation updates topic
  * @param {Function} onError - Callback được gọi khi có lỗi
+ * @param {string} userId - User ID để subscribe vào conversations topic
  * @returns {Promise<Client>} Promise resolve với STOMP client instance
  */
-export const connectWebSocket = (onMessage, onError) => {
+export const connectWebSocket = (onMessage, onError, userId = null) => {
   return new Promise((resolve, reject) => {
     try {
       // Lấy JWT token để authenticate
@@ -89,10 +90,10 @@ export const connectWebSocket = (onMessage, onError) => {
 
       // Xác định WebSocket URL (đi qua Gateway)
       const wsUrl = getWebSocketUrl();
-      
+
       // Tạo SockJS socket - wrapper cho WebSocket
       const socket = new SockJS(wsUrl);
-      
+
       // Tạo STOMP client với các config
       const client = new Client({
         webSocketFactory: () => socket,  // Factory function trả về socket
@@ -102,7 +103,7 @@ export const connectWebSocket = (onMessage, onError) => {
         connectHeaders: {
           Authorization: `Bearer ${token}` // JWT token trong headers
         },
-        
+
         /**
          * Callback khi WebSocket kết nối thành công
          * Đây là nơi subscribe vào các topics
@@ -111,7 +112,7 @@ export const connectWebSocket = (onMessage, onError) => {
           console.log('WebSocket connected via Gateway:', frame);
           reconnectAttempts = 0;  // Reset reconnect counter
           stompClient = client;    // Lưu client vào global variable
-          
+
           /**
            * Tự động subscribe vào topic conversation updates
            * Topic: /topic/user/{userId}/conversations
@@ -119,9 +120,9 @@ export const connectWebSocket = (onMessage, onError) => {
            * Khi có conversation mới hoặc conversation được update (new message, read status, etc.),
            * server sẽ gửi event tới topic này
            */
-          const userId = Cookies?.get('userId');
-          if (userId) {
-            client.subscribe(`/topic/user/${userId}/conversations`, (message) => {
+          const subscribeUserId = userId;
+          if (subscribeUserId) {
+            client.subscribe(`/topic/user/${subscribeUserId}/conversations`, (message) => {
               console.log('Received conversation update:', message.body);
               if (onMessage) {
                 try {
@@ -133,7 +134,7 @@ export const connectWebSocket = (onMessage, onError) => {
               }
             });
           }
-          
+
           // Resolve promise với client instance
           resolve(client);
         },
@@ -145,7 +146,7 @@ export const connectWebSocket = (onMessage, onError) => {
           if (onError) onError(frame);
           reject(frame);
         },
-        
+
         /**
          * Callback khi có lỗi WebSocket connection
          * Tự động thử reconnect nếu chưa vượt quá MAX_RECONNECT_ATTEMPTS
@@ -155,7 +156,7 @@ export const connectWebSocket = (onMessage, onError) => {
           if (onError) onError(error);
           handleReconnect(onMessage, onError);
         },
-        
+
         /**
          * Callback khi WebSocket bị disconnect
          */
@@ -197,14 +198,14 @@ export const subscribeToConversation = (conversationId, callback) => {
 
   // Topic để nhận messages của conversation này
   const destination = `/topic/conversation/${conversationId}/messages`;
-  
+
   // Subscribe vào topic
   const subscription = stompClient.subscribe(destination, (message) => {
     try {
       // Parse JSON message
       const data = JSON.parse(message.body);
       console.log(`Received message on ${destination}:`, data);
-      
+
       // Gọi callback với message data
       callback(data);
     } catch (error) {
@@ -213,7 +214,7 @@ export const subscribeToConversation = (conversationId, callback) => {
   });
 
   console.log(`Subscribed to conversation messages for conversation: ${conversationId}`);
-  
+
   // Return subscription để có thể unsubscribe sau
   return subscription;
 };
@@ -240,7 +241,7 @@ export const subscribeToConversations = (userId, callback) => {
 
   // Topic để nhận updates về conversations của user
   const destination = `/topic/user/${userId}/conversations`;
-  
+
   const subscription = stompClient.subscribe(destination, (message) => {
     try {
       const data = JSON.parse(message.body);
@@ -284,7 +285,7 @@ const handleReconnect = (onMessage, onError) => {
   if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
     reconnectAttempts++;
     console.log(`Reconnecting... Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
-    
+
     // Exponential backoff: đợi 5s, 10s, 15s, 20s, 25s
     setTimeout(() => {
       connectWebSocket(onMessage, onError).catch((error) => {

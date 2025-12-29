@@ -1,5 +1,6 @@
 import React from "react";
 import Cookies from "js-cookie";
+import { useTranslation } from 'react-i18next';
 import { getConversations, getMessages, sendMessage, markAsRead, startConversation } from "../../api/chat";
 import { connectWebSocket, subscribeToConversation, disconnectWebSocket, isConnected } from "../../utils/websocket";
 import { fetchImageById } from "../../api/image";
@@ -7,7 +8,7 @@ import { getUser, getShopOwnerByUserId } from "../../api/user";
 import { fetchProductById, fetchProductImageById } from "../../api/product";
 
 // Helper functions
-const formatDate = (dateString) => {
+const formatDate = (dateString, t) => {
   if (!dateString) return '';
   try {
     const date = new Date(dateString);
@@ -18,7 +19,7 @@ const formatDate = (dateString) => {
     if (days === 0) {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (days === 1) {
-      return 'Hôm qua';
+      return t('chat.yesterday');
     } else if (days < 7) {
       return date.toLocaleDateString('vi-VN', { weekday: 'short' });
     } else {
@@ -115,6 +116,7 @@ const MOCK_CONVERSATIONS = [
 ];
 
 export default function ChatBotWidget() {
+  const { t } = useTranslation();
   // Chỉ render phía client để tránh lỗi khi SSR/ssg
   const [isClient, setIsClient] = React.useState(false);
   const [open, setOpen] = React.useState(false);
@@ -225,7 +227,8 @@ export default function ChatBotWidget() {
         },
         (error) => {
           console.error('WebSocket error:', error);
-        }
+        },
+        currentUserId
       ).catch(err => console.error('Failed to connect WebSocket:', err));
     }
 
@@ -258,12 +261,17 @@ export default function ChatBotWidget() {
       // Chỉ mark as read nếu conversation đã có messages (tránh lỗi khi conversation mới tạo)
       // Đợi một chút để đảm bảo conversation đã được lưu vào DB
       setTimeout(() => {
-        markAsRead(selectedChat.id).catch(err => {
-          // Không hiển thị lỗi nếu conversation chưa tồn tại (có thể là conversation mới)
-          if (!err?.response?.data?.message?.includes('not found')) {
-            console.error('Error marking as read:', err);
-          }
-        });
+        markAsRead(selectedChat.id)
+          .then(() => {
+            // Refresh conversations to update unread count in badge
+            loadConversations();
+          })
+          .catch(err => {
+            // Không hiển thị lỗi nếu conversation chưa tồn tại (có thể là conversation mới)
+            if (!err?.response?.data?.message?.includes('not found')) {
+              console.error('Error marking as read:', err);
+            }
+          });
       }, 500);
 
       // Subscribe to WebSocket for this conversation
@@ -304,7 +312,8 @@ export default function ChatBotWidget() {
           },
           (error) => {
             console.error('WebSocket error:', error);
-          }
+          },
+          currentUserId
         ).then(() => {
           // After connection, subscribe
           if (isConnected()) {
@@ -337,8 +346,10 @@ export default function ChatBotWidget() {
     scrollToBottom();
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (instant = false) => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth' });
+    }, 100);
   };
 
   const loadConversations = async () => {
@@ -377,7 +388,8 @@ export default function ChatBotWidget() {
       setLoading(true);
       const data = await getMessages(conversationId, 0, 50);
       // Reverse để hiển thị từ cũ đến mới
-      setMessages(Array.isArray(data) ? data.reverse() : []);
+      const reversedData = Array.isArray(data) ? data.reverse() : [];
+      setMessages(reversedData);
 
       // Load images for messages
       loadMessageImages(data);
@@ -386,6 +398,10 @@ export default function ChatBotWidget() {
       setMessages([]);
     } finally {
       setLoading(false);
+      // Scroll sau khi loading hoàn tất và DOM đã render
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      }, 200);
     }
   };
 
@@ -474,6 +490,18 @@ export default function ChatBotWidget() {
     return filtered;
   }, [conversations, searchQuery, filterType]);
 
+  // Calculate total unread count for badge
+  const totalUnreadCount = React.useMemo(() => {
+    return conversations.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
+  }, [conversations]);
+
+  // Load conversations when user is logged in (for unread badge even when chat is closed)
+  React.useEffect(() => {
+    if (currentUserId) {
+      loadConversations();
+    }
+  }, [currentUserId]);
+
   if (!isClient) return null;
 
   return (
@@ -490,6 +518,11 @@ export default function ChatBotWidget() {
             <path d="M7 9H17V11H7V9ZM7 12H15V14H7V12Z" fill="currentColor" />
           </svg>
           <span>Chat</span>
+          {totalUnreadCount > 0 && (
+            <span className="shopee-chat-fab-badge">
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+            </span>
+          )}
         </button>
       )}
 
@@ -499,7 +532,7 @@ export default function ChatBotWidget() {
           className="shopee-chat-minimized-banner"
           onClick={() => setMinimized(false)}
         >
-          <span>Xem cửa sổ Chat</span>
+          <span>{t('chat.viewChatWindow')}</span>
         </div>
       )}
 
@@ -518,7 +551,7 @@ export default function ChatBotWidget() {
                   <input
                     type="text"
                     className="shopee-chat-search-input"
-                    placeholder="Tìm theo tên"
+                    placeholder={t('chat.searchByName')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -528,8 +561,8 @@ export default function ChatBotWidget() {
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                 >
-                  <option value="all">Tất cả</option>
-                  <option value="unread">Chưa đọc</option>
+                  <option value="all">{t('chat.all')}</option>
+                  <option value="unread">{t('chat.unread')}</option>
                 </select>
               </div>
 
@@ -540,13 +573,13 @@ export default function ChatBotWidget() {
                   </div>
                 ) : filteredConversations.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                    Chưa có cuộc trò chuyện nào
+                    {t('chat.noConversations')}
                   </div>
                 ) : (
                   filteredConversations.map((conv) => {
                     // Client side: Hiển thị tên shop (shopName) thay vì username
                     // Ưu tiên: shopName > opponent username > title > shop owner ID > "Unknown"
-                    let name = 'Unknown';
+                    let name = t('chat.unknown');
                     if (conv.shopOwnerId && shopNames[conv.shopOwnerId]) {
                       name = shopNames[conv.shopOwnerId];
                     } else if (conv.opponent?.username) {
@@ -558,7 +591,7 @@ export default function ChatBotWidget() {
                     }
 
                     const lastMsg = conv.lastMessageContent || 'Start a conversation';
-                    const date = formatDate(conv.lastMessageAt);
+                    const date = formatDate(conv.lastMessageAt, t);
                     const unread = conv.unreadCount || 0;
                     const avatarColor = conv.opponent?.id ?
                       `#${conv.opponent.id.substring(0, 6)}` :
@@ -661,7 +694,7 @@ export default function ChatBotWidget() {
                     <div className="shopee-chat-header-name">
                       {selectedChat.shopOwnerId && shopNames[selectedChat.shopOwnerId]
                         ? shopNames[selectedChat.shopOwnerId]
-                        : (selectedChat.opponent?.username || selectedChat.title || 'Shop')}
+                        : (selectedChat.opponent?.username || selectedChat.title || t('chat.shop'))}
                     </div>
                   </div>
 
@@ -669,7 +702,7 @@ export default function ChatBotWidget() {
                   {selectedChat.product && selectedChat.product.name && (
                     <div className="shopee-chat-product-card">
                       <div className="shopee-chat-product-label">
-                        Bạn đang trao đổi với Người bán về sản phẩm này
+                        {t('chat.talkingAboutProduct')}
                       </div>
                       <div className="shopee-chat-product-info">
                         {productImageUrl && (
@@ -699,7 +732,7 @@ export default function ChatBotWidget() {
                       </div>
                     ) : messages.length === 0 ? (
                       <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                        No messages yet. Start the conversation!
+                        {t('chat.noMessages')}
                       </div>
                     ) : (
                       messages.map((msg, idx) => {
@@ -829,6 +862,23 @@ export default function ChatBotWidget() {
         .shopee-chat-fab svg {
           width: 20px;
           height: 20px;
+        }
+        .shopee-chat-fab-badge {
+          position: absolute;
+          top: -5px;
+          right: -5px;
+          background: #ff0000;
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+          min-width: 18px;
+          height: 18px;
+          border-radius: 9px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 4px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
         .shopee-chat-minimized-banner {

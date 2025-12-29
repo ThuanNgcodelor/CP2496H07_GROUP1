@@ -15,7 +15,7 @@ const formatDate = (dateString, t) => {
     const now = new Date();
     const diff = now - date;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (days === 1) {
@@ -67,20 +67,23 @@ export default function ChatPage() {
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
-    connectWebSocket(
-      (message) => {
-        // Handle incoming messages
-        if (message.conversationId === selectedChat?.id) {
-          setMessages(prev => [...prev, message]);
-          scrollToBottom();
-        }
-        // Refresh conversations list
-        loadConversations();
-      },
-      (error) => {
-        console.error('WebSocket error:', error);
-      }
-    ).catch(err => console.error('Failed to connect WebSocket:', err));
+    if (currentUserId) {
+      connectWebSocket(
+        (message) => {
+          // Handle incoming messages
+          if (message.conversationId === selectedChat?.id) {
+            setMessages(prev => [...prev, message]);
+            scrollToBottom();
+          }
+          // Refresh conversations list
+          loadConversations();
+        },
+        (error) => {
+          console.error('WebSocket error:', error);
+        },
+        currentUserId
+      ).catch(err => console.error('Failed to connect WebSocket:', err));
+    }
 
     return () => {
       if (wsSubscription) {
@@ -88,7 +91,7 @@ export default function ChatPage() {
       }
       disconnectWebSocket();
     };
-  }, []);
+  }, [currentUserId]);
 
   // Load product data and image when conversation with product is selected
   useEffect(() => {
@@ -107,23 +110,28 @@ export default function ChatPage() {
   useEffect(() => {
     if (selectedChat?.id) {
       loadMessages(selectedChat.id);
-      
+
       // Mark as read with delay
       setTimeout(() => {
-        markAsRead(selectedChat.id).catch(err => {
-          if (!err?.response?.data?.message?.includes('not found')) {
-            console.error('Error marking as read:', err);
-          }
-        });
+        markAsRead(selectedChat.id)
+          .then(() => {
+            // Refresh conversations to update unread count
+            loadConversations();
+          })
+          .catch(err => {
+            if (!err?.response?.data?.message?.includes('not found')) {
+              console.error('Error marking as read:', err);
+            }
+          });
       }, 500);
-      
+
       // Subscribe to WebSocket for this conversation
       if (isConnected()) {
         // Unsubscribe previous subscription if exists
         if (wsSubscription) {
           wsSubscription.unsubscribe();
         }
-        
+
         const sub = subscribeToConversation(selectedChat.id, (message) => {
           console.log('Received message via WebSocket:', message);
           setMessages(prev => {
@@ -154,7 +162,8 @@ export default function ChatPage() {
           },
           (error) => {
             console.error('WebSocket error:', error);
-          }
+          },
+          currentUserId
         ).then(() => {
           // After connection, subscribe
           if (isConnected()) {
@@ -197,7 +206,7 @@ export default function ChatPage() {
       const data = await getConversations();
       const convs = Array.isArray(data) ? data : [];
       setConversations(convs);
-      
+
       // Load usernames for clients (shop-owner side)
       const clientIds = [...new Set(convs.map(conv => conv.clientId).filter(Boolean))];
       const newUserNames = { ...userNames };
@@ -232,7 +241,7 @@ export default function ChatPage() {
       setLoading(true);
       const data = await getMessages(conversationId, 0, 50);
       setMessages(Array.isArray(data) ? data.reverse() : []);
-      
+
       // Load images for messages
       loadMessageImages(data);
     } catch (error) {
@@ -266,11 +275,11 @@ export default function ChatPage() {
       // Fetch product data
       const productRes = await fetchProductById(productId);
       const product = productRes.data;
-      
+
       // Update selectedChat with full product data
       if (product) {
         setSelectedChat(prev => ({ ...prev, product }));
-        
+
         // Load product image
         if (product?.imageId) {
           const imgRes = await fetchProductImageById(product.imageId);
@@ -309,20 +318,20 @@ export default function ChatPage() {
 
   const filteredConversations = React.useMemo(() => {
     let filtered = conversations;
-    
+
     if (searchQuery.trim()) {
       filtered = filtered.filter(conv => {
         const name = conv.opponent?.username || conv.title || '';
         const productName = conv.product?.name || '';
         return name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               productName.toLowerCase().includes(searchQuery.toLowerCase());
+          productName.toLowerCase().includes(searchQuery.toLowerCase());
       });
     }
-    
+
     if (filterType === "unread") {
       filtered = filtered.filter(conv => (conv.unreadCount || 0) > 0);
     }
-    
+
     return filtered;
   }, [conversations, searchQuery, filterType]);
 
@@ -393,14 +402,14 @@ export default function ChatPage() {
                 } else if (conv.clientId) {
                   name = `User ${conv.clientId.substring(0, 8)}`;
                 }
-                
+
                 const lastMsg = conv.lastMessageContent || t('shopOwner.chat.startConversation');
                 const date = formatDate(conv.lastMessageAt, t);
                 const unread = conv.unreadCount || 0;
-                const avatarColor = conv.opponent?.id ? 
-                  `#${conv.opponent.id.substring(0, 6)}` : 
+                const avatarColor = conv.opponent?.id ?
+                  `#${conv.opponent.id.substring(0, 6)}` :
                   (conv.product?.id ? `#${conv.product.id.substring(0, 6)}` : '#EE4D2D');
-                
+
                 return (
                   <div
                     key={conv.id}
@@ -457,7 +466,7 @@ export default function ChatPage() {
               {selectedChat.product && selectedChat.product.name && (
                 <div className="chat-product-card">
                   <div className="chat-product-label">
-                  {t('shopOwner.chat.talkingAboutProduct')}
+                    {t('shopOwner.chat.talkingAboutProduct')}
                   </div>
                   <div className="chat-product-info">
                     {productImageUrl && (
@@ -494,9 +503,9 @@ export default function ChatPage() {
                   messages.map((msg, idx) => {
                     const isOwn = currentUserId && msg.senderId === currentUserId;
                     const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                    const showDate = !prevMsg || 
+                    const showDate = !prevMsg ||
                       new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
-                    
+
                     return (
                       <React.Fragment key={msg.id}>
                         {showDate && (
@@ -523,9 +532,9 @@ export default function ChatPage() {
                             <div className="chat-message-bubble">
                               <div className="chat-message-text">{msg.content}</div>
                               {msg.imageId && imageUrls[msg.imageId] && (
-                                <img 
-                                  src={imageUrls[msg.imageId]} 
-                                  alt="Message" 
+                                <img
+                                  src={imageUrls[msg.imageId]}
+                                  alt="Message"
                                   className="chat-message-image"
                                 />
                               )}
