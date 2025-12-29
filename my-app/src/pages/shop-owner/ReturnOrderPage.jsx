@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { useSearchParams } from 'react-router-dom';
 import { getShopOwnerOrders, updateOrderStatusForShopOwner, returnOrder, getAllShopOwnerOrders } from '../../api/order';
 import { getUserById } from '../../api/user';
@@ -110,31 +111,74 @@ export default function ReturnOrderPage() {
     };
 
     const handleStatusUpdate = async (orderId, newStatus) => {
-        if (!window.confirm(t('shopOwner.manageOrder.confirmUpdate', { status: getStatusLabel(newStatus) }))) {
+        const result = await Swal.fire({
+            title: t('shopOwner.manageOrder.confirmUpdateTitle', 'Xác nhận cập nhật'),
+            text: t('shopOwner.manageOrder.confirmUpdate', { status: getStatusLabel(newStatus) }),
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: t('common.yes', 'Đồng ý'),
+            cancelButtonText: t('common.no', 'Hủy')
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
 
         try {
             await updateOrderStatusForShopOwner(orderId, newStatus);
-            alert(t('shopOwner.manageOrder.successUpdate'));
+            Swal.fire({
+                icon: 'success',
+                title: t('shopOwner.manageOrder.successUpdate'),
+                showConfirmButton: false,
+                timer: 1500
+            });
             loadOrders(); // Reload orders
         } catch (err) {
             console.error('Error updating order status:', err);
-            alert('Failed to update order status');
+            Swal.fire({
+                icon: 'error',
+                title: 'Failed to update order status',
+                text: err.message
+            });
         }
     };
 
     const handleReturn = async (orderId) => {
-        const reason = window.prompt(t('shopOwner.returnOrder.enterReason'));
-        if (reason === null) return; // Cancelled
+        const { value: reason } = await Swal.fire({
+            title: t('shopOwner.returnOrder.enterReason'),
+            input: 'text',
+            inputLabel: 'Lý do trả hàng',
+            inputPlaceholder: 'Nhập lý do...',
+            showCancelButton: true,
+            confirmButtonText: t('common.submit', 'Gửi'),
+            cancelButtonText: t('common.cancel', 'Hủy'),
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'Bạn phải nhập lý do!';
+                }
+            }
+        });
+
+        if (!reason) return;
 
         try {
             await returnOrder(orderId, reason);
-            alert(t('shopOwner.returnOrder.returnSuccess'));
+            Swal.fire({
+                icon: 'success',
+                title: t('shopOwner.returnOrder.returnSuccess'),
+                showConfirmButton: false,
+                timer: 1500
+            });
             loadOrders();
         } catch (err) {
             console.error('Error returning order:', err);
-            alert('Failed to return order: ' + err.message);
+            Swal.fire({
+                icon: 'error',
+                title: 'Failed to return order',
+                text: err.message
+            });
         }
     };
 
@@ -246,7 +290,10 @@ export default function ReturnOrderPage() {
             const allOrders = await getAllShopOwnerOrders(filter);
 
             if (!allOrders || allOrders.length === 0) {
-                alert(t('shopOwner.manageOrder.noOrdersToExport', 'Không có đơn hàng để xuất'));
+                Swal.fire({
+                    icon: 'info',
+                    title: t('shopOwner.manageOrder.noOrdersToExport', 'Không có đơn hàng để xuất')
+                });
                 setLoading(false);
                 return;
             }
@@ -318,7 +365,11 @@ export default function ReturnOrderPage() {
 
         } catch (err) {
             console.error('Export failed:', err);
-            alert(t('shopOwner.manageOrder.exportError', 'Xuất file thất bại: ') + err.message);
+            Swal.fire({
+                icon: 'error',
+                title: 'Xuất file thất bại',
+                text: err.message
+            });
         } finally {
             setLoading(false);
         }

@@ -505,9 +505,23 @@ export default function ProductDetailPage() {
                                             ) : (
                                                 <div>
                                                     <div className="d-flex align-items-center gap-2">
-                                                        <span className="fs-4 fw-bold">
-                                                            {(product.originalPrice || product.price || 0).toLocaleString("vi-VN")} ₫
-                                                        </span>
+                                                        {/* Check if there's a regular discount (not flash sale) */}
+                                                        {product.discountPercent && product.discountPercent > 0 && product.originalPrice && product.originalPrice > product.price ? (
+                                                            <>
+                                                                <span className="fs-4 fw-bold text-danger">
+                                                                    {(product.price || 0).toLocaleString("vi-VN")} ₫
+                                                                </span>
+                                                                <span className="text-decoration-line-through text-muted">
+                                                                    {product.originalPrice.toLocaleString("vi-VN")} ₫
+                                                                </span>
+                                                                <span className="badge bg-danger">-{product.discountPercent}%</span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="fs-4 fw-bold">
+                                                                {(product.price || 0).toLocaleString("vi-VN")} ₫
+                                                            </span>
+                                                        )}
+                                                        {/* Show "Giá gốc" label when user explicitly chose regular price over flash sale */}
                                                         {isFlashSale === false && product.flashSaleRemaining !== undefined && (
                                                             <span className="text-muted" style={{ fontSize: '0.8rem' }}>(Giá gốc)</span>
                                                         )}
@@ -839,33 +853,33 @@ export default function ProductDetailPage() {
                                                     <h5 className="fw-semibold">{t('product.specifications.title', 'Product Information')}</h5>
                                                     <table className="table table-sm">
                                                         <tbody>
-                                                        {(() => {
-                                                            // Filter out attributes with empty values
-                                                            const validAttributes = product.attributes
-                                                                ? Object.entries(product.attributes).filter(([key, value]) =>
-                                                                    key && value && value.toString().trim() !== ''
-                                                                )
-                                                                : [];
+                                                            {(() => {
+                                                                // Filter out attributes with empty values
+                                                                const validAttributes = product.attributes
+                                                                    ? Object.entries(product.attributes).filter(([key, value]) =>
+                                                                        key && value && value.toString().trim() !== ''
+                                                                    )
+                                                                    : [];
 
-                                                            if (validAttributes.length === 0) {
-                                                                return (
-                                                                    <tr>
-                                                                        <td colSpan="2" className="text-muted fst-italic">
-                                                                            {t('product.specifications.noInformation', 'No additional information.')}
-                                                                        </td>
+                                                                if (validAttributes.length === 0) {
+                                                                    return (
+                                                                        <tr>
+                                                                            <td colSpan="2" className="text-muted fst-italic">
+                                                                                {t('product.specifications.noInformation', 'No additional information.')}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                }
+
+                                                                return validAttributes.map(([key, value]) => (
+                                                                    <tr key={key}>
+                                                                        <th scope="row" style={{ width: '30%' }}>
+                                                                            {translateAttributeName(key, t)}
+                                                                        </th>
+                                                                        <td>{translateAttributeValue(key, value, t)}</td>
                                                                     </tr>
-                                                                );
-                                                            }
-
-                                                            return validAttributes.map(([key, value]) => (
-                                                                <tr key={key}>
-                                                                    <th scope="row" style={{ width: '30%' }}>
-                                                                        {translateAttributeName(key, t)}
-                                                                    </th>
-                                                                    <td>{translateAttributeValue(key, value, t)}</td>
-                                                                </tr>
-                                                            ));
-                                                        })()}
+                                                                ));
+                                                            })()}
                                                         </tbody>
                                                     </table>
                                                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { useTranslation } from 'react-i18next';
 import { getActivePlans, getMySubscription, subscribeToPlan, cancelSubscription } from '../../api/subscription';
 import { getShopOwnerInfo } from '../../api/user';
@@ -122,17 +123,33 @@ export default function SubscriptionPage() {
     const handleSubscribe = async (plan) => {
         if (loading || !shopOwnerId) return;
 
-        if (!window.confirm(t('shopOwner.subscription.confirmSubscribe', {
-            plan: plan.name,
-            price: formatCurrency(planDuration === 'MONTHLY' ? plan.monthlyPrice : plan.yearlyPrice)
-        }))) {
+        const result = await Swal.fire({
+            title: t('shopOwner.subscription.confirmSubscribeTitle', 'Xác nhận đăng ký'),
+            text: t('shopOwner.subscription.confirmSubscribe', {
+                plan: plan.name,
+                price: formatCurrency(planDuration === 'MONTHLY' ? plan.monthlyPrice : plan.yearlyPrice)
+            }),
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#d33',
+            confirmButtonText: t('common.yes', 'Đồng ý'),
+            cancelButtonText: t('common.no', 'Hủy')
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
 
         setLoading(true);
         try {
             await subscribeToPlan(shopOwnerId, plan.id, planDuration);
-            alert(t('shopOwner.subscription.subscribeSuccess'));
+            Swal.fire({
+                icon: 'success',
+                title: t('shopOwner.subscription.subscribeSuccess'),
+                showConfirmButton: false,
+                timer: 1500
+            });
             fetchData(); // Reload all data
         } catch (error) {
             console.error("Subscription error:", error);
@@ -151,23 +168,47 @@ export default function SubscriptionPage() {
                 }
             }
 
-            alert(msg);
+            Swal.fire({
+                icon: 'error',
+                title: 'Đăng ký thất bại',
+                text: msg
+            });
             setLoading(false);
         }
     };
 
     const handleCancel = async () => {
-        if (!window.confirm(t('shopOwner.subscription.confirmCancel', 'Are you sure you want to cancel your subscription? Benefits will end immediately.'))) {
+        const result = await Swal.fire({
+            title: t('shopOwner.subscription.confirmCancelTitle', 'Hủy gói cước?'),
+            text: t('shopOwner.subscription.confirmCancel', 'Are you sure you want to cancel your subscription? Benefits will end immediately.'),
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: t('common.yes', 'Hủy gói'),
+            cancelButtonText: t('common.no', 'Không')
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
 
         setLoading(true);
         try {
             await cancelSubscription(shopOwnerId);
-            alert(t('shopOwner.subscription.cancelSuccess', 'Subscription cancelled successfully'));
+            Swal.fire({
+                icon: 'success',
+                title: t('shopOwner.subscription.cancelSuccess', 'Subscription cancelled successfully'),
+                showConfirmButton: false,
+                timer: 1500
+            });
             fetchData();
         } catch (error) {
-            alert(error.message || t('shopOwner.subscription.cancelError', 'Failed to cancel subscription'));
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: error.message || t('shopOwner.subscription.cancelError', 'Failed to cancel subscription')
+            });
         } finally {
             setLoading(false);
         }

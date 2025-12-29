@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { useTranslation } from 'react-i18next';
 import { getShopOwnerInfo, updateShopOwner } from '../../api/user';
 import { getProvinces, getDistricts, getWards } from '../../api/ghn';
@@ -91,7 +92,11 @@ export default function SettingsPage() {
         }
       } catch (error) {
         console.error('Error loading shop owner info:', error);
-        alert(t('shopOwner.settings.loadFailed'));
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi tải trang',
+          text: t('shopOwner.settings.loadFailed')
+        });
       } finally {
         setInitialLoading(false);
       }
@@ -216,12 +221,20 @@ export default function SettingsPage() {
 
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert(t('shopOwner.settings.selectImageFile'));
+        Swal.fire({
+          icon: 'warning',
+          title: t('shopOwner.settings.invalidFileTitle', 'File không hợp lệ'),
+          text: t('shopOwner.settings.selectImageFile')
+        });
         return;
       }
 
       if (file.size > 5 * 1024 * 1024) {
-        alert(t('shopOwner.settings.imageSizeLimit'));
+        Swal.fire({
+          icon: 'warning',
+          title: t('shopOwner.settings.fileTooLargeTitle', 'File quá lớn'),
+          text: t('shopOwner.settings.imageSizeLimit')
+        });
         return;
       }
 
@@ -268,7 +281,11 @@ export default function SettingsPage() {
     e.preventDefault();
 
     if (!validateForm()) {
-      alert(t('shopOwner.settings.fillRequired'));
+      Swal.fire({
+        icon: 'warning',
+        title: t('shopOwner.settings.fillRequiredTitle', 'Thông tin chưa đủ'),
+        text: t('shopOwner.settings.fillRequired')
+      });
       return;
     }
 
@@ -276,10 +293,19 @@ export default function SettingsPage() {
 
     try {
       await updateShopOwner(settings, imageFile);
-      alert(t('shopOwner.settings.saveSuccess'));
+      Swal.fire({
+        icon: 'success',
+        title: t('shopOwner.settings.saveSuccess'),
+        showConfirmButton: false,
+        timer: 1500
+      });
     } catch (error) {
       console.error('Error updating settings:', error);
-      alert(error.message || t('shopOwner.settings.saveFailed'));
+      Swal.fire({
+        icon: 'error',
+        title: t('shopOwner.settings.saveFailed'),
+        text: error.message
+      });
     } finally {
       setLoading(false);
     }

@@ -54,6 +54,16 @@
     gap: 8px;
 }
 
+/* Override LanguageSwitcher color in Shop Owner (white background header) */
+.shop-owner-header .header-right .position-relative>.d-flex {
+    color: #555555 !important;
+    opacity: 1 !important;
+}
+
+.shop-owner-header .header-right .position-relative>.d-flex:hover {
+    color: #ee4d2d !important;
+}
+
 .header-icon-btn {
     background: transparent;
     border: none;
