@@ -72,7 +72,11 @@ const RegisterShopOwner = () => {
     // ✅ CAPTCHA & Security
     const [isAgreed, setIsAgreed] = useState(false);
     const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+<<<<<<< Updated upstream
 
+=======
+    
+>>>>>>> Stashed changes
     // CAPTCHA Types
     const CAPTCHA_TYPES = {
         TEXT: 'text',      // Nhập mã chữ cái số
@@ -81,13 +85,29 @@ const RegisterShopOwner = () => {
         SLIDER: 'slider'   // Kéo slider
     };
     const [captchaType, setCaptchaType] = useState(CAPTCHA_TYPES.TEXT);
+<<<<<<< Updated upstream
 
+=======
+    
+>>>>>>> Stashed changes
     // Common CAPTCHA state
     const [generatedCaptcha, setGeneratedCaptcha] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
     const [isVerified, setIsVerified] = useState(false);
     const [captchaError, setCaptchaError] = useState('');
     const [fieldErrors, setFieldErrors] = useState({});
+    
+    // Math CAPTCHA state
+    const [mathProblem, setMathProblem] = useState({ num1: 0, num2: 0, operator: '+', answer: 0 });
+    const [mathInput, setMathInput] = useState('');
+    
+    // Image CAPTCHA state
+    const [imageAnswer, setImageAnswer] = useState(null);
+    const [selectedImage, setSelectedImage] = useState(null);
+    
+    // Slider CAPTCHA state
+    const [sliderValue, setSliderValue] = useState(0);
+    const [sliderTarget, setSliderTarget] = useState(0);
 
     // Math CAPTCHA state
     const [mathProblem, setMathProblem] = useState({ num1: 0, num2: 0, operator: '+', answer: 0 });
@@ -152,12 +172,20 @@ const RegisterShopOwner = () => {
         const num1 = Math.floor(Math.random() * 20) + 1;
         const num2 = Math.floor(Math.random() * 20) + 1;
         const operator = operators[Math.floor(Math.random() * operators.length)];
+<<<<<<< Updated upstream
 
+=======
+        
+>>>>>>> Stashed changes
         let answer = 0;
         if (operator === '+') answer = num1 + num2;
         else if (operator === '-') answer = num1 - num2;
         else answer = num1 * num2;
+<<<<<<< Updated upstream
 
+=======
+        
+>>>>>>> Stashed changes
         setMathProblem({ num1, num2, operator, answer });
         setMathInput('');
         setCaptchaError('');
@@ -194,18 +222,27 @@ const RegisterShopOwner = () => {
             const types = Object.values(CAPTCHA_TYPES);
             const randomType = types[Math.floor(Math.random() * types.length)];
             setCaptchaType(randomType);
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             if (randomType === CAPTCHA_TYPES.TEXT) generateCaptcha();
             else if (randomType === CAPTCHA_TYPES.MATH) generateMathCaptcha();
             else if (randomType === CAPTCHA_TYPES.IMAGE) generateImageCaptcha();
             else if (randomType === CAPTCHA_TYPES.SLIDER) generateSliderCaptcha();
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             setShowCaptchaModal(true);
         }
     };
 
     const verifyCaptcha = () => {
         let isValid = false;
+<<<<<<< Updated upstream
 
         if (captchaType === CAPTCHA_TYPES.TEXT) {
             isValid = captchaInput.toUpperCase() === generatedCaptcha;
@@ -219,11 +256,30 @@ const RegisterShopOwner = () => {
             isValid = imageAnswer && selectedImage === 2; // id 2 là đúng
             if (!isValid) setCaptchaError('Vui lòng chọn hình ảnh đúng.');
         }
+=======
+        
+        if (captchaType === CAPTCHA_TYPES.TEXT) {
+            isValid = captchaInput.toUpperCase() === generatedCaptcha;
+            if (!isValid) setCaptchaError('Mã xác thực không đúng. Vui lòng nhập lại.');
+        } 
+        else if (captchaType === CAPTCHA_TYPES.MATH) {
+            isValid = parseInt(mathInput) === mathProblem.answer;
+            if (!isValid) setCaptchaError('Kết quả tính toán không đúng. Vui lòng thử lại.');
+        } 
+        else if (captchaType === CAPTCHA_TYPES.IMAGE) {
+            isValid = imageAnswer && selectedImage === 2; // id 2 là đúng
+            if (!isValid) setCaptchaError('Vui lòng chọn hình ảnh đúng.');
+        } 
+>>>>>>> Stashed changes
         else if (captchaType === CAPTCHA_TYPES.SLIDER) {
             isValid = Math.abs(sliderValue - sliderTarget) <= 3; // Sai lệch <= 3
             if (!isValid) setCaptchaError(`Kéo slider đến ${sliderTarget}. Hiện tại: ${sliderValue}`);
         }
+<<<<<<< Updated upstream
 
+=======
+        
+>>>>>>> Stashed changes
         if (isValid) {
             setIsVerified(true);
             setIsAgreed(true);
@@ -233,17 +289,29 @@ const RegisterShopOwner = () => {
 
     // ====== VALIDATION HELPERS ======
     const isEmpty = (value) => !value || String(value).trim().length === 0;
+<<<<<<< Updated upstream
 
+=======
+    
+>>>>>>> Stashed changes
     const isValidEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(String(email).trim());
     };
+<<<<<<< Updated upstream
 
+=======
+    
+>>>>>>> Stashed changes
     const isValidPhone = (phone) => {
         const phoneStr = String(phone).trim();
         return phoneStr.startsWith('0') && phoneStr.length === 10 && /^\d+$/.test(phoneStr);
     };
+<<<<<<< Updated upstream
 
+=======
+    
+>>>>>>> Stashed changes
     const isValidIdNumber = (idNumber) => {
         return String(idNumber).trim().length >= 9;
     };
@@ -251,12 +319,17 @@ const RegisterShopOwner = () => {
     // ====== Validation ======
     const validateStep = (step) => {
         let errors = {};
+<<<<<<< Updated upstream
 
+=======
+        
+>>>>>>> Stashed changes
         if (step === 1) {
             // Tên shop
             if (isEmpty(shopInfo.shopName)) {
                 errors.shopName = 'Bạn phải nhập tên shop';
             }
+<<<<<<< Updated upstream
 
             // Tên chủ hàng
             if (isEmpty(shopInfo.ownerName)) {
@@ -288,6 +361,39 @@ const RegisterShopOwner = () => {
             }
         }
 
+=======
+            
+            // Tên chủ hàng
+            if (isEmpty(shopInfo.ownerName)) {
+                errors.ownerName = 'Bạn phải nhập tên chủ cửa hàng';
+            }
+            
+            // Địa chỉ nhận hàng
+            if (isEmpty(address)) {
+                errors.address = 'Bạn phải chọn địa chỉ nhận hàng';
+            }
+            
+            // Email
+            if (isEmpty(shopInfo.email)) {
+                errors.email = 'Bạn phải nhập email';
+            } else if (!isValidEmail(shopInfo.email)) {
+                errors.email = 'Email không hợp lệ, vui lòng kiểm tra lại';
+            }
+            
+            // Số điện thoại
+            if (isEmpty(shopInfo.phone)) {
+                errors.phone = 'Bạn phải nhập số điện thoại';
+            } else if (!isValidPhone(shopInfo.phone)) {
+                errors.phone = 'Số điện thoại phải bắt đầu bằng 0 và có đúng 10 chữ số';
+            }
+            
+            // Lý do đăng ký
+            if (isEmpty(shopInfo.reason)) {
+                errors.reason = 'Bạn phải nhập lý do muốn đăng ký bán hàng';
+            }
+        }
+        
+>>>>>>> Stashed changes
         if (step === 2) {
             // Email kinh doanh
             if (isEmpty(taxInfo.email)) {
@@ -295,13 +401,21 @@ const RegisterShopOwner = () => {
             } else if (!isValidEmail(taxInfo.email)) {
                 errors.taxEmail = 'Email kinh doanh không hợp lệ';
             }
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             // Mã số thuế
             if (isEmpty(taxInfo.taxCode)) {
                 errors.taxCode = 'Bạn phải nhập mã số thuế';
             }
         }
+<<<<<<< Updated upstream
 
+=======
+        
+>>>>>>> Stashed changes
         if (step === 3) {
             // Số định danh
             if (isEmpty(idInfo.idNumber)) {
@@ -309,22 +423,38 @@ const RegisterShopOwner = () => {
             } else if (!isValidIdNumber(idInfo.idNumber)) {
                 errors.idNumber = 'Số định danh phải có ít nhất 9 chữ số';
             }
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             // Họ tên
             if (isEmpty(idInfo.fullName)) {
                 errors.fullName = 'Bạn phải nhập họ và tên đầy đủ';
             }
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             // Ảnh mặt trước
             if (!frontFile) {
                 errors.frontImage = 'Bạn phải tải lên ảnh mặt trước của định danh';
             }
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             // Ảnh mặt sau
             if (!backFile) {
                 errors.backImage = 'Bạn phải tải lên ảnh mặt sau của định danh';
             }
+<<<<<<< Updated upstream
 
+=======
+            
+>>>>>>> Stashed changes
             // Xác nhận thỏa thuận
             if (!isAgreed) {
                 errors.agreement = 'Bạn phải xác nhận đã đọc và đồng ý với các điều khoản';
@@ -1120,16 +1250,26 @@ const RegisterShopOwner = () => {
                             <span className="modal-close-icon" onClick={() => setShowCaptchaModal(false)}>&times;</span>
                         </div>
                         <div className="shopee-modal-body" style={{ padding: '0 30px 30px 30px' }}>
+<<<<<<< Updated upstream
 
+=======
+                            
+>>>>>>> Stashed changes
                             {/* ===== TEXT CAPTCHA ===== */}
                             {captchaType === CAPTCHA_TYPES.TEXT && (
                                 <div style={{ textAlign: 'center' }}>
                                     <p style={{ marginBottom: '24px', color: '#666', fontSize: '14px' }}>
                                         🔤 Vui lòng nhập mã xác thực bên dưới
                                     </p>
+<<<<<<< Updated upstream
                                     <div className="captcha-code-box" style={{
                                         display: 'flex',
                                         alignItems: 'center',
+=======
+                                    <div className="captcha-code-box" style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+>>>>>>> Stashed changes
                                         justifyContent: 'space-between',
                                         gap: '12px',
                                         marginBottom: '24px',
@@ -1300,7 +1440,11 @@ const RegisterShopOwner = () => {
 
                             {/* ERROR MESSAGE */}
                             {captchaError && (
+<<<<<<< Updated upstream
                                 <div style={{
+=======
+                                <div style={{ 
+>>>>>>> Stashed changes
                                     marginBottom: '20px',
                                     padding: '12px',
                                     background: '#fff1f0',
@@ -1316,7 +1460,11 @@ const RegisterShopOwner = () => {
                             {/* ACTION BUTTONS */}
                             <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                                 <button
+<<<<<<< Updated upstream
                                     style={{
+=======
+                                    style={{ 
+>>>>>>> Stashed changes
                                         flex: 1,
                                         padding: '12px',
                                         fontSize: '14px',
@@ -1333,7 +1481,11 @@ const RegisterShopOwner = () => {
                                     Hủy
                                 </button>
                                 <button
+<<<<<<< Updated upstream
                                     style={{
+=======
+                                    style={{ 
+>>>>>>> Stashed changes
                                         flex: 1,
                                         padding: '12px',
                                         fontSize: '14px',

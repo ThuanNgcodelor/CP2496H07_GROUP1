@@ -194,6 +194,18 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
                     </Link>
                 </div>
 
+                {/* Marketing Section */}
+                <div className="sidebar-section">
+                    <Link
+                        className={`sidebar-item ${isActive('/shop-owner/ads') ? 'active' : ''}`}
+                        to="/shop-owner/ads"
+                        onClick={handleLinkClick}
+                    >
+                        <i className="fas fa-bullhorn"></i>
+                        <span>Advertising</span>
+                    </Link>
+                </div>
+
                 {/* Chat */}
                 <div className="sidebar-section">
                     <Link

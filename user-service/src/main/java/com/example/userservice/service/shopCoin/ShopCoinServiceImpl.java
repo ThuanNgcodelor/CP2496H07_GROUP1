@@ -1,6 +1,9 @@
 package com.example.userservice.service.shopCoin;
 
+<<<<<<< Updated upstream
 import com.example.userservice.client.StockServiceClient;
+=======
+>>>>>>> Stashed changes
 import com.example.userservice.dto.ShopCoinDto;
 import com.example.userservice.exception.NotFoundException;
 import com.example.userservice.model.ShopCoin;
@@ -137,7 +140,11 @@ public class ShopCoinServiceImpl implements ShopCoinService {
         return getOrCreateShopCoin(userId);
     }
 
+<<<<<<< Updated upstream
     private final StockServiceClient stockServiceClient;
+=======
+    private final com.example.userservice.client.StockServiceClient stockServiceClient;
+>>>>>>> Stashed changes
 
     @Override
     @Transactional

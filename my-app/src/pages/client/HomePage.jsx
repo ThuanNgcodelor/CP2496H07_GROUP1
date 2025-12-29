@@ -7,6 +7,8 @@ import TopSearch from "../../components/client/TopSearch.jsx";
 import TodaysSuggestions from "../../components/client/TodaysSuggestions.jsx";
 import AdDisplay from "../../components/client/ads/AdDisplay.jsx";
 
+import AdDisplay from "../../components/client/ads/AdDisplay.jsx";
+
 export default function HomePage() {
   return (
     <div className="wrapper" style={{ background: '#F5F5F5', minHeight: '100vh' }}>

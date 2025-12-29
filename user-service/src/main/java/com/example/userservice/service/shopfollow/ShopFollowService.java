@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ShopFollowService {
     private final ShopFollowRepository shopFollowRepository;
+    private final com.example.userservice.service.shopCoin.ShopCoinService shopCoinService;
 
     @Transactional
     public void followShop(String followerId, String shopId) {
@@ -19,6 +20,14 @@ public class ShopFollowService {
                     .shopId(shopId)
                     .build();
             shopFollowRepository.save(follow);
+
+            // Trigger Mission Action: FOLLOW_SHOP
+            try {
+                shopCoinService.performMissionAction(followerId, "FOLLOW_SHOP");
+            } catch (Exception e) {
+                // Log error but don't fail the follow action
+                System.err.println("Failed to trigger FOLLOW_SHOP mission: " + e.getMessage());
+            }
         }
     }
 

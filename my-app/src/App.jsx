@@ -39,6 +39,7 @@ import LiveListPage from "./pages/client/LiveListPage.jsx";
 import LiveWatchPage from "./pages/client/LiveWatchPage.jsx";
 import LiveManagePage from "./pages/live/LiveManagePage.jsx";
 import VoucherManagementPage from "./pages/admin/VoucherManagementPage.jsx";
+import CoinManagement from "./components/admin/coins/CoinManagement.jsx";
 import SubscriptionPlanManagementPage from "./pages/admin/SubscriptionPlanManagementPage.jsx";
 import BannerManagementPage from "./pages/admin/BannerManagementPage.jsx";
 import ShopOwnerManagementPage from "./pages/admin/ShopOwnerManagementPage.jsx";
@@ -46,11 +47,16 @@ import RegisterShopOwner from "./pages/client/RegisterShopOwner.jsx";
 import ReviewManagementPage from "./pages/shop-owner/ReviewManagementPage.jsx";
 import CategoriesPage from "./pages/admin/categoeis/CategoriesPage.jsx";
 import ChatBotWidget from "./components/client/ChatBotWidget.jsx";
+<<<<<<< Updated upstream
 import AIChatWidget from "./components/client/AIChatWidget.jsx";
 
 import ShopVoucherPage from "./pages/shop-owner/VoucherManagementPage.jsx";
 import CoinManagement from "./components/admin/coins/CoinManagement.jsx";
 import AdManagement from "./components/admin/ads/AdManagement.jsx";
+=======
+import AdManagement from "./components/admin/ads/AdManagement.jsx";
+import ShopAdRequest from "./components/shop-owner/ads/ShopAdRequest.jsx";
+>>>>>>> Stashed changes
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -184,6 +190,7 @@ export default function App() {
             <Route path="wallet" element={<WalletPage />} />
             <Route path="subscription" element={<SubscriptionPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="ads" element={<ShopAdRequest />} />
             <Route path="logout" element={<Logout />} />
           </Route>
 
