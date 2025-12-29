@@ -2,6 +2,7 @@ package com.example.stockservice.service.flashsale;
 
 import com.example.stockservice.client.NotificationClient;
 import com.example.stockservice.enums.FlashSaleStatus;
+import com.example.stockservice.event.ProductUpdateKafkaEvent;
 import com.example.stockservice.model.FlashSaleProduct;
 import com.example.stockservice.model.FlashSaleSession;
 import com.example.stockservice.model.Product;
@@ -13,6 +14,7 @@ import com.example.stockservice.request.flashsale.FlashSaleSessionRequest;
 import com.example.stockservice.client.ShopOwnerClient;
 import com.example.stockservice.dto.ShopOwnerDto;
 import lombok.RequiredArgsConstructor;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,10 @@ public class FlashSaleService {
     private final ProductRepository productRepository;
     private final NotificationClient notificationClient;
     private final ShopOwnerClient shopOwnerClient;
+    private final KafkaTemplate<String, ProductUpdateKafkaEvent> kafkaTemplate;
+    
+    @org.springframework.beans.factory.annotation.Value("${kafka.topic.product-updates}")
+    private String productUpdatesTopic;
 
     // --- Admin: Session Management ---
 
@@ -108,6 +114,9 @@ public class FlashSaleService {
                 .status(FlashSaleStatus.PENDING)
                 .build();
 
+        // Thêm hàm sendMessage giống bên 273 ProductServiceImpl
+        // 
+
         return flashSaleProductRepository.save(flashSaleProduct);
     }
 
@@ -118,7 +127,16 @@ public class FlashSaleService {
         FlashSaleProduct fsp = flashSaleProductRepository.findById(flashSaleProductId)
                 .orElseThrow(() -> new RuntimeException("Registration not found"));
         fsp.setStatus(FlashSaleStatus.APPROVED);
-        return flashSaleProductRepository.save(fsp);
+        FlashSaleProduct saved = flashSaleProductRepository.save(fsp);
+        
+        // Publish event to sync cart items with flash sale price
+        try {
+            kafkaTemplate.send(productUpdatesTopic, new ProductUpdateKafkaEvent(saved.getProductId()));
+        } catch (Exception e) {
+            System.err.println("Failed to send Kafka event for flash sale approval: " + e.getMessage());
+        }
+        
+        return saved;
     }
 
     @Transactional
@@ -127,7 +145,16 @@ public class FlashSaleService {
                 .orElseThrow(() -> new RuntimeException("Registration not found"));
         fsp.setStatus(FlashSaleStatus.REJECTED);
         fsp.setRejectionReason(reason);
-        return flashSaleProductRepository.save(fsp);
+        FlashSaleProduct saved = flashSaleProductRepository.save(fsp);
+        
+        // Publish event to sync cart items (revert to normal price)
+        try {
+            kafkaTemplate.send(productUpdatesTopic, new ProductUpdateKafkaEvent(saved.getProductId()));
+        } catch (Exception e) {
+            System.err.println("Failed to send Kafka event for flash sale rejection: " + e.getMessage());
+        }
+        
+        return saved;
     }
 
     // --- Public / Data Access ---

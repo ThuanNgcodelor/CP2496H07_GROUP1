@@ -1,6 +1,7 @@
 package com.example.stockservice.service.product;
 
 import com.example.stockservice.client.FileStorageClient;
+import com.example.stockservice.event.ProductUpdateKafkaEvent;
 import com.example.stockservice.service.category.CategoryService;
 import org.springframework.data.domain.Pageable;
 import com.example.stockservice.enums.ProductStatus;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -40,7 +42,7 @@ public class ProductServiceImpl implements ProductService {
     private final FileStorageClient fileStorageClient;
     private final SizeRepository sizeRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
-    private final org.springframework.kafka.core.KafkaTemplate<String, com.example.stockservice.event.ProductUpdateKafkaEvent> kafkaTemplate;
+    private final KafkaTemplate<String, ProductUpdateKafkaEvent> kafkaTemplate;
 
     @org.springframework.beans.factory.annotation.Value("${kafka.topic.product-updates}")
     private String productUpdatesTopic;
