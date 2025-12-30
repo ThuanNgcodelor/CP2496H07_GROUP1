@@ -65,18 +65,7 @@ const ShopDecorationPage = () => {
         ));
     };
 
-    const moveWidget = (id, direction) => {
-        const index = decorationConfig.findIndex(w => w.id === id);
-        if (index < 0) return;
 
-        const newConfig = [...decorationConfig];
-        if (direction === 'up' && index > 0) {
-            [newConfig[index], newConfig[index - 1]] = [newConfig[index - 1], newConfig[index]];
-        } else if (direction === 'down' && index < newConfig.length - 1) {
-            [newConfig[index], newConfig[index + 1]] = [newConfig[index + 1], newConfig[index]];
-        }
-        setDecorationConfig(newConfig);
-    };
 
     const getDefaultDataForType = (type) => {
         switch (type) {
@@ -114,7 +103,7 @@ const ShopDecorationPage = () => {
                                 widgets={decorationConfig}
                                 onRemove={removeWidget}
                                 onUpdate={updateWidget}
-                                onMove={moveWidget}
+                                onReorder={setDecorationConfig}
                             />
                         </Card.Body>
                     </Card>

@@ -865,6 +865,7 @@
       "savedSuccess": "Configuration saved successfully",
       "saveFailed": "Failed to save configuration",
       "loadFailed": "Failed to load shop configuration",
+      "delete": "Delete",
       "selectComponent": "Select a component from the library to start decorating",
       "unknownWidget": "Unknown Component",
       "defaultCollectionTitle": "New Collection",
