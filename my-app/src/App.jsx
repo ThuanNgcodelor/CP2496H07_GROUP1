@@ -25,6 +25,8 @@ import TrackingPage from "./pages/client/TrackingPage.jsx";
 import ShopOwnerLayout from "./components/shop-owner/ShopOwnerLayout.jsx";
 import ShopOwnerDashboard from "./pages/shop-owner/ShopOwnerDashboard.jsx";
 import AllProductsPage from "./pages/shop-owner/AllProductsPage.jsx";
+
+import InventoryPage from "./pages/shop-owner/InventoryPage.jsx";
 import AddProductPage from "./pages/shop-owner/AddProductPage.jsx";
 import ReturnOrderPage from "./pages/shop-owner/ReturnOrderPage.jsx";
 import BulkShippingPage from "./pages/shop-owner/BulkShippingPage.jsx";
@@ -35,6 +37,7 @@ import ChatPage from "./pages/shop-owner/ChatPage.jsx";
 import WalletPage from "./pages/shop-owner/WalletPage.jsx";
 import SubscriptionPage from "./pages/shop-owner/SubscriptionPage.jsx";
 import LiveStreamPage from "./pages/shop-owner/LiveStreamPage.jsx";
+
 import LiveListPage from "./pages/client/LiveListPage.jsx";
 import LiveWatchPage from "./pages/client/LiveWatchPage.jsx";
 import LiveManagePage from "./pages/live/LiveManagePage.jsx";
@@ -165,8 +168,10 @@ export default function App() {
             <Route path="live" element={<LiveStreamPage />} />
             <Route index element={<ShopOwnerDashboard />} />
             <Route path="products" element={<AllProductsPage />} />
+            <Route path="inventory" element={<InventoryPage />} />
             <Route path="products/add" element={<AddProductPage />} />
             <Route path="products/edit/:id" element={<AddProductPage />} />
+
             <Route path="orders/returns" element={<ReturnOrderPage />} />
             <Route path="orders/bulk-shipping" element={<BulkShippingPage />} />
             <Route path="reviews" element={<ReviewManagementPage />} />

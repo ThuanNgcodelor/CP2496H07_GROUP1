@@ -40,11 +40,13 @@ public class ProductServiceImpl implements ProductService {
     private final SizeRepository sizeRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final org.springframework.kafka.core.KafkaTemplate<String, com.example.stockservice.event.ProductUpdateKafkaEvent> kafkaTemplate;
+    private final InventoryService inventoryService;
 
     @org.springframework.beans.factory.annotation.Value("${kafka.topic.product-updates}")
     private String productUpdatesTopic;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public void decreaseStockBySize(String sizeId, int quantity) {
         Size size = sizeRepository.findById(sizeId)
                 .orElseThrow(() -> new RuntimeException("Size not found with id: " + sizeId));
@@ -56,15 +58,74 @@ public class ProductServiceImpl implements ProductService {
 
         size.setStock(size.getStock() - quantity);
         sizeRepository.save(size);
+
+        // Update product status
+        checkAndUpdateProductStatus(size.getProduct());
+
+        // Inventory Log
+        try {
+            inventoryService.logStockChange(
+                    size.getProduct().getId(),
+                    sizeId,
+                    -quantity,
+                    size.getProduct().getUserId(),
+                    com.example.stockservice.enums.InventoryLogType.ORDER,
+                    "Order placement");
+        } catch (Exception e) {
+            // Log error but don't fail transaction
+            System.err.println("Failed to log inventory change: " + e.getMessage());
+        }
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public void increaseStockBySize(String sizeId, int quantity) {
         Size size = sizeRepository.findById(sizeId)
                 .orElseThrow(() -> new RuntimeException("Size not found with id: " + sizeId));
 
         size.setStock(size.getStock() + quantity);
         sizeRepository.save(size);
+
+        // Update product status
+        checkAndUpdateProductStatus(size.getProduct());
+
+        // Inventory Log
+        try {
+            inventoryService.logStockChange(
+                    size.getProduct().getId(),
+                    sizeId,
+                    quantity,
+                    size.getProduct().getUserId(),
+                    com.example.stockservice.enums.InventoryLogType.CANCEL,
+                    "Order cancelled/returned");
+        } catch (Exception e) {
+            System.err.println("Failed to log inventory change: " + e.getMessage());
+        }
+    }
+
+    private void checkAndUpdateProductStatus(Product product) {
+        // Use direct DB count to ensure data consistency
+        // Note: product.getId() might be null if it's a new product still being saved,
+        // but this is called after updates
+        if (product.getId() == null)
+            return;
+
+        long positiveStockCount = sizeRepository.countByProductIdAndStockGreaterThan(product.getId(), 0);
+        boolean allOutOfStock = (positiveStockCount == 0);
+
+        if (allOutOfStock) {
+            if (product.getStatus() != ProductStatus.BANNED && product.getStatus() != ProductStatus.SUSPENDED) {
+                if (product.getStatus() != ProductStatus.OUT_OF_STOCK) {
+                    product.setStatus(ProductStatus.OUT_OF_STOCK);
+                    productRepository.save(product);
+                }
+            }
+        } else {
+            if (product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+                product.setStatus(ProductStatus.IN_STOCK);
+                productRepository.save(product);
+            }
+        }
     }
 
     @Override
@@ -135,7 +196,8 @@ public class ProductServiceImpl implements ProductService {
                             .description(sizeRequest.getDescription())
                             .stock(sizeRequest.getStock())
                             .priceModifier(sizeRequest.getPriceModifier())
-                            .weight(sizeRequest.getWeight() != null ? sizeRequest.getWeight() : 500) // Default 500g if not provided
+                            .weight(sizeRequest.getWeight() != null ? sizeRequest.getWeight() : 500) // Default 500g if
+                                                                                                     // not provided
                             .product(savedProduct)
                             .build())
                     .collect(Collectors.toList());
@@ -241,7 +303,9 @@ public class ProductServiceImpl implements ProductService {
                                 .description(sizeRequest.getDescription())
                                 .stock(sizeRequest.getStock())
                                 .priceModifier(sizeRequest.getPriceModifier())
-                                .weight(sizeRequest.getWeight() != null ? sizeRequest.getWeight() : 500) // Default 500g if not provided
+                                .weight(sizeRequest.getWeight() != null ? sizeRequest.getWeight() : 500) // Default 500g
+                                                                                                         // if not
+                                                                                                         // provided
                                 .product(toUpdate)
                                 .build())
                         .collect(Collectors.toList());
@@ -254,16 +318,20 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product updatedProduct = productRepository.save(toUpdate);
-        
+
+        // Ensure status consistency based on stock
+        checkAndUpdateProductStatus(updatedProduct);
+
         // Publish event to Kafka
         try {
-            kafkaTemplate.send(productUpdatesTopic, new com.example.stockservice.event.ProductUpdateKafkaEvent(updatedProduct.getId()));
+            kafkaTemplate.send(productUpdatesTopic,
+                    new com.example.stockservice.event.ProductUpdateKafkaEvent(updatedProduct.getId()));
         } catch (Exception e) {
             // Log error but don't fail the transaction
             // log.error("Failed to send Kafka event", e);
             System.err.println("Failed to send Kafka event: " + e.getMessage());
         }
-        
+
         return updatedProduct;
     }
 

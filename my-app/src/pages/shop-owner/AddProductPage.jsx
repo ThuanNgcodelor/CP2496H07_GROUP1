@@ -13,6 +13,9 @@ import 'react-quill/dist/quill.snow.css';
 export default function AddProductPage() {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+
+    console.log("AddProductPage: Rendering..."); // Debug log
+
     const { id: productId } = useParams();
     const isEditMode = Boolean(productId);
 
@@ -902,7 +905,7 @@ export default function AddProductPage() {
                                         onChange={handleInputChange}
                                     >
                                         <option value="">{t('shopOwner.addProduct.noCategory')}</option>
-                                        {categories.map(category => (
+                                        {Array.isArray(categories) && categories.map(category => (
                                             <option key={category.id} value={category.id}>
                                                 {category.name}
                                             </option>
