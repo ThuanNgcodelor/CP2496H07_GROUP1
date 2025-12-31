@@ -18,7 +18,9 @@ import java.util.stream.Collectors;
 public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final ShopCoinClient shopCoinClient;
-
+    private final com.example.stockservice.repository.ProductRepository productRepository;
+    private final com.example.stockservice.client.UserServiceClient userServiceClient;
+    private final com.example.stockservice.client.ShopOwnerClient shopOwnerClient;
 
     public ReviewDto createReview(String token, ReviewRequest request) {
         Review review = Review.builder()
@@ -53,6 +55,8 @@ public class ReviewService {
         List<Review> reviews = reviewRepository.findByShopId(shopId);
         System.out.println("DEBUG: Found " + reviews.size() + " reviews for shopId: " + shopId);
         return reviews.stream()
+                .filter(r -> (r.getComment() != null && !r.getComment().trim().isEmpty()) ||
+                        (r.getImageIds() != null && !r.getImageIds().isEmpty()))
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
@@ -73,12 +77,47 @@ public class ReviewService {
     }
 
     private ReviewDto mapToDto(Review review) {
+        String pName = "";
+        String pImage = "";
+        String freshAvatar = review.getUserAvatar();
+
+        try {
+            com.example.stockservice.model.Product p = productRepository.findById(review.getProductId()).orElse(null);
+            if (p != null) {
+                pName = p.getName();
+                if (p.getImageId() != null && !p.getImageId().isEmpty()) {
+                    pImage = p.getImageId();
+                }
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
+        try {
+            org.springframework.http.ResponseEntity<com.example.stockservice.dto.UserDto> userRes = userServiceClient
+                    .getUserById(review.getUserId());
+            if (userRes != null && userRes.getBody() != null && userRes.getBody().getImageUrl() != null) {
+                freshAvatar = userRes.getBody().getImageUrl();
+            } else {
+                org.springframework.http.ResponseEntity<com.example.stockservice.dto.ShopOwnerDto> shopRes = shopOwnerClient
+                        .getShopOwnerByUserId(review.getUserId());
+                if (shopRes != null && shopRes.getBody() != null && shopRes.getBody().getImageUrl() != null) {
+                    freshAvatar = shopRes.getBody().getImageUrl();
+                }
+            }
+        } catch (Exception e) {
+            // System.out.println("DEBUG: Failed to fetch fresh avatar for user " +
+            // review.getUserId() + ": " + e.getMessage());
+        }
+
         return ReviewDto.builder()
                 .id(review.getId())
                 .userId(review.getUserId())
                 .username(review.getUsername())
-                .userAvatar(review.getUserAvatar())
+                .userAvatar(freshAvatar)
                 .productId(review.getProductId())
+                .productName(pName)
+                .productImage(pImage)
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .imageIds(review.getImageIds())

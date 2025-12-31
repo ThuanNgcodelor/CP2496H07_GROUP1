@@ -83,16 +83,16 @@ const ShopOwnerHeader = ({ onMenuClick }) => {
             className="header-icon-btn user-btn"
             onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            <div className="user-avatar-wrapper">
+            <div className="header-user-avatar-wrapper">
               {shopImage ? (
                 <img
                   src={shopImage}
                   alt="User"
-                  className="user-avatar"
+                  className="header-user-avatar"
                   onError={() => setImageError(true)}
                 />
               ) : (
-                <div className="user-avatar-fallback">
+                <div className="header-user-avatar-fallback">
                   {(displayName.charAt(0) || 'U').toUpperCase()}
                 </div>
               )}
