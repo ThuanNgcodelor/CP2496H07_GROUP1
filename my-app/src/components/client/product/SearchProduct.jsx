@@ -6,6 +6,7 @@ import {
   fetchProductImageById,
   fetchProducts,
 } from "../../../api/product.js";
+import { trackSearch } from "../../../api/tracking";
 
 const USE_OBJECT_URL = true;
 
@@ -81,6 +82,18 @@ const SearchProduct = () => {
   // Reset to page 1 when filters/search change
   useEffect(() => {
     setPage(1);
+
+    // Track search event when debouncedQuery changes (user finished typing)
+    if (debouncedQuery && debouncedQuery.trim().length >= 2) {
+      // Track with current filtered results count
+      const resultsCount = products.filter((p) => {
+        const q = debouncedQuery.toLowerCase();
+        const name = (p.name || "").toLowerCase();
+        const desc = (p.description || "").toLowerCase();
+        return name.includes(q) || desc.includes(q);
+      }).length;
+      trackSearch(debouncedQuery, resultsCount);
+    }
   }, [debouncedQuery, sortBy]);
 
   // Helper: compute total stock
@@ -103,7 +116,7 @@ const SearchProduct = () => {
   // Apply sorting
   const sorted = useMemo(() => {
     const arr = [...filteredBySearch].filter((p) => totalStockOf(p) > 0);
-    
+
     if (sortBy === "newest") {
       return arr;
     } else if (sortBy === "bestselling") {
@@ -232,7 +245,7 @@ const SearchProduct = () => {
   }
 
   return (
-    <div style={{  minHeight: '100vh', paddingTop: '12px', paddingBottom: '20px' }}>
+    <div style={{ minHeight: '100vh', paddingTop: '12px', paddingBottom: '20px' }}>
       <div className="container" style={{ maxWidth: '1250px' }}>
         {/* Search Result Title */}
         <div style={{ marginBottom: '12px', fontSize: '16px', color: '#262626', fontWeight: 500 }}>
@@ -242,7 +255,7 @@ const SearchProduct = () => {
         <div className="row g-3">
           {/* Left Sidebar - Filters */}
           <div className="col-12 col-lg-2 col-md-3">
-            <div style={{  borderRadius: 'px', padding: '12px', border: '1px solid #f0f0f0' }}>
+            <div style={{ borderRadius: 'px', padding: '12px', border: '1px solid #f0f0f0' }}>
               <h6 style={{ fontSize: '14px', fontWeight: 600, color: '#333', marginBottom: '12px' }}>{t('search.searchFilters')}</h6>
 
               {/* Location */}
@@ -342,7 +355,7 @@ const SearchProduct = () => {
                     {t('search.economy')}
                   </label>
                 </div>
-          </div>
+              </div>
 
               {/* Price Range */}
               <div className="mb-3" style={{ borderBottom: '1px solid #f5f5f5', paddingBottom: '12px' }}>
@@ -353,7 +366,7 @@ const SearchProduct = () => {
                     className="form-control form-control-sm"
                     placeholder={t('search.from')}
                     value={priceMin}
-                onChange={(e) => setPriceMin(e.target.value)}
+                    onChange={(e) => setPriceMin(e.target.value)}
                     style={{ fontSize: '13px', height: '32px' }}
                   />
                   <input
@@ -361,7 +374,7 @@ const SearchProduct = () => {
                     className="form-control form-control-sm"
                     placeholder={t('search.to')}
                     value={priceMax}
-                onChange={(e) => setPriceMax(e.target.value)}
+                    onChange={(e) => setPriceMax(e.target.value)}
                     style={{ fontSize: '13px', height: '32px' }}
                   />
                 </div>
@@ -401,7 +414,7 @@ const SearchProduct = () => {
                   <label className="form-check-label" htmlFor="shop-mall" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
                     {t('search.mall')}
                   </label>
-              </div>
+                </div>
                 <div className="form-check mb-2">
                   <input
                     className="form-check-input"
@@ -420,8 +433,8 @@ const SearchProduct = () => {
                   <label className="form-check-label" htmlFor="shop-favorite" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
                     {t('search.favorite')}
                   </label>
-            </div>
-          </div>
+                </div>
+              </div>
 
               {/* Condition */}
               <div className="mb-3" style={{ borderBottom: '1px solid #f5f5f5', paddingBottom: '12px' }}>
@@ -608,14 +621,14 @@ const SearchProduct = () => {
                       </button>
                     </li>
                   </ul>
-          </div>
-        </div>
-      </div>
+                </div>
+              </div>
+            </div>
 
             {pageItems.length === 0 ? (
               <div className="text-center py-5" style={{ background: '#fff', borderRadius: '4px' }}>
                 <p style={{ fontSize: '16px', color: '#757575' }}>{t('search.noProductsFound')}</p>
-            </div>
+              </div>
             ) : (
               <>
                 <div className="row g-2 g-sm-3">
@@ -632,7 +645,7 @@ const SearchProduct = () => {
                             background: '#fff',
                             borderRadius: '3px',
                             overflow: 'hidden',
-                  position: 'relative',
+                            position: 'relative',
                             transition: 'transform 0.2s, box-shadow 0.2s',
                             cursor: 'pointer',
                             height: '100%',
@@ -654,21 +667,21 @@ const SearchProduct = () => {
                           >
                             {/* Product Image */}
                             <div style={{ position: 'relative', paddingTop: '100%', background: '#f7f7f7' }}>
-                  <img
-                    src={imageUrls[product.id] || imgFallback}
+                              <img
+                                src={imageUrls[product.id] || imgFallback}
                                 alt={product.name}
-                    onError={(e) => {
-                      e.currentTarget.src = imgFallback;
-                    }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
-                  />
+                                onError={(e) => {
+                                  e.currentTarget.src = imgFallback;
+                                }}
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover'
+                                }}
+                              />
                               {/* Discount Badge */}
                               {hasDiscount && (
                                 <div
@@ -704,7 +717,7 @@ const SearchProduct = () => {
                               >
                                 {t('search.favorite')}
                               </div>
-                </div>
+                            </div>
 
                             {/* Product Info */}
                             <div style={{ padding: '8px 7px', flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -735,8 +748,8 @@ const SearchProduct = () => {
                                     <div style={{ fontSize: '11px', color: '#9e9e9e', textDecoration: 'line-through' }}>
                                       {Number(product.originalPrice).toLocaleString('vi-VN')}₫
                                     </div>
-                    )}
-                  </div>
+                                  )}
+                                </div>
                                 <div className="d-flex align-items-center gap-1 mb-1" style={{ fontSize: '10px' }}>
                                   <span style={{ color: '#ffc107', fontSize: '9px' }}>★★★★★</span>
                                   <span style={{ color: '#9e9e9e' }}>{t('search.sold')} {formatSoldCount(product.soldOf || 0)}</span>
@@ -746,18 +759,18 @@ const SearchProduct = () => {
                                 </div>
                                 <div style={{ fontSize: '10px', color: '#9e9e9e' }}>
                                   Hồ Chí Minh
-                </div>
-              </div>
-            </div>
+                                </div>
+                              </div>
+                            </div>
                           </Link>
                         </div>
                       </div>
                     );
                   })}
-        </div>
+                </div>
 
                 {/* Pagination */}
-        {totalPages > 1 && (
+                {totalPages > 1 && (
                   <div className="d-flex justify-content-center align-items-center gap-3 mt-4">
                     <button
                       className="btn btn-sm"
@@ -791,7 +804,7 @@ const SearchProduct = () => {
                       }}
                     >
                       &gt;
-                        </button>
+                    </button>
                   </div>
                 )}
 
@@ -818,8 +831,8 @@ const SearchProduct = () => {
               </>
             )}
           </div>
-            </div>
-          </div>
+        </div>
+      </div>
 
       <style>{`
         @media (min-width: 1200px) {

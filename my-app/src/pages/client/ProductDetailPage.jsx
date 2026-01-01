@@ -10,6 +10,8 @@ import { getCart, getShopOwnerByUserId } from "../../api/user.js";
 import { useCart } from "../../contexts/CartContext.jsx";
 import { translateAttributeName, translateAttributeValue } from "../../utils/attributeTranslator.js";
 import imgFallback from "../../assets/images/shop/6.png";
+import { useTrackProductView } from "../../hooks/useTrackBehavior";
+import { trackCart } from "../../api/tracking";
 
 const USE_OBJECT_URL = true;
 
@@ -26,6 +28,10 @@ export default function ProductDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { setCart } = useCart();
+
+    // Track product view with duration (auto-tracks when user leaves page)
+    useTrackProductView(id, 'product_detail');
+
     const [product, setProduct] = useState(null);
     const [shopOwner, setShopOwner] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -202,6 +208,9 @@ export default function ProductDetailPage() {
             await fetchAddToCart(requestData);
             const cart = await getCart();
             setCart(cart);
+
+            // Track add to cart event
+            trackCart(product.id, Number(qty) || 1);
 
             window.dispatchEvent(new CustomEvent('cart-updated'));
 
@@ -839,33 +848,33 @@ export default function ProductDetailPage() {
                                                     <h5 className="fw-semibold">{t('product.specifications.title', 'Product Information')}</h5>
                                                     <table className="table table-sm">
                                                         <tbody>
-                                                        {(() => {
-                                                            // Filter out attributes with empty values
-                                                            const validAttributes = product.attributes
-                                                                ? Object.entries(product.attributes).filter(([key, value]) =>
-                                                                    key && value && value.toString().trim() !== ''
-                                                                )
-                                                                : [];
+                                                            {(() => {
+                                                                // Filter out attributes with empty values
+                                                                const validAttributes = product.attributes
+                                                                    ? Object.entries(product.attributes).filter(([key, value]) =>
+                                                                        key && value && value.toString().trim() !== ''
+                                                                    )
+                                                                    : [];
 
-                                                            if (validAttributes.length === 0) {
-                                                                return (
-                                                                    <tr>
-                                                                        <td colSpan="2" className="text-muted fst-italic">
-                                                                            {t('product.specifications.noInformation', 'No additional information.')}
-                                                                        </td>
+                                                                if (validAttributes.length === 0) {
+                                                                    return (
+                                                                        <tr>
+                                                                            <td colSpan="2" className="text-muted fst-italic">
+                                                                                {t('product.specifications.noInformation', 'No additional information.')}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                }
+
+                                                                return validAttributes.map(([key, value]) => (
+                                                                    <tr key={key}>
+                                                                        <th scope="row" style={{ width: '30%' }}>
+                                                                            {translateAttributeName(key, t)}
+                                                                        </th>
+                                                                        <td>{translateAttributeValue(key, value, t)}</td>
                                                                     </tr>
-                                                                );
-                                                            }
-
-                                                            return validAttributes.map(([key, value]) => (
-                                                                <tr key={key}>
-                                                                    <th scope="row" style={{ width: '30%' }}>
-                                                                        {translateAttributeName(key, t)}
-                                                                    </th>
-                                                                    <td>{translateAttributeValue(key, value, t)}</td>
-                                                                </tr>
-                                                            ));
-                                                        })()}
+                                                                ));
+                                                            })()}
                                                         </tbody>
                                                     </table>
                                                 </div>

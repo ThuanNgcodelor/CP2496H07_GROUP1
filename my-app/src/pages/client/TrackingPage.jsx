@@ -72,7 +72,7 @@ const getDisplayStatus = (orderStatus) => {
 };
 
 // Generate timeline from real shipping trackingHistory or fallback to order events
-const generateTimeline = (order, shipping) => {
+const generateTimeline = (order, shipping, t) => {
     const timeline = [];
 
     // Parse real tracking history from shipping order if available
@@ -88,7 +88,7 @@ const generateTimeline = (order, shipping) => {
                     timeline.push({
                         time: entry.ts ? formatDateTime(new Date(entry.ts)) : '-',
                         status: entry.status || 'update',
-                        title: entry.title || 'Cập nhật trạng thái',
+                        title: entry.title || t('tracking.timeline.statusUpdate', 'Cập nhật trạng thái'),
                         description: entry.description || '',
                         highlight: index === 0 // Highlight newest entry
                     });
@@ -104,8 +104,8 @@ const generateTimeline = (order, shipping) => {
     timeline.push({
         time: formatDateTime(baseDate),
         status: 'pending',
-        title: 'Đặt hàng thành công',
-        description: 'Đơn hàng đã được đặt thành công',
+        title: t('tracking.timeline.orderPlaced', 'Đặt hàng thành công'),
+        description: t('tracking.timeline.orderPlacedDesc', 'Đơn hàng đã được đặt thành công'),
         highlight: timeline.length === 0 // Highlight if it's the only event
     });
 
@@ -118,8 +118,8 @@ const generateTimeline = (order, shipping) => {
             timeline.unshift({
                 time: formatDateTime(new Date(baseDate.getTime() + 1 * 60 * 60 * 1000)),
                 status: 'confirmed',
-                title: 'Đã xác nhận đơn hàng',
-                description: 'Đơn hàng đã được shop xác nhận',
+                title: t('tracking.timeline.confirmed', 'Đã xác nhận đơn hàng'),
+                description: t('tracking.timeline.confirmedDesc', 'Đơn hàng đã được shop xác nhận'),
                 highlight: stepIndex === 1
             });
         }
@@ -128,8 +128,8 @@ const generateTimeline = (order, shipping) => {
             timeline.unshift({
                 time: formatDateTime(new Date(baseDate.getTime() + 2 * 60 * 60 * 1000)),
                 status: 'processing',
-                title: 'Đã giao cho đơn vị vận chuyển',
-                description: 'Đơn hàng đã được bàn giao cho GHN',
+                title: t('tracking.timeline.handedToCarrier', 'Đã giao cho đơn vị vận chuyển'),
+                description: t('tracking.timeline.handedToCarrierDesc', 'Đơn hàng đã được bàn giao cho GHN'),
                 highlight: stepIndex === 2
             });
         }
@@ -138,8 +138,8 @@ const generateTimeline = (order, shipping) => {
             timeline.unshift({
                 time: formatDateTime(new Date(baseDate.getTime() + 3 * 60 * 60 * 1000)),
                 status: 'shipped',
-                title: 'Đã giao hàng',
-                description: 'Giao hàng thành công',
+                title: t('tracking.timeline.delivered', 'Đã giao hàng'),
+                description: t('tracking.timeline.deliveredDesc', 'Giao hàng thành công'),
                 highlight: stepIndex === 3
             });
         }
@@ -148,8 +148,8 @@ const generateTimeline = (order, shipping) => {
             timeline.unshift({
                 time: formatDateTime(new Date(baseDate.getTime() + 4 * 60 * 60 * 1000)),
                 status: 'completed',
-                title: 'Hoàn thành',
-                description: 'Đơn hàng đã hoàn thành',
+                title: t('tracking.timeline.completed', 'Hoàn thành'),
+                description: t('tracking.timeline.completedDesc', 'Đơn hàng đã hoàn thành'),
                 highlight: stepIndex === 4
             });
         }
@@ -157,6 +157,7 @@ const generateTimeline = (order, shipping) => {
 
     return timeline;
 };
+
 
 export default function TrackingPage() {
     const { orderId } = useParams();
@@ -252,7 +253,7 @@ export default function TrackingPage() {
     const isCancelled = order?.orderStatus === 'CANCELLED';
     const isReturned = order?.orderStatus === 'RETURNED';
     const ORDER_STEPS = getOrderSteps(order?.paymentMethod, t);
-    const timeline = generateTimeline(order, ghn);
+    const timeline = generateTimeline(order, ghn, t);
     const displayedTimeline = showAllTimeline ? timeline : timeline.slice(0, 4);
 
     if (loading) {

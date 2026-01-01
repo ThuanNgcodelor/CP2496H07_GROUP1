@@ -8,6 +8,7 @@ import { getAllAddress, getUser } from "../../../api/user.js";
 import { calculateShippingFee, createOrder } from "../../../api/order.js";
 import { createVnpayPayment, createMomoPayment } from "../../../api/payment.js";
 import { validateVoucher } from "../../../api/voucher.js";
+import { trackPurchase } from "../../../api/tracking";
 import Swal from "sweetalert2";
 
 const formatVND = (n) => (Number(n) || 0).toLocaleString("vi-VN") + "₫";
@@ -408,6 +409,11 @@ export function CheckoutPage({
       // COD flow - use async Kafka
       const result = await createOrder(orderData);
       Swal.close();
+
+      // Track purchase events for all ordered products
+      selectedItems.forEach((item) => {
+        trackPurchase(item.productId || item.id, item.quantity || 1);
+      });
 
       // Show success modal with countdown (wait for Kafka to process order)
       let timerInterval;
@@ -1228,7 +1234,7 @@ export function CheckoutPage({
                     />
                     <div className="checkout-payment-info">
                       <div className="checkout-payment-name">
-                        💜 Ví MoMo
+                        MoMo
                       </div>
                       <div className="checkout-payment-details">
                         {t('checkout.momoDescription', 'Thanh toán qua ví điện tử MoMo')}

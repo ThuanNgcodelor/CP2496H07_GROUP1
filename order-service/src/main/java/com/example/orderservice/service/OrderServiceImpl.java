@@ -360,8 +360,8 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Cannot cancel order with status: " + order.getOrderStatus());
         }
 
-        // Nếu là VNPay và đã PAID → Refund vào wallet của client
-        if ("VNPAY".equalsIgnoreCase(order.getPaymentMethod())) {
+        // Nếu là VNPay/MOMO và đã PAID → Refund vào wallet của client
+        if ("VNPAY".equalsIgnoreCase(order.getPaymentMethod()) || "MOMO".equalsIgnoreCase(order.getPaymentMethod())) {
             try {
                 ResponseEntity<PaymentDto> paymentResponse = paymentServiceClient.getPaymentByOrderId(orderId);
                 if (paymentResponse != null && paymentResponse.getBody() != null) {
