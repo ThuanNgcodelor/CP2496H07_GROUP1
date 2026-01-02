@@ -12,8 +12,19 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Kafka producer service for publishing behavior events asynchronously
- * Events are sent to analytics-topic for processing by consumers
+ * ===== PHASE 1: KAFKA PRODUCER =====
+ * 
+ * Service gửi behavior events đến Kafka một cách ASYNC (bất đồng bộ)
+ * Events được gửi đến topic: analytics-topic
+ * 
+ * TẠI SAO DÙNG KAFKA?
+ * - Không block user request (gửi async, response trong 5ms)
+ * - High throughput: xử lý hàng ngàn events/giây
+ * - Đảm bảo thứ tự events theo productId (partition key)
+ * - Retry tự động nếu gửi thất bại
+ * 
+ * LUỒNG:
+ * TrackingService → BehaviorKafkaProducer → Kafka → BehaviorKafkaConsumer → MySQL
  */
 @Service
 @RequiredArgsConstructor
@@ -26,48 +37,59 @@ public class BehaviorKafkaProducer {
     private String analyticsTopic;
     
     /**
-     * Send behavior event to Kafka asynchronously
-     * Uses productId as partition key for ordering guarantee per product
+     * Gửi behavior event đến Kafka (ASYNC - không chờ đợi)
      * 
-     * @param event The behavior event to send
+     * Hoạt động:
+     * 1. Xác định partition key = productId (hoặc sessionId nếu không có productId)
+     * 2. Gửi message đến Kafka topic
+     * 3. Log kết quả khi hoàn thành (callback)
+     * 
+     * Dùng @Async để chạy trên thread pool riêng, không block request
+     * 
+     * @param event Event hành vi cần gửi
      */
     @Async
     public void sendEvent(BehaviorEventDto event) {
         try {
+            // Key = productId để đảm bảo events của cùng 1 product vào cùng partition
+            // → Giữ thứ tự sự kiện cho mỗi sản phẩm
             String key = event.getProductId() != null ? event.getProductId() : event.getSessionId();
             
             CompletableFuture<SendResult<String, Object>> future = 
                     kafkaTemplate.send(analyticsTopic, key, event);
             
+            // Callback khi gửi xong (thành công hoặc thất bại)
             future.whenComplete((result, ex) -> {
                 if (ex != null) {
-                    log.error("Failed to send behavior event: {}", ex.getMessage());
+                    log.error("Gửi behavior event thất bại: {}", ex.getMessage());
                 } else {
-                    log.debug("Sent behavior event: type={}, productId={}, partition={}", 
+                    log.debug("Đã gửi behavior event: type={}, productId={}, partition={}", 
                             event.getEventType(), 
                             event.getProductId(),
                             result.getRecordMetadata().partition());
                 }
             });
         } catch (Exception e) {
-            log.error("Error sending behavior event to Kafka: {}", e.getMessage());
+            log.error("Lỗi gửi behavior event đến Kafka: {}", e.getMessage());
         }
     }
     
     /**
-     * Send event synchronously (blocking) - use for critical events
+     * Gửi event ĐỒNG BỘ (blocking) - dùng cho events quan trọng
      * 
-     * @param event The behavior event to send
-     * @return true if sent successfully, false otherwise
+     * Ví dụ: events cần đảm bảo gửi thành công trước khi response
+     * 
+     * @param event Event hành vi cần gửi
+     * @return true nếu gửi thành công, false nếu thất bại
      */
     public boolean sendEventSync(BehaviorEventDto event) {
         try {
             String key = event.getProductId() != null ? event.getProductId() : event.getSessionId();
-            kafkaTemplate.send(analyticsTopic, key, event).get();
-            log.debug("Sent behavior event synchronously: type={}", event.getEventType());
+            kafkaTemplate.send(analyticsTopic, key, event).get(); // .get() = blocking wait
+            log.debug("Đã gửi behavior event đồng bộ: type={}", event.getEventType());
             return true;
         } catch (Exception e) {
-            log.error("Failed to send behavior event synchronously: {}", e.getMessage());
+            log.error("Gửi behavior event đồng bộ thất bại: {}", e.getMessage());
             return false;
         }
     }

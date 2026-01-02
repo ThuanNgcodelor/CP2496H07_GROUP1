@@ -50,12 +50,14 @@ const createApiInstance = (baseURL) => {
     const PUBLIC_401_ALLOWLIST = [
         "/user/vets/getAllVet",
         "/user/vets/search",
-        "/stock/product/list", 
+        "/stock/product/list",
         "/stock/product/getProductById", // Public - allow guest to view product details
-        "/stock/category/getAll", 
+        "/stock/category/getAll",
         "/file-storage/get",
         "/shop-owners/", // Public - allow guest to view shop owner info
         "/order/track/",
+        "/stock/search/query", // Public - allow guest to search products
+        "/stock/search/autocomplete", // Public - allow guest to use autocomplete
     ];
 
     api.interceptors.response.use(
@@ -80,7 +82,7 @@ const createApiInstance = (baseURL) => {
 
                 // Kiểm tra xem có token trong cookie không
                 const hasToken = Cookies.get("accessToken");
-                
+
                 // Nếu là public endpoint hoặc đang ở trang auth/public → chỉ reject, không redirect
                 // QUAN TRỌNG: Không redirect khi ở trang public, kể cả khi có token invalid
                 if (isPublicEndpoint || onAuthPage || onPublicPage) {
@@ -98,7 +100,7 @@ const createApiInstance = (baseURL) => {
                     window.location.href = `/login?from=${encodeURIComponent(current)}`;
                     return;
                 }
-                
+
                 // Guest không có token ở trang không public → chỉ reject error, không redirect
                 return Promise.reject(error);
             }

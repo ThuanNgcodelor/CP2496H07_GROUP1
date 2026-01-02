@@ -2,31 +2,51 @@ import { useEffect, useRef, useCallback } from 'react';
 import { trackView, trackSearch, trackCart } from '../api/tracking';
 
 /**
- * Hook to track product view with duration
- * Automatically tracks when component unmounts (user leaves page)
+ * ===== HOOK THEO DÕI HÀNH VI NGƯỜI DÙNG =====
  * 
- * @param {string} productId - Product ID to track
- * @param {string} source - Source of the view (homepage, search, category, recommendation)
+ * Các React hooks để theo dõi hành vi người dùng trên frontend
+ * Gửi dữ liệu đến backend thông qua tracking API
+ * 
+ * CÁC HOOK:
+ * - useTrackProductView: Theo dõi xem sản phẩm (kèm thời gian xem)
+ * - useTrackSearch: Theo dõi tìm kiếm (có debounce)
+ * - useTrackAddToCart: Theo dõi thêm vào giỏ hàng
+ * - trackProductView: Hàm helper không dùng hook
+ */
+
+/**
+ * Hook theo dõi XEM SẢN PHẨM với thời gian xem
+ * 
+ * Cách hoạt động:
+ * 1. Ghi nhận thời điểm bắt đầu xem
+ * 2. Khi user rời trang (component unmount) → tính duration
+ * 3. Gửi tracking event đến backend
+ * 
+ * @param {string} productId - ID sản phẩm đang xem
+ * @param {string} source - Nguồn xem (homepage, search, category, recommendation)
  * 
  * @example
- * // In ProductDetail.jsx
+ * // Trong ProductDetail.jsx
  * function ProductDetail({ productId }) {
  *     useTrackProductView(productId, 'product_detail');
- *     // ... rest of component
+ *     // ... phần còn lại của component
  * }
  */
 export const useTrackProductView = (productId, source = 'direct') => {
     const startTime = useRef(Date.now());
-    const hasTracked = useRef(false); useEffect(() => {
+    const hasTracked = useRef(false);
+
+    useEffect(() => {
         if (!productId) return;
 
-        // Reset tracking on productId change
+        // Reset tracking khi productId thay đổi
         startTime.current = Date.now();
         hasTracked.current = false;
 
-        // Track when user leaves the page
+        // Track khi user rời trang (cleanup function)
         return () => {
             if (!hasTracked.current && productId) {
+                // Tính thời gian xem (giây)
                 const duration = Math.round((Date.now() - startTime.current) / 1000);
                 trackView(productId, source, duration);
                 hasTracked.current = true;
@@ -36,14 +56,18 @@ export const useTrackProductView = (productId, source = 'direct') => {
 };
 
 /**
- * Hook to get debounced track search function
- * Prevents too many tracking calls when user is typing
+ * Hook theo dõi TÌM KIẾM với debounce
  * 
- * @param {number} delay - Debounce delay in ms (default 500ms)
- * @returns {Function} Debounced trackSearch function
+ * Tại sao cần debounce?
+ * - Tránh gửi quá nhiều request khi user đang gõ
+ * - Chỉ track khi user ngừng gõ trong 500ms
+ * - Chỉ track từ khóa >= 2 ký tự
+ * 
+ * @param {number} delay - Thời gian debounce (ms), mặc định 500ms
+ * @returns {Function} Hàm trackSearch đã được debounce
  * 
  * @example
- * // In SearchComponent.jsx
+ * // Trong SearchComponent.jsx
  * function SearchComponent() {
  *     const trackSearchDebounced = useTrackSearch(300);
  *     
@@ -58,18 +82,21 @@ export const useTrackSearch = (delay = 500) => {
     const timeoutRef = useRef(null);
 
     const debouncedTrack = useCallback((keyword, resultCount = 0) => {
+        // Xóa timeout cũ nếu có (user vẫn đang gõ)
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
         }
 
+        // Đặt timeout mới
         timeoutRef.current = setTimeout(() => {
+            // Chỉ track từ khóa có >= 2 ký tự
             if (keyword && keyword.trim().length >= 2) {
                 trackSearch(keyword.trim(), resultCount);
             }
         }, delay);
     }, [delay]);
 
-    // Cleanup on unmount
+    // Cleanup khi component unmount
     useEffect(() => {
         return () => {
             if (timeoutRef.current) {
@@ -82,30 +109,33 @@ export const useTrackSearch = (delay = 500) => {
 };
 
 /**
- * Hook to track add to cart with callback
- * Returns a function that tracks and executes original add to cart
+ * Hook theo dõi THÊM VÀO GIỎ HÀNG
  * 
- * @param {Function} originalAddToCart - Original add to cart function
- * @returns {Function} Enhanced add to cart function with tracking
+ * Cách hoạt động:
+ * 1. Nhận hàm addToCart gốc
+ * 2. Trả về hàm mới: track + gọi hàm gốc
+ * 
+ * @param {Function} originalAddToCart - Hàm thêm giỏ hàng gốc
+ * @returns {Function} Hàm thêm giỏ hàng có tracking
  * 
  * @example
- * // In ProductDetail.jsx
+ * // Trong ProductDetail.jsx
  * function ProductDetail({ productId }) {
  *     const addToCartOriginal = async (productId, quantity) => {
- *         // original logic
+ *         // logic gốc
  *     };
  *     
  *     const addToCart = useTrackAddToCart(addToCartOriginal);
  *     
- *     return <button onClick={() => addToCart(productId, 1)}>Add to Cart</button>;
+ *     return <button onClick={() => addToCart(productId, 1)}>Thêm vào giỏ</button>;
  * }
  */
 export const useTrackAddToCart = (originalAddToCart) => {
     return useCallback(async (productId, quantity = 1, ...args) => {
-        // Track the add to cart action
+        // Track hành động thêm giỏ hàng
         trackCart(productId, quantity);
 
-        // Execute original function
+        // Thực thi hàm gốc
         if (originalAddToCart) {
             return originalAddToCart(productId, quantity, ...args);
         }
@@ -113,14 +143,14 @@ export const useTrackAddToCart = (originalAddToCart) => {
 };
 
 /**
- * Simple function to track view immediately (for non-hook usage)
- * Use this in event handlers or outside React components
+ * Hàm helper để track xem sản phẩm ngay lập tức (không dùng hook)
+ * Dùng trong event handlers hoặc bên ngoài React components
  * 
- * @param {string} productId - Product ID
- * @param {string} source - Source of the view
+ * @param {string} productId - ID sản phẩm
+ * @param {string} source - Nguồn xem
  * 
  * @example
- * // In event handler
+ * // Trong event handler
  * const handleProductClick = (productId) => {
  *     trackProductView(productId, 'homepage');
  *     navigate(`/product/${productId}`);

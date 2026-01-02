@@ -21,8 +21,16 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Main service for tracking user behavior events
- * Coordinates between Redis (real-time) and Kafka (async persistence)
+ * ===== PHASE 1: TRACKING SERVICE =====
+ * LUỒNG HOẠT ĐỘNG:
+ * 1. User xem sản phẩm/search → Frontend gọi API tracking
+ * 2. TrackingService nhận request → Cập nhật Redis ngay lập tức (real-time counters)
+ * 3. TrackingService gửi event đến Kafka (async) → Consumer lưu vào MySQL
+ * CÁC LOẠI EVENT:
+ * - VIEW: Xem sản phẩm (productId, duration, source)
+ * - SEARCH: Tìm kiếm (keyword)
+ * - ADD_CART: Thêm vào giỏ hàng (productId, quantity)
+ * - PURCHASE: Mua hàng (productId, orderId)
  */
 @Service
 @RequiredArgsConstructor
@@ -34,11 +42,16 @@ public class TrackingService {
     private final ProductRepository productRepository;
     private final JwtUtil jwtUtil;
     
+    // ==================== TRACKING METHODS ====================
+    
     /**
-     * Track product view event
-     * Updates Redis counters immediately and sends to Kafka for persistence
-     * 
-     * @param request View tracking request
+     * Theo dõi sự kiện XEM SẢN PHẨM
+     * Luồng xử lý:
+     * 1. Lấy userId từ JWT token
+     * 2. Tăng view counter trong Redis (real-time)
+     * 3. Thêm vào danh sách "đã xem gần đây" cho user đã đăng nhập
+     * 4. Gửi event đến Kafka để lưu vào MySQL (async)
+     * @param request Thông tin tracking: productId, sessionId, source, duration
      */
     public void trackView(TrackViewRequest request) {
         String userId = getCurrentUserId();
@@ -47,15 +60,15 @@ public class TrackingService {
         log.info("Tracking view: productId={}, userId={}, source={}", 
                 request.getProductId(), userId, request.getSource());
         
-        // 1. Update Redis counters immediately (real-time)
+        // Bước 1: Cập nhật Redis counters ngay lập tức (real-time)
         redisService.incrementViewCount(request.getProductId());
         
-        // 2. Add to recently viewed for logged-in users
+        // Bước 2: Thêm vào danh sách "đã xem gần đây" cho user đã đăng nhập
         if (userId != null) {
             redisService.addRecentlyViewed(userId, request.getProductId());
         }
         
-        // 3. Send to Kafka for async persistence
+        // Bước 3: Gửi đến Kafka để lưu vào MySQL
         BehaviorEventDto event = BehaviorEventDto.builder()
                 .eventId(UUID.randomUUID().toString())
                 .userId(userId)
@@ -72,20 +85,22 @@ public class TrackingService {
     }
     
     /**
-     * Track search event
-     * Updates Redis search counters and trending keywords
-     * 
-     * @param request Search tracking request
+     * Theo dõi sự kiện TÌM KIẾM
+     * Luồng xử lý:
+     * 1. Tăng search counter trong Redis
+     * 2. Cập nhật danh sách "từ khóa trending"
+     * 3. Gửi event đến Kafka để lưu vào MySQL
+     * @param request Thông tin tracking: keyword, sessionId
      */
     public void trackSearch(TrackSearchRequest request) {
         String userId = getCurrentUserId();
         
         log.info("Tracking search: keyword={}, userId={}", request.getKeyword(), userId);
         
-        // 1. Update Redis search counter and trending
+        // Bước 1: Cập nhật Redis search counter và trending keywords
         redisService.incrementSearchCount(request.getKeyword());
         
-        // 2. Send to Kafka for async persistence
+        // Bước 2: Gửi đến Kafka để lưu vào MySQL (async)
         BehaviorEventDto event = BehaviorEventDto.builder()
                 .eventId(UUID.randomUUID().toString())
                 .userId(userId)
@@ -99,9 +114,9 @@ public class TrackingService {
     }
     
     /**
-     * Track add to cart event
+     * Theo dõi sự kiện THÊM VÀO GIỎ HÀNG
      * 
-     * @param request Cart tracking request
+     * @param request Thông tin tracking: productId, quantity
      */
     public void trackCart(TrackCartRequest request) {
         String userId = getCurrentUserId();
@@ -110,7 +125,7 @@ public class TrackingService {
         log.info("Tracking add to cart: productId={}, userId={}, quantity={}", 
                 request.getProductId(), userId, request.getQuantity());
         
-        // Send to Kafka for async persistence
+        // Gửi đến Kafka để lưu vào MySQL (async)
         BehaviorEventDto event = BehaviorEventDto.builder()
                 .eventId(UUID.randomUUID().toString())
                 .userId(userId)
@@ -125,12 +140,12 @@ public class TrackingService {
     }
     
     /**
-     * Track purchase event (called from order service via Kafka or Feign)
+     * Theo dõi sự kiện MUA HÀNG (gọi từ Order Service qua Kafka/Feign)
      * 
-     * @param userId User ID
-     * @param productId Product ID
-     * @param shopId Shop ID
-     * @param orderId Order ID
+     * @param userId ID người dùng
+     * @param productId ID sản phẩm
+     * @param shopId ID cửa hàng
+     * @param orderId ID đơn hàng
      */
     public void trackPurchase(String userId, String productId, String shopId, String orderId) {
         log.info("Tracking purchase: productId={}, userId={}, orderId={}", 
@@ -149,11 +164,11 @@ public class TrackingService {
     }
     
     /**
-     * Track purchase event from frontend
-     * Called when user successfully places an order from the frontend
+     * Theo dõi sự kiện MUA HÀNG từ Frontend
+     * Được gọi khi user đặt hàng thành công từ giao diện
      * 
-     * @param productId Product ID
-     * @param quantity Quantity purchased
+     * @param productId ID sản phẩm
+     * @param quantity Số lượng mua
      */
     public void trackPurchaseFromFrontend(String productId, Integer quantity) {
         String userId = getCurrentUserId();
@@ -175,13 +190,13 @@ public class TrackingService {
         kafkaProducer.sendEvent(event);
     }
     
-    // ==================== Query Methods ====================
+    // ==================== QUERY METHODS (Truy vấn dữ liệu) ====================
     
     /**
-     * Get recently viewed products for current user
+     * Lấy danh sách sản phẩm đã xem gần đây của user hiện tại
      * 
-     * @param limit Maximum number of products
-     * @return List of product IDs
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Danh sách productId
      */
     public List<String> getRecentlyViewed(int limit) {
         String userId = getCurrentUserId();
@@ -192,40 +207,40 @@ public class TrackingService {
     }
     
     /**
-     * Get trending search keywords
+     * Lấy từ khóa tìm kiếm xu hướng (trending)
      * 
-     * @param limit Maximum number of keywords
-     * @return Set of trending keywords
+     * @param limit Số lượng từ khóa tối đa
+     * @return Set các từ khóa trending
      */
     public Set<String> getTrendingKeywords(int limit) {
         return redisService.getTrendingKeywords(limit);
     }
     
     /**
-     * Get trending products
+     * Lấy sản phẩm xu hướng (được xem nhiều nhất)
      * 
-     * @param limit Maximum number of products
-     * @return Set of product IDs
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Set các productId trending
      */
     public Set<String> getTrendingProducts(int limit) {
         return redisService.getTrendingProducts(limit);
     }
     
     /**
-     * Get view count for a product
+     * Lấy số lượt xem của một sản phẩm
      * 
-     * @param productId Product ID
-     * @return View count
+     * @param productId ID sản phẩm
+     * @return Số lượt xem
      */
     public Long getViewCount(String productId) {
         return redisService.getViewCount(productId);
     }
     
-    // ==================== Helper Methods ====================
+    // ==================== HELPER METHODS (Phương thức hỗ trợ) ====================
     
     /**
-     * Get current authenticated user ID from JWT token
-     * Returns the actual userId (UUID) instead of email
+     * Lấy userId hiện tại từ JWT token
+     * Trả về UUID userId thực thay vì email
      */
     private String getCurrentUserId() {
         try {
@@ -235,13 +250,13 @@ public class TrackingService {
                 return jwtUtil.ExtractUserId(request);
             }
         } catch (Exception e) {
-            log.debug("Could not get current user ID from JWT: {}", e.getMessage());
+            log.debug("Không thể lấy userId từ JWT: {}", e.getMessage());
         }
         return null;
     }
     
     /**
-     * Get shop ID for a product
+     * Lấy shopId (userId của shop owner) từ productId
      */
     private String getShopIdForProduct(String productId) {
         if (productId == null) {
@@ -252,7 +267,7 @@ public class TrackingService {
                     .map(Product::getUserId)
                     .orElse(null);
         } catch (Exception e) {
-            log.warn("Could not get shop ID for product {}: {}", productId, e.getMessage());
+            log.warn("Không thể lấy shopId cho sản phẩm {}: {}", productId, e.getMessage());
             return null;
         }
     }

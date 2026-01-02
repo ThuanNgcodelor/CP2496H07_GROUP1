@@ -85,43 +85,57 @@ export default function Header() {
     fetchTotalCart();
   }, [token, setCart]);
 
-  // Search suggestions
+  // Search suggestions with history
+  const [searchHistory, setSearchHistory] = useState([]);
+
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
       const fetchSuggestions = async () => {
         try {
-          const res = await fetchProducts();
-          const products = res.data || [];
-          const filtered = products
-            .filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-            .slice(0, 10)
-            .map(p => ({
-              id: p.id,
-              name: p.name,
-              type: 'product'
-            }));
+          const { getAutocomplete } = await import('../../api/searchApi');
+          const response = await getAutocomplete(searchQuery, 10);
 
-          // Add shop suggestions
-          const shopSuggestions = [{
-            id: 'shop',
-            name: t('header.findShop', { query: searchQuery }),
-            type: 'shop'
-          }];
+          // Transform suggestions to match current format
+          const suggestions = response.suggestions.map(s => ({
+            id: s.productId || s.text,
+            name: s.text,
+            type: s.type // 'product', 'history', 'keyword'
+          }));
 
-          setSearchSuggestions([...shopSuggestions, ...filtered]);
+          setSearchSuggestions(suggestions);
           setShowSearchSuggestions(true);
         } catch (error) {
-          console.error('Error fetching suggestions:', error);
+          console.error('Error fetching autocomplete:', error);
         }
       };
 
       const timeoutId = setTimeout(fetchSuggestions, 300);
       return () => clearTimeout(timeoutId);
     } else {
+      // Empty query - show search history if available
+      if (token) {
+        const loadHistory = async () => {
+          try {
+            const { getSearchHistory } = await import('../../api/searchApi');
+            const response = await getSearchHistory(5);
+            const historyItems = (response.history || []).map(h => ({
+              id: h,
+              name: h,
+              type: 'history'
+            }));
+            setSearchHistory(historyItems);
+            setSearchSuggestions(historyItems);
+            // Don't auto-show, only show when focused
+          } catch (error) {
+            console.error('Error loading search history:', error);
+          }
+        };
+        loadHistory();
+      }
       setSearchSuggestions([]);
       setShowSearchSuggestions(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, token]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -229,11 +243,28 @@ export default function Header() {
   const handleSuggestionClick = (suggestion) => {
     if (suggestion.type === 'shop') {
       navigate(`/shop?q=${encodeURIComponent(suggestion.name.replace("Find Shop '", "").replace("'", ""))}`);
+    } else if (suggestion.type === 'history' || suggestion.type === 'keyword') {
+      // For history/keyword, set as search query and navigate
+      navigate(`/shop?q=${encodeURIComponent(suggestion.name)}`);
     } else {
+      // Product type
       navigate(`/product/${suggestion.id}`);
     }
     setSearchQuery("");
     setShowSearchSuggestions(false);
+  };
+
+  const handleRemoveHistoryItem = async (e, item) => {
+    e.stopPropagation();
+    try {
+      const { removeSearchHistoryItem } = await import('../../api/searchApi');
+      await removeSearchHistoryItem(item.name);
+      // Reload history
+      setSearchHistory(prev => prev.filter(h => h.name !== item.name));
+      setSearchSuggestions(prev => prev.filter(s => s.name !== item.name));
+    } catch (error) {
+      console.error('Error removing history item:', error);
+    }
   };
 
   return (
@@ -573,18 +604,56 @@ export default function Header() {
                       padding: '12px 16px',
                       cursor: 'pointer',
                       borderBottom: idx < searchSuggestions.length - 1 ? '1px solid #f0f0f0' : 'none',
-                      transition: 'background 0.2s'
+                      transition: 'background 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                   >
-                    <div style={{ fontSize: '14px', color: '#222' }}>
-                      {suggestion.name}
-                    </div>
-                    {suggestion.type === 'product' && (
-                      <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                        {t('header.product')}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                      {/* Icon based on type */}
+                      {suggestion.type === 'history' && (
+                        <i className="fa fa-history" style={{ color: '#999', fontSize: '14px' }}></i>
+                      )}
+                      {suggestion.type === 'product' && (
+                        <i className="fa fa-box" style={{ color: '#999', fontSize: '14px' }}></i>
+                      )}
+                      {suggestion.type === 'keyword' && (
+                        <i className="fa fa-search" style={{ color: '#999', fontSize: '14px' }}></i>
+                      )}
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', color: '#222' }}>
+                          {suggestion.name}
+                        </div>
+                        {suggestion.type === 'product' && (
+                          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+                            {t('header.product')}
+                          </div>
+                        )}
                       </div>
+                    </div>
+
+                    {/* Remove button for history items */}
+                    {suggestion.type === 'history' && (
+                      <button
+                        onClick={(e) => handleRemoveHistoryItem(e, suggestion)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#999',
+                          cursor: 'pointer',
+                          padding: '4px 8px',
+                          fontSize: '16px',
+                          lineHeight: 1
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = '#ee4d2d'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
                 ))}

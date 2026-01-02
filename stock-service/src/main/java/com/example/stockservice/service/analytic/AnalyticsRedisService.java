@@ -12,8 +12,27 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Service for managing analytics counters and data in Redis
- * Provides real-time tracking capabilities with expiration policies
+ * ===== PHASE 1: REDIS ANALYTICS SERVICE =====
+ quản lý dữ liệu analytics trong Redis
+ * CẤU TRÚC DỮ LIỆU REDIS:
+ * 1. VIEW COUNTER (String):
+ *    Key: "analytics:view:{productId}"
+ *    Value: số lượt xem
+ *    TTL: 7 ngày
+ * 2. SEARCH COUNTER (String):
+ *    Key: "analytics:search:{keyword}"
+ *    Value: số lượt tìm kiếm
+ *    TTL: 7 ngày
+ * 3. RECENTLY VIEWED (List):
+ *    Key: "analytics:recent:{userId}"
+ *    Value: danh sách productId (mới nhất ở đầu)
+ *    Max: 20 items, TTL: 30 ngày
+ * 4. TRENDING PRODUCTS (Sorted Set):
+ *    Key: "analytics:trending_products"
+ *    Value: productId với score = số lượt xem
+ * 5. TRENDING KEYWORDS (Sorted Set):
+ *    Key: "analytics:trending_search"
+ *    Value: keyword với score = số lượt search
  */
 @Service
 @RequiredArgsConstructor
@@ -22,23 +41,29 @@ public class AnalyticsRedisService {
     
     private final RedisTemplate<String, Object> redisTemplate;
     
-    // Key prefixes
+    // Key prefixes - tiền tố cho các key Redis
     private static final String VIEW_COUNT_PREFIX = "analytics:view:";
     private static final String SEARCH_COUNT_PREFIX = "analytics:search:";
     private static final String RECENT_VIEWS_PREFIX = "analytics:recent:";
     private static final String TRENDING_SEARCH_KEY = "analytics:trending_search";
     private static final String TRENDING_PRODUCTS_KEY = "analytics:trending_products";
     
-    // TTL constants
-    private static final long VIEW_COUNT_TTL_DAYS = 7;
-    private static final long RECENT_VIEWS_TTL_DAYS = 30;
-    private static final int MAX_RECENT_VIEWS = 20;
+    // TTL constants - thời gian sống của dữ liệu
+    private static final long VIEW_COUNT_TTL_DAYS = 7;      // View count giữ 7 ngày
+    private static final long RECENT_VIEWS_TTL_DAYS = 30;   // Recently viewed giữ 30 ngày
+    private static final int MAX_RECENT_VIEWS = 20;         // Tối đa 20 sản phẩm đã xem
     
-    // ==================== VIEW COUNTERS ====================
+    // ==================== VIEW COUNTERS (Đếm lượt xem) ====================
     
     /**
-     * Increment view count for a product
-     * @param productId Product ID
+     * Tăng số lượt xem cho một sản phẩm
+     * 
+     * Hoạt động:
+     * 1. INCR: Tăng counter cho productId
+     * 2. EXPIRE: Set TTL 7 ngày
+     * 3. ZINCRBY: Tăng score trong Sorted Set trending_products
+     * 
+     * @param productId ID sản phẩm
      */
     public void incrementViewCount(String productId) {
         try {
@@ -46,18 +71,19 @@ public class AnalyticsRedisService {
             redisTemplate.opsForValue().increment(key);
             redisTemplate.expire(key, VIEW_COUNT_TTL_DAYS, TimeUnit.DAYS);
             
-            // Also add to trending products sorted set
+            // Cập nhật Sorted Set để tracking sản phẩm trending
             redisTemplate.opsForZSet().incrementScore(TRENDING_PRODUCTS_KEY, productId, 1);
-            log.debug("Incremented view count for product: {}", productId);
+            log.debug("Đã tăng view count cho sản phẩm: {}", productId);
         } catch (Exception e) {
-            log.warn("Failed to increment view count for {}: {}", productId, e.getMessage());
+            log.warn("Lỗi tăng view count cho {}: {}", productId, e.getMessage());
         }
     }
     
     /**
-     * Get view count for a product
-     * @param productId Product ID
-     * @return View count
+     * Lấy số lượt xem của một sản phẩm
+     * 
+     * @param productId ID sản phẩm
+     * @return Số lượt xem (0 nếu không tồn tại)
      */
     public Long getViewCount(String productId) {
         try {
@@ -65,16 +91,20 @@ public class AnalyticsRedisService {
             Object value = redisTemplate.opsForValue().get(key);
             return value != null ? Long.parseLong(value.toString()) : 0L;
         } catch (Exception e) {
-            log.warn("Failed to get view count for {}: {}", productId, e.getMessage());
+            log.warn("Lỗi lấy view count cho {}: {}", productId, e.getMessage());
             return 0L;
         }
     }
     
-    // ==================== SEARCH COUNTERS ====================
+    // ==================== SEARCH COUNTERS (Đếm lượt tìm kiếm) ====================
     
     /**
-     * Increment search count for a keyword
-     * @param keyword Search keyword
+     * Tăng số lượt tìm kiếm cho một từ khóa
+     * Hoạt động:
+     * 1. Chuẩn hóa keyword (lowercase, trim)
+     * 2. INCR: Tăng counter cho keyword
+     * 3. ZINCRBY: Tăng score trong Sorted Set trending_search
+     * @param keyword Từ khóa tìm kiếm
      */
     public void incrementSearchCount(String keyword) {
         try {
@@ -83,18 +113,19 @@ public class AnalyticsRedisService {
             redisTemplate.opsForValue().increment(key);
             redisTemplate.expire(key, VIEW_COUNT_TTL_DAYS, TimeUnit.DAYS);
             
-            // Add to trending searches sorted set
+            // Cập nhật Sorted Set để tracking từ khóa trending
             redisTemplate.opsForZSet().incrementScore(TRENDING_SEARCH_KEY, normalizedKeyword, 1);
-            log.debug("Incremented search count for keyword: {}", normalizedKeyword);
+            log.debug("Đã tăng search count cho từ khóa: {}", normalizedKeyword);
         } catch (Exception e) {
-            log.warn("Failed to increment search count for {}: {}", keyword, e.getMessage());
+            log.warn("Lỗi tăng search count cho {}: {}", keyword, e.getMessage());
         }
     }
     
     /**
-     * Get search count for a keyword
-     * @param keyword Search keyword
-     * @return Search count
+     * Lấy số lượt tìm kiếm của một từ khóa
+     * 
+     * @param keyword Từ khóa tìm kiếm
+     * @return Số lượt tìm kiếm
      */
     public Long getSearchCount(String keyword) {
         try {
@@ -102,49 +133,55 @@ public class AnalyticsRedisService {
             Object value = redisTemplate.opsForValue().get(key);
             return value != null ? Long.parseLong(value.toString()) : 0L;
         } catch (Exception e) {
-            log.warn("Failed to get search count for {}: {}", keyword, e.getMessage());
+            log.warn("Lỗi lấy search count cho {}: {}", keyword, e.getMessage());
             return 0L;
         }
     }
     
-    // ==================== RECENTLY VIEWED ====================
+    // ==================== RECENTLY VIEWED (Sản phẩm đã xem gần đây) ====================
     
     /**
-     * Add a product to user's recently viewed list
-     * @param userId User ID
-     * @param productId Product ID
+     * Thêm sản phẩm vào danh sách "đã xem gần đây" của user
+     * Hoạt động:
+     * 1. LREM: Xóa productId nếu đã tồn tại (để đẩy lên đầu)
+     * 2. LPUSH: Thêm vào đầu danh sách
+     * 3. LTRIM: Giữ tối đa 20 items
+     * 4. EXPIRE: Set TTL 30 ngày
+     * @param userId ID người dùng
+     * @param productId ID sản phẩm
      */
     public void addRecentlyViewed(String userId, String productId) {
         if (userId == null || userId.isEmpty()) {
-            return; // Skip for guest users without session tracking
+            return; // Bỏ qua nếu là guest user
         }
         
         try {
             String key = RECENT_VIEWS_PREFIX + userId;
             
-            // Remove if already exists (to move to front)
+            // Xóa nếu đã tồn tại (để move lên đầu danh sách)
             redisTemplate.opsForList().remove(key, 1, productId);
             
-            // Add to front of list
+            // Thêm vào đầu danh sách (mới nhất ở đầu)
             redisTemplate.opsForList().leftPush(key, productId);
             
-            // Trim to max size
+            // Giữ tối đa MAX_RECENT_VIEWS items
             redisTemplate.opsForList().trim(key, 0, MAX_RECENT_VIEWS - 1);
             
-            // Set expiration
+            // Set thời gian hết hạn
             redisTemplate.expire(key, RECENT_VIEWS_TTL_DAYS, TimeUnit.DAYS);
             
-            log.debug("Added {} to recent views for user: {}", productId, userId);
+            log.debug("Đã thêm {} vào recent views của user: {}", productId, userId);
         } catch (Exception e) {
-            log.warn("Failed to add recent view for user {}: {}", userId, e.getMessage());
+            log.warn("Lỗi thêm recent view cho user {}: {}", userId, e.getMessage());
         }
     }
     
     /**
-     * Get recently viewed products for a user
-     * @param userId User ID
-     * @param limit Maximum number of products to return
-     * @return List of product IDs
+     * Lấy danh sách sản phẩm đã xem gần đây của user
+     * 
+     * @param userId ID người dùng
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Danh sách productId (mới nhất ở đầu)
      */
     public List<String> getRecentlyViewed(String userId, int limit) {
         if (userId == null || userId.isEmpty()) {
@@ -161,17 +198,21 @@ public class AnalyticsRedisService {
                     .map(Object::toString)
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.warn("Failed to get recent views for user {}: {}", userId, e.getMessage());
+            log.warn("Lỗi lấy recent views cho user {}: {}", userId, e.getMessage());
             return Collections.emptyList();
         }
     }
     
-    // ==================== TRENDING ====================
+    // ==================== TRENDING (Xu hướng) ====================
     
     /**
-     * Get trending search keywords
-     * @param limit Maximum number of keywords to return
-     * @return Set of trending keywords
+     * Lấy từ khóa tìm kiếm xu hướng (search nhiều nhất)
+     * 
+     * Sử dụng ZREVRANGE để lấy top từ khóa từ Sorted Set
+     * (sắp xếp theo score giảm dần)
+     * 
+     * @param limit Số lượng từ khóa tối đa
+     * @return Set các từ khóa trending
      */
     public Set<String> getTrendingKeywords(int limit) {
         try {
@@ -184,15 +225,19 @@ public class AnalyticsRedisService {
                     .map(Object::toString)
                     .collect(Collectors.toSet());
         } catch (Exception e) {
-            log.warn("Failed to get trending keywords: {}", e.getMessage());
+            log.warn("Lỗi lấy trending keywords: {}", e.getMessage());
             return Collections.emptySet();
         }
     }
     
     /**
-     * Get trending products (most viewed)
-     * @param limit Maximum number of products to return
-     * @return Set of product IDs
+     * Lấy sản phẩm xu hướng (được xem nhiều nhất)
+     * 
+     * Sử dụng ZREVRANGE để lấy top sản phẩm từ Sorted Set
+     * (sắp xếp theo score = số lượt xem, giảm dần)
+     * 
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Set các productId trending
      */
     public Set<String> getTrendingProducts(int limit) {
         try {
@@ -205,21 +250,22 @@ public class AnalyticsRedisService {
                     .map(Object::toString)
                     .collect(Collectors.toSet());
         } catch (Exception e) {
-            log.warn("Failed to get trending products: {}", e.getMessage());
+            log.warn("Lỗi lấy trending products: {}", e.getMessage());
             return Collections.emptySet();
         }
     }
     
     /**
-     * Reset trending data (can be called daily by a scheduler)
+     * Reset dữ liệu trending (có thể gọi hàng ngày bởi scheduler)
+     * Xóa cả trending_search và trending_products
      */
     public void resetTrendingData() {
         try {
             redisTemplate.delete(TRENDING_SEARCH_KEY);
             redisTemplate.delete(TRENDING_PRODUCTS_KEY);
-            log.info("Reset trending data");
+            log.info("Đã reset dữ liệu trending");
         } catch (Exception e) {
-            log.error("Failed to reset trending data: {}", e.getMessage());
+            log.error("Lỗi reset trending data: {}", e.getMessage());
         }
     }
 }

@@ -16,8 +16,33 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Service for generating personalized product recommendations
- * Uses tracking data from Redis to provide real-time recommendations
+ * ===== PHASE 2: RECOMMENDATION SERVICE =====
+ * 
+ * Service tạo gợi ý sản phẩm cá nhân hóa dựa trên dữ liệu hành vi từ Phase 1
+ * Sử dụng dữ liệu tracking từ Redis để gợi ý real-time
+ * 
+ * CÁC LOẠI GỢI Ý:
+ * 
+ * 1. RECENTLY VIEWED (Đã xem gần đây)
+ *    - Nguồn: Redis list "analytics:recent:{userId}"
+ *    - Chỉ dành cho user đã đăng nhập
+ *    - Hiển thị: Section "Đã xem gần đây" trên HomePage
+ * 
+ * 2. TRENDING PRODUCTS (Sản phẩm xu hướng)
+ *    - Nguồn: Redis sorted set "analytics:trending_products"
+ *    - Dành cho tất cả (Guest + User)
+ *    - Hiển thị: Section "Sản phẩm xu hướng" trên HomePage
+ * 
+ * 3. PERSONALIZED (Có thể bạn quan tâm)
+ *    - Logic: Tìm sản phẩm cùng category với sản phẩm đã xem
+ *    - Fallback: Nếu không có history → trả về trending
+ *    - Chỉ dành cho user đã đăng nhập
+ *    - Hiển thị: Section "Có thể bạn quan tâm" trên HomePage
+ * 
+ * 4. SIMILAR PRODUCTS (Sản phẩm tương tự)
+ *    - Logic: Tìm sản phẩm cùng category hoặc cùng shop
+ *    - Dành cho tất cả
+ *    - Hiển thị: Section "Sản phẩm tương tự" trên ProductDetailPage
  */
 @Service
 @RequiredArgsConstructor
@@ -28,15 +53,22 @@ public class RecommendationService {
     private final ProductRepository productRepository;
     private final JwtUtil jwtUtil;
     
-    // ==================== Public API Methods ====================
+    // ==================== API METHODS (Phương thức API) ====================
     
     /**
-     * Get recently viewed products with full details
+     * Lấy sản phẩm ĐÃ XEM GẦN ĐÂY với đầy đủ thông tin
+     * Luồng:
+     * 1. Lấy userId từ JWT
+     * 2. Query Redis để lấy danh sách productId đã xem
+     * 3. Lookup product details từ MySQL
+     * 4. Trả về RecommendationResponse với đầy đủ thông tin
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Danh sách sản phẩm đã xem (rỗng nếu chưa đăng nhập)
      */
     public List<RecommendationResponse> getRecentlyViewedWithDetails(int limit) {
         String userId = getCurrentUserId();
         if (userId == null) {
-            return List.of();
+            return List.of(); // Guest user - không có history
         }
         
         List<String> productIds = redisService.getRecentlyViewed(userId, limit);
@@ -51,7 +83,10 @@ public class RecommendationService {
     }
     
     /**
-     * Get trending products with full details
+     * Lấy sản phẩm XU HƯỚNG (được xem nhiều nhất) với đầy đủ thông tin
+     * Dành cho: Tất cả users (Guest + Logged-in)
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Danh sách sản phẩm trending
      */
     public List<RecommendationResponse> getTrendingProductsWithDetails(int limit) {
         Set<String> productIds = redisService.getTrendingProducts(limit);
@@ -66,21 +101,30 @@ public class RecommendationService {
     }
     
     /**
-     * Get personalized recommendations based on user behavior
+     * Lấy gợi ý CÁ NHÂN HÓA dựa trên hành vi user
+     * Logic gợi ý:
+     * 1. Lấy 5 sản phẩm đã xem gần đây
+     * 2. Lấy category của sản phẩm đầu tiên
+     * 3. Tìm sản phẩm cùng category (loại bỏ sản phẩm đã xem)
+     * 4. Nếu không đủ → thêm sản phẩm cùng shop
+     * 5. Fallback: Nếu không có history → trả về trending
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Danh sách sản phẩm gợi ý cá nhân hóa
      */
     public List<RecommendationResponse> getPersonalizedRecommendations(int limit) {
         String userId = getCurrentUserId();
         if (userId == null) {
-            return List.of();
+            return List.of(); // Guest user
         }
         
-        // Get recently viewed products to find categories
+        // Lấy 5 sản phẩm đã xem gần đây để phân tích category
         List<String> recentlyViewed = redisService.getRecentlyViewed(userId, 5);
         if (recentlyViewed.isEmpty()) {
+            // Không có history → trả về trending products
             return getTrendingProductsWithDetails(limit);
         }
         
-        // Get first viewed product for recommendation reason
+        // Lấy sản phẩm đầu tiên để xác định category
         Optional<Product> firstProduct = productRepository.findById(recentlyViewed.get(0));
         if (firstProduct.isEmpty()) {
             return getTrendingProductsWithDetails(limit);
@@ -90,20 +134,20 @@ public class RecommendationService {
         String categoryId = getCategoryIdFromProduct(baseProduct);
         String reason = "Vì bạn đã xem " + baseProduct.getName();
         
-        // Find products in same category, excluding already viewed
+        // Tìm sản phẩm cùng category, loại bỏ sản phẩm đã xem
         Set<String> viewedSet = new HashSet<>(recentlyViewed);
         final List<Product> recommendations = new ArrayList<>();
         
         if (categoryId != null) {
             List<Product> categoryProducts = productRepository.findByCategoryId(categoryId).stream()
-                    .filter(p -> !viewedSet.contains(p.getId()))
-                    .filter(this::isProductActive)
+                    .filter(p -> !viewedSet.contains(p.getId()))   // Loại bỏ đã xem
+                    .filter(this::isProductActive)                   // Chỉ lấy sản phẩm đang bán
                     .limit(limit)
-                    .collect(Collectors.toList());
+                    .toList();
             recommendations.addAll(categoryProducts);
         }
         
-        // If not enough, add more from same shop
+        // Nếu không đủ số lượng → thêm sản phẩm cùng shop
         if (recommendations.size() < limit) {
             String shopId = baseProduct.getUserId();
             List<Product> shopProducts = productRepository.findByUserId(shopId).stream()
@@ -111,7 +155,7 @@ public class RecommendationService {
                     .filter(p -> !recommendations.contains(p))
                     .filter(this::isProductActive)
                     .limit(limit - recommendations.size())
-                    .collect(Collectors.toList());
+                    .toList();
             recommendations.addAll(shopProducts);
         }
         
@@ -121,7 +165,15 @@ public class RecommendationService {
     }
     
     /**
-     * Get similar products to a given product
+     * Lấy sản phẩm TƯƠNG TỰ với một sản phẩm cụ thể
+     * Dùng cho: ProductDetailPage
+     * Logic:
+     * 1. Tìm sản phẩm cùng category
+     * 2. Nếu không đủ → thêm sản phẩm cùng shop
+     * 
+     * @param productId ID sản phẩm gốc
+     * @param limit Số lượng sản phẩm tối đa
+     * @return Danh sách sản phẩm tương tự
      */
     public List<RecommendationResponse> getSimilarProducts(String productId, int limit) {
         Optional<Product> productOpt = productRepository.findById(productId);
@@ -135,24 +187,24 @@ public class RecommendationService {
         
         List<Product> similar = new ArrayList<>();
         
-        // First, find products in same category
+        // Bước 1: Tìm sản phẩm cùng category
         if (categoryId != null) {
             List<Product> categoryProducts = productRepository.findByCategoryId(categoryId).stream()
-                    .filter(p -> !p.getId().equals(productId))
+                    .filter(p -> !p.getId().equals(productId))  // Loại bỏ sản phẩm gốc
                     .filter(this::isProductActive)
                     .limit(limit)
-                    .collect(Collectors.toList());
+                    .toList();
             similar.addAll(categoryProducts);
         }
         
-        // If not enough, add from same shop
+        // Bước 2: Nếu không đủ → thêm sản phẩm cùng shop
         if (similar.size() < limit && shopId != null) {
             List<Product> shopProducts = productRepository.findByUserId(shopId).stream()
                     .filter(p -> !p.getId().equals(productId))
                     .filter(p -> !similar.contains(p))
                     .filter(this::isProductActive)
                     .limit(limit - similar.size())
-                    .collect(Collectors.toList());
+                    .toList();
             similar.addAll(shopProducts);
         }
         
@@ -161,17 +213,17 @@ public class RecommendationService {
                 .collect(Collectors.toList());
     }
     
-    // ==================== Helper Methods ====================
+    // ==================== HELPER METHODS (Phương thức hỗ trợ) ====================
     
     /**
-     * Check if product is active (IN_STOCK status)
+     * Kiểm tra sản phẩm có đang bán không (status = IN_STOCK)
      */
     private boolean isProductActive(Product product) {
         return product.getStatus() == ProductStatus.IN_STOCK;
     }
     
     /**
-     * Get category ID from product safely
+     * Lấy categoryId từ product một cách an toàn
      */
     private String getCategoryIdFromProduct(Product product) {
         if (product.getCategory() != null) {
@@ -181,23 +233,20 @@ public class RecommendationService {
     }
     
     /**
-     * Build recommendation response from product ID
+     * Tạo RecommendationResponse từ productId
      */
     private RecommendationResponse buildRecommendation(String productId, String source, String reason) {
         try {
             Optional<Product> productOpt = productRepository.findById(productId);
-            if (productOpt.isEmpty()) {
-                return null;
-            }
-            return buildRecommendationFromProduct(productOpt.get(), source, reason);
+            return productOpt.map(product -> buildRecommendationFromProduct(product, source, reason)).orElse(null);
         } catch (Exception e) {
-            log.warn("Failed to build recommendation for product {}: {}", productId, e.getMessage());
+            log.warn("Lỗi tạo recommendation cho sản phẩm {}: {}", productId, e.getMessage());
             return null;
         }
     }
     
     /**
-     * Build recommendation response from product entity
+     * Tạo RecommendationResponse từ Product entity
      */
     private RecommendationResponse buildRecommendationFromProduct(Product product, String source, String reason) {
         Long viewCount = redisService.getViewCount(product.getId());
@@ -218,7 +267,7 @@ public class RecommendationService {
     }
     
     /**
-     * Get current authenticated user ID from JWT token
+     * Lấy userId hiện tại từ JWT token
      */
     private String getCurrentUserId() {
         try {
@@ -228,9 +277,8 @@ public class RecommendationService {
                 return jwtUtil.ExtractUserId(request);
             }
         } catch (Exception e) {
-            log.debug("Could not get current user ID: {}", e.getMessage());
+            log.debug("Không thể lấy userId: {}", e.getMessage());
         }
         return null;
     }
 }
-

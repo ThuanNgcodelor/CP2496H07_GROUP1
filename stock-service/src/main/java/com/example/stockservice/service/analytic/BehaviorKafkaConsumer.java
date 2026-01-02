@@ -18,8 +18,20 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Kafka consumer for processing behavior events
- * Listens to analytics-topic and persists data to MySQL
+ * ===== PHASE 1: KAFKA CONSUMER =====
+ * 
+ * Consumer xử lý behavior events từ Kafka và lưu vào MySQL
+ * Lắng nghe topic: analytics-topic
+ * BẢNG MYSQL ĐƯỢC CẬP NHẬT:
+ * 1. behavior_logs - Log chi tiết từng sự kiện
+ *    Mỗi event tạo 1 record mới 
+ * 2. product_analytics - Thống kê tổng hợp theo sản phẩm
+ *    Chứa: viewCount, cartCount, purchaseCount, conversionRate
+ *    Cập nhật khi có event VIEW, ADD_CART, PURCHASE
+ * 3. search_analytics - Thống kê tìm kiếm theo ngày
+ *    Chứa: keyword, date, searchCount
+ *    Cập nhật khi có event SEARCH
+ * Kafka (analytics-topic) → Consumer.consume() → MySQL (3 bảng)
  */
 @Service
 @RequiredArgsConstructor
@@ -31,8 +43,17 @@ public class BehaviorKafkaConsumer {
     private final SearchAnalyticsRepository searchAnalyticsRepository;
     
     /**
-     * Consume behavior events from Kafka and persist to database
-     * Uses 10 concurrent threads for high throughput
+     * Lắng nghe và xử lý behavior events từ Kafka
+     * 
+     * Cấu hình:
+     * - topics: analytics-topic
+     * - groupId: stock-service-analytics (đảm bảo chỉ 1 consumer xử lý mỗi message)
+     * - containerFactory: dùng cho concurrent processing
+     * 
+     * Hoạt động khi nhận event:
+     * 1. Lưu behavior log chi tiết
+     * 2. Cập nhật product analytics (nếu có productId)
+     * 3. Cập nhật search analytics (nếu có keyword)
      */
     @KafkaListener(
             topics = "${kafka.topic.analytics:analytics-topic}",
@@ -42,32 +63,35 @@ public class BehaviorKafkaConsumer {
     @Transactional
     public void consume(BehaviorEventDto event) {
         try {
-            log.debug("Received behavior event: type={}, productId={}", 
+            log.debug("Nhận behavior event: type={}, productId={}", 
                     event.getEventType(), event.getProductId());
             
-            // 1. Save detailed behavior log
+            // Bước 1: Lưu log chi tiết (luôn thực hiện)
             saveBehaviorLog(event);
             
-            // 2. Update product analytics if applicable
+            // Bước 2: Cập nhật product analytics (nếu có productId)
             if (event.getProductId() != null) {
                 updateProductAnalytics(event);
             }
             
-            // 3. Update search analytics if applicable
+            // Bước 3: Cập nhật search analytics (nếu là event SEARCH)
             if (event.getKeyword() != null && event.getEventType() == EventType.SEARCH) {
                 updateSearchAnalytics(event);
             }
             
-            log.debug("Processed behavior event successfully: {}", event.getEventId());
+            log.debug("Đã xử lý behavior event thành công: {}", event.getEventId());
             
         } catch (Exception e) {
-            log.error("Error processing behavior event {}: {}", event.getEventId(), e.getMessage(), e);
-            // Don't rethrow - let Kafka commit the offset to avoid infinite retry
+            log.error("Lỗi xử lý behavior event {}: {}", event.getEventId(), e.getMessage(), e);
+            // Không throw exception - để Kafka commit offset, tránh retry vô hạn
         }
     }
     
     /**
-     * Save detailed behavior log record
+     * Lưu log chi tiết hành vi vào bảng behavior_logs
+     * 
+     * Mỗi event tạo 1 record mới (append-only log)
+     * Dùng để phân tích chi tiết sau này
      */
     private void saveBehaviorLog(BehaviorEventDto event) {
         BehaviorLog log = BehaviorLog.builder()
@@ -85,9 +109,16 @@ public class BehaviorKafkaConsumer {
     }
     
     /**
-     * Update aggregated product analytics
+     * Cập nhật thống kê tổng hợp cho sản phẩm
+     * 
+     * Bảng: product_analytics
+     * - VIEW: tăng viewCount, cập nhật lastViewedAt
+     * - ADD_CART: tăng cartCount
+     * - PURCHASE: tăng purchaseCount
+     * - Tính lại conversionRate = (purchaseCount / viewCount) * 100
      */
     private void updateProductAnalytics(BehaviorEventDto event) {
+        // Tìm hoặc tạo mới record analytics cho sản phẩm
         ProductAnalytics analytics = productAnalyticsRepository
                 .findById(event.getProductId())
                 .orElseGet(() -> ProductAnalytics.builder()
@@ -100,6 +131,7 @@ public class BehaviorKafkaConsumer {
                         .conversionRate(0.0)
                         .build());
         
+        // Cập nhật counters theo loại event
         switch (event.getEventType()) {
             case VIEW -> {
                 analytics.setViewCount(analytics.getViewCount() + 1);
@@ -109,22 +141,28 @@ public class BehaviorKafkaConsumer {
             case PURCHASE -> analytics.setPurchaseCount(analytics.getPurchaseCount() + 1);
         }
         
-        // Recalculate conversion rate
+        // Tính lại tỷ lệ chuyển đổi (conversion rate)
+        // CVR = (Số đơn mua / Số lượt xem) * 100%
         if (analytics.getViewCount() > 0) {
             double cvr = (analytics.getPurchaseCount() * 100.0) / analytics.getViewCount();
-            analytics.setConversionRate(Math.round(cvr * 100.0) / 100.0); // Round to 2 decimals
+            analytics.setConversionRate(Math.round(cvr * 100.0) / 100.0); // Làm tròn 2 chữ số
         }
         
         productAnalyticsRepository.save(analytics);
     }
     
     /**
-     * Update search analytics for keyword tracking
+     * Cập nhật thống kê tìm kiếm theo ngày
+     * 
+     * Bảng: search_analytics
+     * - Nhóm theo: keyword + date
+     * - Tăng searchCount mỗi khi có event SEARCH
      */
     private void updateSearchAnalytics(BehaviorEventDto event) {
         LocalDate today = LocalDate.now();
         String keyword = event.getKeyword().toLowerCase().trim();
         
+        // Tìm hoặc tạo mới record cho keyword + ngày hôm nay
         SearchAnalytics analytics = searchAnalyticsRepository
                 .findByKeywordAndDate(keyword, today)
                 .orElseGet(() -> SearchAnalytics.builder()
