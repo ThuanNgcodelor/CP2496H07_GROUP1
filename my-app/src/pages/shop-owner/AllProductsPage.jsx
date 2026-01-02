@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getProducts, searchProducts, deleteProduct } from '../../api/shopOwner';
@@ -7,7 +8,7 @@ import '../../components/shop-owner/ShopOwnerLayout.css';
 export default function AllProductsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,19 +27,19 @@ export default function AllProductsPage() {
     try {
       setLoading(true);
       let result;
-      
+
       if (searchQuery.trim()) {
         result = await searchProducts(searchQuery, currentPage, itemsPerPage);
       } else {
         result = await getProducts(currentPage, itemsPerPage);
       }
-      
+
       // Filter by status
       let filteredData = result.content || [];
       if (statusFilter !== 'all') {
         filteredData = filteredData.filter(p => (p.status || '').toUpperCase() === statusFilter);
       }
-      
+
       setProducts(filteredData);
       setTotalPages(result.totalPages || 1);
       setTotalElements(result.totalElements || 0);
@@ -46,7 +47,11 @@ export default function AllProductsPage() {
       console.error('Error fetching products:', error);
       // Don't show alert if it's just empty data
       if (!error.message.includes('empty')) {
-        alert(t('shopOwner.allProducts.failedToLoad') + error.message);
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi',
+          text: t('shopOwner.allProducts.failedToLoad') + error.message
+        });
       }
     } finally {
       setLoading(false);
@@ -59,14 +64,35 @@ export default function AllProductsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm(t('shopOwner.allProducts.deleteConfirm'))) {
+    const result = await Swal.fire({
+      title: t('shopOwner.allProducts.deleteConfirmTitle', 'Xác nhận xóa'),
+      text: t('shopOwner.allProducts.deleteConfirm'),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: t('common.delete', 'Xóa'),
+      cancelButtonText: t('common.cancel', 'Hủy')
+    });
+
+    if (result.isConfirmed) {
       try {
         await deleteProduct(id);
-        alert(t('shopOwner.allProducts.productDeleted'));
+        Swal.fire({
+          icon: 'success',
+          title: t('common.deleted', 'Đã xóa'),
+          text: t('shopOwner.allProducts.productDeleted'),
+          showConfirmButton: false,
+          timer: 1500
+        });
         fetchProducts();
       } catch (error) {
         console.error('Error deleting product:', error);
-        alert(t('shopOwner.allProducts.deleteFailed') + error.message);
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi',
+          text: t('shopOwner.allProducts.deleteFailed') + error.message
+        });
       }
     }
   };
@@ -82,48 +108,48 @@ export default function AllProductsPage() {
       </div>
 
       <div className="orders-table">
-            <div className="table-header">
-              <div className="table-title">{t('shopOwner.allProducts.allProducts')}</div>
-              <div className="table-actions">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder={t('shopOwner.allProducts.searchPlaceholder')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSearch();
-                    }
-                  }}
-                  style={{width: '250px', marginRight: '10px'}}
-                />
-                <button
-                  className="btn btn-outline-primary"
-                  onClick={handleSearch}
-                  style={{marginRight: '10px'}}
-                >
-                  <i className="fas fa-search"></i>
-                </button>
-                <select 
-                  className="form-select"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                    fetchProducts();
-                  }}
-                  style={{width: '150px', marginRight: '10px'}}
-                >
-                  <option value="all">{t('shopOwner.allProducts.all')}</option>
-                  <option value="IN_STOCK">{t('shopOwner.allProducts.inStock')}</option>
-                  <option value="OUT_OF_STOCK">{t('shopOwner.allProducts.outOfStock')}</option>
-                </select>
-                <Link to="/shop-owner/products/add" className="btn btn-primary-shop">
-                  <i className="fas fa-plus"></i> {t('shopOwner.allProducts.addProduct')}
-                </Link>
-              </div>
-            </div>
+        <div className="table-header">
+          <div className="table-title">{t('shopOwner.allProducts.allProducts')}</div>
+          <div className="table-actions">
+            <input
+              type="text"
+              className="form-control"
+              placeholder={t('shopOwner.allProducts.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch();
+                }
+              }}
+              style={{ width: '250px', marginRight: '10px' }}
+            />
+            <button
+              className="btn btn-outline-primary"
+              onClick={handleSearch}
+              style={{ marginRight: '10px' }}
+            >
+              <i className="fas fa-search"></i>
+            </button>
+            <select
+              className="form-select"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+                fetchProducts();
+              }}
+              style={{ width: '150px', marginRight: '10px' }}
+            >
+              <option value="all">{t('shopOwner.allProducts.all')}</option>
+              <option value="IN_STOCK">{t('shopOwner.allProducts.inStock')}</option>
+              <option value="OUT_OF_STOCK">{t('shopOwner.allProducts.outOfStock')}</option>
+            </select>
+            <Link to="/shop-owner/products/add" className="btn btn-primary-shop">
+              <i className="fas fa-plus"></i> {t('shopOwner.allProducts.addProduct')}
+            </Link>
+          </div>
+        </div>
 
         <div className="table-responsive">
           <table className="table table-hover">
@@ -139,24 +165,24 @@ export default function AllProductsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="5" style={{textAlign: 'center', padding: '40px'}}>
-                    <i className="fas fa-spinner fa-spin" style={{fontSize: '24px'}}></i>
-                    <p style={{marginTop: '12px'}}>{t('shopOwner.allProducts.loading')}</p>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>
+                    <i className="fas fa-spinner fa-spin" style={{ fontSize: '24px' }}></i>
+                    <p style={{ marginTop: '12px' }}>{t('shopOwner.allProducts.loading')}</p>
                   </td>
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan="5" style={{textAlign: 'center', padding: '40px'}}>
-                    <i className="fas fa-inbox" style={{fontSize: '48px', color: '#ddd', marginBottom: '12px', display: 'block'}}></i>
-                    <p style={{color: '#999'}}>{t('shopOwner.allProducts.noProductsFound')}</p>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>
+                    <i className="fas fa-inbox" style={{ fontSize: '48px', color: '#ddd', marginBottom: '12px', display: 'block' }}></i>
+                    <p style={{ color: '#999' }}>{t('shopOwner.allProducts.noProductsFound')}</p>
                   </td>
                 </tr>
               ) : (
                 products.map(product => (
                   <tr key={product.id}>
                     <td>
-                      <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                        <img 
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <img
                           src={product.imageId ? `/v1/file-storage/get/${product.imageId}` : 'https://via.placeholder.com/80'}
                           alt={product.name}
                           style={{
@@ -170,9 +196,9 @@ export default function AllProductsPage() {
                           }}
                         />
                         <div>
-                          <div style={{fontWeight: '500'}}>{product.name}</div>
+                          <div style={{ fontWeight: '500' }}>{product.name}</div>
                           {product.categoryName && (
-                            <small style={{color: '#999'}}>{product.categoryName}</small>
+                            <small style={{ color: '#999' }}>{product.categoryName}</small>
                           )}
                           {product.createdAt && (
                             <div>
@@ -185,11 +211,11 @@ export default function AllProductsPage() {
                       </div>
                     </td>
                     <td>
-                      <div style={{fontWeight: '600', color: '#ee4d2d'}}>
+                      <div style={{ fontWeight: '600', color: '#ee4d2d' }}>
                         {product.price?.toLocaleString()}₫
                       </div>
                       {product.originalPrice && product.originalPrice > product.price && (
-                        <small style={{color: '#999', textDecoration: 'line-through'}}>
+                        <small style={{ color: '#999', textDecoration: 'line-through' }}>
                           {product.originalPrice.toLocaleString()}₫
                         </small>
                       )}
@@ -207,14 +233,14 @@ export default function AllProductsPage() {
                       </span>
                     </td>
                     <td>
-                      <div style={{display: 'flex', gap: '8px'}}>
-                        <button 
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
                           className="btn btn-sm btn-outline-primary"
                           onClick={() => handleEdit(product.id)}
                         >
                           <i className="fas fa-edit"></i>
                         </button>
-                        <button 
+                        <button
                           className="btn btn-sm btn-outline-danger"
                           onClick={() => handleDelete(product.id)}
                         >
@@ -238,8 +264,8 @@ export default function AllProductsPage() {
             <nav aria-label="Page navigation">
               <ul className="pagination">
                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                  <button 
-                    className="page-link" 
+                  <button
+                    className="page-link"
                     onClick={() => {
                       setCurrentPage(currentPage - 1);
                       fetchProducts();
@@ -251,8 +277,8 @@ export default function AllProductsPage() {
                 </li>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                    <button 
-                      className="page-link" 
+                    <button
+                      className="page-link"
                       onClick={() => {
                         setCurrentPage(page);
                         fetchProducts();
@@ -263,8 +289,8 @@ export default function AllProductsPage() {
                   </li>
                 ))}
                 <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                  <button 
-                    className="page-link" 
+                  <button
+                    className="page-link"
                     onClick={() => {
                       setCurrentPage(currentPage + 1);
                       fetchProducts();

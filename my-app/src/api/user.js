@@ -151,9 +151,9 @@ export const getShopOwnerInfo = async () => {
  */
 export const getShopOwnerByUserId = async (userId) => {
     try {
-        const response = await api.get(`/shop-owners/${userId}`);
+        const response = await api.get(`/shop-owners/${encodeURIComponent(userId)}`);
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch shop owner");
     }
 };
@@ -326,7 +326,7 @@ export const getUserRoleRequests = async () => {
     try {
         const response = await api.get("/role-requests/user");
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch user role requests");
     }
 };
@@ -352,7 +352,7 @@ export const checkDefaultAddress = async () => {
     try {
         const response = await api.get('/location/check-default-address');
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to check default address");
     }
 };
@@ -361,7 +361,7 @@ export const checkDefaultAddress = async () => {
  * @param {string} shopId
  */
 export const followShop = async (shopId) => {
-    return api.post(`/follow/${shopId}`);
+    return api.post(`/follow/${encodeURIComponent(shopId)}`, {});
 };
 
 /**
@@ -369,7 +369,7 @@ export const followShop = async (shopId) => {
  * @param {string} shopId
  */
 export const unfollowShop = async (shopId) => {
-    return api.delete(`/follow/${shopId}`);
+    return api.delete(`/follow/${encodeURIComponent(shopId)}`);
 };
 
 /**
@@ -377,7 +377,7 @@ export const unfollowShop = async (shopId) => {
  * @param {string} shopId
  */
 export const getFollowerCount = async (shopId) => {
-    const res = await api.get(`/follow/${shopId}/count`);
+    const res = await api.get(`/follow/${encodeURIComponent(shopId)}/count`);
     return res.data;
 };
 
@@ -386,6 +386,61 @@ export const getFollowerCount = async (shopId) => {
  * @param {string} shopId
  */
 export const checkIsFollowing = async (shopId) => {
-    const res = await api.get(`/follow/${shopId}/status`);
+    const res = await api.get(`/follow/${encodeURIComponent(shopId)}/status`);
     return res.data;
+};
+
+/**
+ * Get shop decoration config
+ * @param {string} shopId
+ */
+export const getShopDecoration = async (shopId) => {
+    try {
+        const res = await api.get(`/shops/${encodeURIComponent(shopId)}/decoration`);
+        return res.data;
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * Get current shop decoration config
+ */
+export const getMyShopDecoration = async () => {
+    try {
+        const res = await api.get("/shops/decoration/me");
+        return res.data;
+    } catch (error) {
+        throw new Error("Failed to load decoration config");
+    }
+};
+
+/**
+ * Save shop decoration config
+ * @param {Array} config
+ */
+export const saveShopDecoration = async (config) => {
+    const response = await api.put("/shops/decoration/me", JSON.stringify(config), {
+        headers: {
+            "Content-Type": "application/json",
+        },
+    });
+    return response.data;
+};
+
+/**
+ * Upload shop decoration image
+ * @param {File} file
+ * @returns {Promise<string>} - Promise returns image URL
+ */
+export const uploadShopDecorationImage = async (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+
+    const response = await api.post("/shops/decoration/upload", fd, {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
+    return response.data;
 };

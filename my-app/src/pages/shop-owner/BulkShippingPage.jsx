@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { useSearchParams } from 'react-router-dom';
 import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders, getShippingByOrderId, bulkUpdateOrderStatus, searchOrders, getAllOrderIds } from '../../api/order';
 import { getUserById } from '../../api/user';
@@ -152,32 +153,71 @@ export default function BulkShippingPage() {
     };
 
     const handleStatusUpdate = async (orderId, newStatus) => {
-        if (!window.confirm(t('shopOwner.manageOrder.confirmUpdate', { status: getStatusLabel(newStatus) }))) {
+        const result = await Swal.fire({
+            title: t('shopOwner.manageOrder.confirmUpdateTitle', 'Xác nhận cập nhật'),
+            text: t('shopOwner.manageOrder.confirmUpdate', { status: getStatusLabel(newStatus) }),
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: t('common.yes', 'Đồng ý'),
+            cancelButtonText: t('common.no', 'Hủy')
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
 
         try {
             await updateOrderStatusForShopOwner(orderId, newStatus);
-            alert(t('shopOwner.manageOrder.successUpdate'));
+            Swal.fire({
+                icon: 'success',
+                title: t('shopOwner.manageOrder.successUpdate'),
+                showConfirmButton: false,
+                timer: 1500
+            });
             loadOrders(); // Reload orders
         } catch (err) {
             console.error('Error updating order status:', err);
-            alert('Failed to update order status');
+            Swal.fire({
+                icon: 'error',
+                title: 'Failed to update order status',
+                text: err.message
+            });
         }
     };
 
     const handleBulkStatusUpdate = async () => {
         if (selectedOrders.size === 0) {
-            alert(t('shopOwner.manageOrder.selectOne'));
+            Swal.fire({
+                icon: 'warning',
+                title: t('shopOwner.manageOrder.selectOne'),
+                timer: 2000
+            });
             return;
         }
 
         if (!bulkStatus) {
-            alert(t('shopOwner.manageOrder.selectStatusAlert'));
+            Swal.fire({
+                icon: 'warning',
+                title: t('shopOwner.manageOrder.selectStatusAlert'),
+                timer: 2000
+            });
             return;
         }
 
-        if (!window.confirm(t('shopOwner.manageOrder.confirmBulkUpdate', { count: selectedOrders.size, status: getStatusLabel(bulkStatus) }))) {
+        const result = await Swal.fire({
+            title: t('shopOwner.manageOrder.confirmBulkUpdateTitle', 'Xác nhận cập nhật hàng loạt'),
+            text: t('shopOwner.manageOrder.confirmBulkUpdate', { count: selectedOrders.size, status: getStatusLabel(bulkStatus) }),
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: t('common.yes', 'Đồng ý'),
+            cancelButtonText: t('common.no', 'Hủy')
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
 
@@ -190,10 +230,20 @@ export default function BulkShippingPage() {
 
             // Show processing message (async - results come via notification)
             const message = response.message || `Đang xử lý ${response.accepted} đơn hàng...`;
+
             if (response.rejected > 0) {
-                alert(`${message}\n${response.rejected} đơn bị từ chối.`);
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Hoàn tất một phần',
+                    text: `${message}\n${response.rejected} đơn bị từ chối.`
+                });
             } else {
-                alert(message);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: message,
+                    timer: 2000
+                });
             }
 
             setSelectedOrders(new Set());
@@ -203,7 +253,11 @@ export default function BulkShippingPage() {
             setTimeout(() => loadOrders(), 2000);
         } catch (err) {
             console.error('Error updating bulk order status:', err);
-            alert(err.message || 'Failed to update orders');
+            Swal.fire({
+                icon: 'error',
+                title: 'Failed to update orders',
+                text: err.message
+            });
             loadOrders();
         }
     };
@@ -233,10 +287,27 @@ export default function BulkShippingPage() {
             const allOrderIds = await getAllOrderIds(filterValue);
             setSelectedOrders(new Set(allOrderIds));
             setTotalOrderCount(allOrderIds.length);
-            alert(`Đã chọn ${allOrderIds.length} đơn hàng`);
+            // alert(`Đã chọn ${allOrderIds.length} đơn hàng`); // REMOVED AS REQUESTED
+
+            // Optional: Show a small toast or just nothing
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
+            Toast.fire({
+                icon: 'success',
+                title: `Đã chọn ${allOrderIds.length} đơn hàng`
+            });
         } catch (err) {
             console.error('Error selecting all orders:', err);
-            alert('Không thể chọn tất cả đơn hàng');
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: 'Không thể chọn tất cả đơn hàng'
+            });
         }
     };
 
@@ -461,7 +532,10 @@ export default function BulkShippingPage() {
             const allOrders = await getAllShopOwnerOrders(filter);
 
             if (!allOrders || allOrders.length === 0) {
-                alert(t('shopOwner.manageOrder.noOrdersToExport', 'Không có đơn hàng để xuất'));
+                Swal.fire({
+                    icon: 'info',
+                    title: t('shopOwner.manageOrder.noOrdersToExport', 'Không có đơn hàng để xuất')
+                });
                 setLoading(false);
                 return;
             }
@@ -533,7 +607,12 @@ export default function BulkShippingPage() {
 
         } catch (err) {
             console.error('Export failed:', err);
-            alert(t('shopOwner.manageOrder.exportError', 'Xuất file thất bại: ') + err.message);
+            console.error('Export failed:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'Xuất file thất bại',
+                text: err.message
+            });
         } finally {
             setLoading(false);
         }

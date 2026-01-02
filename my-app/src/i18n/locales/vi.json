@@ -55,7 +55,9 @@
       "cancelled": "Đã hủy",
       "completed": "Hoàn thành",
       "returned": "Trả hàng/Hoàn tiền"
-    }
+    },
+    "action": "Thao tác",
+    "date": "Ngày"
   },
   "header": {
     "sellerCenter": "Kênh Người Bán",
@@ -180,6 +182,30 @@
       "totalAmount": "Tổng tiền"
     }
   },
+  "inventory": {
+    "title": "Quản Lý Kho Hàng",
+    "lowStock": "Cảnh Báo Sắp Hết",
+    "history": "Lịch Sử Kho",
+    "noLowStock": "Tuyệt vời! Không có sản phẩm nào sắp hết hàng.",
+    "adjustStock": "Điều Chỉnh Tồn Kho",
+    "newStock": "Số lượng mới",
+    "quantityToAdd": "Số lượng nhập thêm",
+    "reason": "Lý do",
+    "success": "Cập nhật thành công",
+    "change": "Thay đổi",
+    "stockAfter": "Tồn sau",
+    "type": "Loại",
+    "adjust": "Điều chỉnh",
+    "manualAdjustment": "Điều chỉnh thủ công",
+    "logType": {
+      "IMPORT": "Nhập hàng",
+      "ORDER": "Đơn hàng",
+      "CANCEL": "Hủy đơn",
+      "RETURN": "Trả hàng",
+      "ADJUSTMENT": "Điều chỉnh",
+      "SYSTEM": "Hệ thống"
+    }
+  },
   "payment": {
     "success": {
       "title": "Thanh toán thành công!",
@@ -208,6 +234,9 @@
     "weight": "Trọng lượng",
     "noProductsYet": "Chưa có sản phẩm",
     "pleaseBuy": "Vui lòng mua sản phẩm.",
+    "name": "Tên sản phẩm",
+    "size": "Kích thước",
+    "stock": "Tồn kho",
     "specifications": {
       "title": "Thông tin sản phẩm",
       "description": "Mô tả sản phẩm",
@@ -437,6 +466,8 @@
     "processing": "Đang xử lý",
     "shipped": "Đã gửi hàng",
     "delivered": "Đã giao hàng",
+    "loadingShop": "Đang tải...",
+    "unknownShop": "Shop không xác định",
     "confirmed": "Đã xác nhận",
     "confirmReceipt": "Xác nhận đã nhận hàng",
     "confirmSuccess": "Đã xác nhận. Đơn hàng hoàn thành.",
@@ -902,7 +933,10 @@
     },
     "sidebar": {
       "sellerCenter": "Kênh Người Bán",
+      "dashboard": "Thống kê",
       "orderManagement": "Quản Lý Đơn Hàng",
+      "inventory": "Quản lý kho hàng",
+      "chat": "Tin nhắn",
       "manageOrder": "Quản Lý Đơn Hàng",
       "returnsRefunds": "Trả Hàng & Hoàn Tiền",
       "productManagement": "Quản Lý Sản Phẩm",
@@ -917,7 +951,83 @@
       "finance": "Tài Chính",
       "wallet": "Ví Shop",
       "subscription": "Gói Dịch Vụ",
-      "settings": "Cài Đặt"
+      "settings": "Cài Đặt",
+      "flashSale": "Flash Sale Của Shop"
+    },
+    "flashSale": {
+      "title": "Quản Lý Flash Sale",
+      "registerTitle": "Đăng Ký Sản Phẩm Mới",
+      "description": "Danh sách các sản phẩm đã đăng ký tham gia Flash Sale",
+      "registerDescription": "điền thông tin sản phẩm để tham gia chương trình Flash Sale",
+      "registerButton": "Đăng Ký Tham Gia",
+      "backButton": "Quay lại",
+      "registrationInfo": "Thông tin đăng ký",
+      "selectSession": "Chọn Chương Trình",
+      "selectSessionRequired": "Chọn Chương Trình *",
+      "selectSessionPlaceholder": "-- Chọn khung giờ Flash Sale --",
+      "selectProduct": "Chọn Sản Phẩm",
+      "selectProductRequired": "Chọn Sản Phẩm *",
+      "selectProductPlaceholder": "-- Chọn sản phẩm tham gia --",
+      "salePrice": "Giá Sale (VND)",
+      "stock": "Số Lượng Đăng Ký",
+      "originalPrice": "Giá gốc",
+      "stockAvailable": "Tồn kho khả dụng",
+      "submitRegister": "Gửi Đăng Ký",
+      "cancel": "Hủy bỏ",
+      "historyTitle": "Lịch Sử Đăng Ký",
+      "noRegistrations": "Bạn chưa đăng ký sản phẩm nào tham gia Flash Sale.",
+      "status": "Trạng Thái",
+      "approved": "Đã duyệt",
+      "rejected": "Đã từ chối",
+      "pending": "Chờ duyệt",
+      "product": "Sản Phẩm",
+      "program": "Chương Trình",
+      "loading": "Đang xử lý...",
+      "successMessage": "Đăng ký thành công! Chờ Admin duyệt.",
+      "errorMessage": "Đăng ký thất bại: {{message}}"
+    },
+    "decoration": {
+      "title": "Trang trí Shop",
+      "saveChanges": "Lưu thay đổi",
+      "componentLibrary": "Thư viện thành phần",
+      "previewAndEdit": "Xem trước & Chỉnh sửa",
+      "templates": "Mẫu giao diện",
+      "applyTemplate": "Áp dụng mẫu",
+      "confirmApplyTemplate": "Áp dụng mẫu này?",
+      "confirmApplyTemplateText": "Mẫu này sẽ thay thế toàn bộ trang trí hiện tại của bạn. Bạn không thể hoàn tác.",
+      "templateApplied": "Đã áp dụng mẫu thành công",
+      "savedSuccess": "Lưu cấu hình thành công",
+      "saveFailed": "Lưu cấu hình thất bại",
+      "loadFailed": "Không thể tải cấu hình shop",
+      "delete": "Xóa",
+      "selectComponent": "Chọn thành phần từ thư viện để bắt đầu trang trí",
+      "unknownWidget": "Thành phần không xác định",
+      "defaultCollectionTitle": "Bộ sưu tập mới",
+      "widgets": {
+        "banner": "Ảnh chạy (Banner)",
+        "bannerTitle": "Cài đặt Banner",
+        "video": "Video",
+        "videoTitle": "Cài đặt Video",
+        "products": "Danh sách sản phẩm",
+        "productListTitle": "Cài đặt danh sách sản phẩm",
+        "noImage": "Chưa có ảnh",
+        "imageUrl": "Đường dẫn ảnh",
+        "linkUrl": "Đường dẫn liên kết (Tùy chọn)",
+        "addSlide": "Thêm Slide",
+        "youtubeUrl": "Đường dẫn YouTube",
+        "title": "Tiêu đề",
+        "productIds": "ID Sản phẩm (ngăn cách bởi dấu phẩy)",
+        "productIdsHelp": "Nhập ID các sản phẩm muốn hiển thị.",
+        "productPreview": "Xem trước lưới sản phẩm",
+        "productsSelected": "sản phẩm được chọn",
+        "selectProducts": "Chọn Sản Phẩm",
+        "searchProducts": "Tìm kiếm sản phẩm...",
+        "noProductsFound": "Không tìm thấy sản phẩm nào",
+        "noProductsSelected": "Chưa có sản phẩm nào được chọn",
+        "chooseNow": "Chọn ngay",
+        "confirm": "Xác nhận",
+        "cancel": "Hủy bỏ"
+      }
     },
     "reviews": {
       "title": "Quản lý đánh giá",
@@ -1404,7 +1514,8 @@
         "paymentFee": "Phí thanh toán",
         "fixedFee": "Phí cố định",
         "subscriptionFee": "Phí gói subscription",
-        "perProduct": "mỗi sản phẩm"
+        "perProduct": "mỗi sản phẩm",
+        "contactSupport": "Liên hệ hỗ trợ để biết thêm chi tiết"
       }
     }
   },
@@ -1563,5 +1674,37 @@
       "total": "Tổng thanh toán",
       "paymentMethod": "Phương thức thanh toán"
     }
+  },
+  "shopDecoration": "Trang trí Shop",
+  "shop": {
+    "products": "Sản phẩm",
+    "rating": "Đánh giá",
+    "chatResponse": "Tỉ lệ phản hồi",
+    "followers": "Người theo dõi",
+    "joined": "Tham gia",
+    "following": "Đang theo dõi",
+    "home": "Trang chủ",
+    "intro": "Giới thiệu",
+    "aboutShop": "Thông tin Shop",
+    "shopName": "Tên Shop",
+    "owner": "Chủ Shop",
+    "email": "Email",
+    "address": "Địa chỉ",
+    "noProducts": "Không tìm thấy sản phẩm nào trong shop này.",
+    "follow": "Theo dõi",
+    "followingStatus": "Đang theo dõi",
+    "chat": "Chat",
+    "online": "Online",
+    "errorLoading": "Không thể tải thông tin shop",
+    "notFound": "Không tìm thấy Shop",
+    "goHome": "Về trang chủ",
+    "yearsAgo": "{{count}} năm trước",
+    "monthsAgo": "{{count}} tháng trước",
+    "daysAgo": "{{count}} ngày trước",
+    "hoursAgo": "{{count}} giờ trước",
+    "justNow": "Vừa xong",
+    "na": "N/A",
+    "soldOut": "Hết hàng",
+    "noRatings": "Chưa có đánh giá"
   }
 }

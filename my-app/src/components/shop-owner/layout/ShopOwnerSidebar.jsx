@@ -162,6 +162,15 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
                                 <i className="fas fa-box"></i>
                                 <span>{t('shopOwner.sidebar.allProducts')}</span>
                             </Link>
+
+                            <Link
+                                className={`sidebar-item ${isActive('/shop-owner/inventory') ? 'active' : ''}`}
+                                to="/shop-owner/inventory"
+                                onClick={handleLinkClick}
+                            >
+                                <i className="fas fa-boxes"></i>
+                                <span>{t('shopOwner.sidebar.inventory')}</span>
+                            </Link>
                             <Link
                                 className={`sidebar-item ${isActive('/shop-owner/products/add') ? 'active' : ''}`}
                                 to="/shop-owner/products/add"
@@ -178,6 +187,7 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
                                 <i className="fas fa-star"></i>
                                 <span>{t('shopOwner.sidebar.reviews')}</span>
                             </Link>
+
                         </div>
                     )}
                 </div>
@@ -322,6 +332,18 @@ const ShopOwnerSidebar = ({ isOpen, onClose }) => {
                             </Link>
                         </div>
                     )}
+                </div>
+
+                {/* Shop Decoration */}
+                <div className="sidebar-section">
+                    <Link
+                        className={`sidebar-item ${isActive('/shop-owner/decoration') ? 'active' : ''}`}
+                        to="/shop-owner/decoration"
+                        onClick={handleLinkClick}
+                    >
+                        <i className="fas fa-paint-brush"></i>
+                        <span>{t('shopDecoration') || 'Decoration'}</span>
+                    </Link>
                 </div>
 
                 {/* Settings */}

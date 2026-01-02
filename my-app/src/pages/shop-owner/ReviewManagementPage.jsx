@@ -48,11 +48,11 @@ export default function ReviewManagementPage() {
             const data = res.data || [];
             setReviews(data);
 
-            // Extract unique Product IDs
-            const productIds = [...new Set(data.map(r => r.productId))];
+            // Extract unique Product IDs (No longer needed for fetching details)
+            // const productIds = [...new Set(data.map(r => r.productId))];
 
-            // Fetch product details lazily
-            fetchProductDetails(productIds);
+            // Fetch product details lazily (Removed)
+            // fetchProductDetails(productIds);
 
         } catch (error) {
             console.error("Error fetching reviews:", error);
@@ -61,30 +61,8 @@ export default function ReviewManagementPage() {
         }
     };
 
-    const fetchProductDetails = async (ids) => {
-        const newMap = { ...productMap };
-        const missingIds = ids.filter(id => !newMap[id]);
+    // Old fetchProductDetails removed as Backend now provides product info
 
-        if (missingIds.length === 0) return;
-
-        // Fetch in parallel (in real app, consider batch API if available to reduce calls)
-        await Promise.all(missingIds.map(async (pid) => {
-            try {
-                const res = await fetchProductById(pid);
-                if (res && res.data) {
-                    newMap[pid] = {
-                        name: res.data.productName,
-                        image: res.data.image // Assuming main image field is 'image' or 'images[0]'
-                    };
-                }
-            } catch (err) {
-                console.warn(`Failed to fetch product ${pid}`, err);
-                newMap[pid] = { name: t('shopOwner.reviews.unknownProduct'), image: null };
-            }
-        }));
-
-        setProductMap(newMap);
-    };
 
     const handleReply = async (reviewId) => {
         if (!replyText.trim()) return;
@@ -248,14 +226,18 @@ export default function ReviewManagementPage() {
                     </div>
                 ) : (
                     filteredReviews.map(review => {
-                        const product = productMap[review.productId];
+                        // const product = productMap[review.productId];
 
                         return (
                             <div key={review.id} className="review-card">
                                 <div className="review-header">
                                     <div className="user-info">
                                         <img
-                                            src={review.userAvatar ? `/v1/file-storage/get/${review.userAvatar}` : "https://via.placeholder.com/45"}
+                                            src={
+                                                review.userAvatar
+                                                    ? (review.userAvatar.startsWith('http') ? review.userAvatar : `/v1/file-storage/get/${review.userAvatar}`)
+                                                    : "https://via.placeholder.com/45"
+                                            }
                                             alt="User"
                                             className="user-avatar"
                                             onError={(e) => e.target.src = "https://via.placeholder.com/45"}
@@ -266,20 +248,18 @@ export default function ReviewManagementPage() {
                                         </div>
                                     </div>
 
-                                    {product && (
-                                        <div className="product-badge" title={product.name}>
-                                            {product.image && (
-                                                <img
-                                                    src={`/v1/file-storage/get/${product.image}`}
-                                                    alt="Product"
-                                                    className="product-thumb-small"
-                                                />
-                                            )}
-                                            <a href={`/product/${review.productId}`} target="_blank" rel="noreferrer" className="product-name-link">
-                                                {product.name}
-                                            </a>
-                                        </div>
-                                    )}
+                                    <div className="product-badge" title={review.productName}>
+                                        {review.productImage && (
+                                            <img
+                                                src={`/v1/file-storage/get/${review.productImage}`}
+                                                alt="Product"
+                                                className="product-thumb-small"
+                                            />
+                                        )}
+                                        <a href={`/product/${review.productId}`} target="_blank" rel="noreferrer" className="product-name-link">
+                                            {review.productName || t('shopOwner.reviews.unknownProduct')}
+                                        </a>
+                                    </div>
                                 </div>
 
                                 <div className="review-body">

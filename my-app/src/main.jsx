@@ -7,6 +7,7 @@ import App from './App.jsx'
 import './i18n/config.js'
 
 import './assets/css/vendor/bootstrap.min.css'
+import 'bootstrap-icons/font/bootstrap-icons.css';
 import './assets/css/plugins/swiper-bundle.min.css'
 import './assets/css/style.css'
 import './assets/css/plugins/fancybox.min.css'

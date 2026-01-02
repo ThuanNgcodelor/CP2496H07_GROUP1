@@ -9,4 +9,5 @@ public class UserDto {
     private String id;
     private String username;
     private String email;
+    private String imageUrl; // Added to map user avatar
 }

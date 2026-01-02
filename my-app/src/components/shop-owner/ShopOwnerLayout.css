@@ -54,6 +54,16 @@
     gap: 8px;
 }
 
+/* Override LanguageSwitcher color in Shop Owner (white background header) */
+.shop-owner-header .header-right .position-relative>.d-flex {
+    color: #555555 !important;
+    opacity: 1 !important;
+}
+
+.shop-owner-header .header-right .position-relative>.d-flex:hover {
+    color: #ee4d2d !important;
+}
+
 .header-icon-btn {
     background: transparent;
     border: none;
@@ -112,25 +122,25 @@
     color: #ee4d2d;
 }
 
-.user-avatar-wrapper {
+.header-user-avatar-wrapper {
     position: relative;
-    width: 30px;
-    height: 30px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     flex-shrink: 0;
 }
 
-.user-avatar {
-    width: 30px;
-    height: 30px;
+.header-user-avatar {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.user-avatar-fallback {
-    width: 30px;
-    height: 30px;
+.header-user-avatar-fallback {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     background: #f3f4f6;
     border: 1px solid #e5e7eb;
@@ -139,7 +149,7 @@
     justify-content: center;
     color: #ee4d2d;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 16px;
     text-transform: uppercase;
 }
 

@@ -514,9 +514,23 @@ export default function ProductDetailPage() {
                                             ) : (
                                                 <div>
                                                     <div className="d-flex align-items-center gap-2">
-                                                        <span className="fs-4 fw-bold">
-                                                            {(product.originalPrice || product.price || 0).toLocaleString("vi-VN")} ₫
-                                                        </span>
+                                                        {/* Check if there's a regular discount (not flash sale) */}
+                                                        {product.discountPercent && product.discountPercent > 0 && product.originalPrice && product.originalPrice > product.price ? (
+                                                            <>
+                                                                <span className="fs-4 fw-bold text-danger">
+                                                                    {(product.price || 0).toLocaleString("vi-VN")} ₫
+                                                                </span>
+                                                                <span className="text-decoration-line-through text-muted">
+                                                                    {product.originalPrice.toLocaleString("vi-VN")} ₫
+                                                                </span>
+                                                                <span className="badge bg-danger">-{product.discountPercent}%</span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="fs-4 fw-bold">
+                                                                {(product.price || 0).toLocaleString("vi-VN")} ₫
+                                                            </span>
+                                                        )}
+                                                        {/* Show "Giá gốc" label when user explicitly chose regular price over flash sale */}
                                                         {isFlashSale === false && product.flashSaleRemaining !== undefined && (
                                                             <span className="text-muted" style={{ fontSize: '0.8rem' }}>(Giá gốc)</span>
                                                         )}
@@ -934,6 +948,10 @@ export default function ProductDetailPage() {
                                                 <div className="d-flex flex-column gap-3">
                                                     {(() => {
                                                         const filtered = reviews.filter(r => {
+                                                            // Hide reviews with no content (no text AND no images)
+                                                            const hasContent = (r.comment && r.comment.trim().length > 0) || (r.imageIds && r.imageIds.length > 0);
+                                                            if (!hasContent) return false;
+
                                                             if (reviewFilter === "All") return true;
                                                             const star = parseInt(reviewFilter.charAt(0));
                                                             return r.rating === star;

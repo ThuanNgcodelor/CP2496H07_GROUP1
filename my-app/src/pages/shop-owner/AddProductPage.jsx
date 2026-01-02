@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import Swal from 'sweetalert2';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { addProduct, getProductById, updateProduct } from '../../api/shopOwner';
@@ -10,8 +11,11 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
 export default function AddProductPage() {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+
+    console.log("AddProductPage: Rendering..."); // Debug log
+
     const { id: productId } = useParams();
     const isEditMode = Boolean(productId);
 
@@ -64,7 +68,11 @@ export default function AddProductPage() {
 
     const handleAiGenerate = async () => {
         if (!formData.name) {
-            alert(t('shopOwner.addProduct.pleaseEnterNameFirst', 'Vui lòng nhập tên sản phẩm trước!'));
+            Swal.fire({
+                icon: 'warning',
+                title: 'Thiếu thông tin',
+                text: t('shopOwner.addProduct.pleaseEnterNameFirst', 'Vui lòng nhập tên sản phẩm trước!')
+            });
             return;
         }
 
@@ -106,18 +114,28 @@ export default function AddProductPage() {
             const requestData = {
                 productName: formData.name,
                 attributes: attributesMap,
-                language: 'vi',
+                language: i18n.language || 'vi',
                 images: base64Images
             };
 
             const response = await generateProductDescription(requestData);
             if (response && response.result) {
                 handleDescriptionChange(response.result); // Set ReactQuill content
-                alert('Mô tả đã được tạo thành công bởi AI!');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: 'Mô tả đã được tạo thành công bởi AI!',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             }
         } catch (error) {
             console.error("AI Gen Error", error);
-            alert('Lỗi tạo mô tả: ' + (error.message || 'Unknown error'));
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: 'Lỗi tạo mô tả: ' + (error.message || 'Unknown error')
+            });
         } finally {
             setIsGenerating(false);
         }
@@ -156,7 +174,11 @@ export default function AddProductPage() {
                 setCategories(data);
             } catch (error) {
                 console.error('Error fetching categories:', error);
-                alert(t('shopOwner.addProduct.failedToLoadCategories'));
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi',
+                    text: t('shopOwner.addProduct.failedToLoadCategories')
+                });
             }
         };
 
@@ -214,7 +236,11 @@ export default function AddProductPage() {
                 setImagePreviews(previews);
             } catch (e) {
                 console.error('Error loading product:', e);
-                alert(t('shopOwner.addProduct.failedToLoadProduct'));
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi',
+                    text: t('shopOwner.addProduct.failedToLoadProduct')
+                });
                 navigate('/shop-owner/products');
             } finally {
                 setInitialLoading(false);
@@ -290,7 +316,11 @@ export default function AddProductPage() {
         const files = Array.from(e.target.files);
 
         if (files.length + imagePreviews.length > 10) {
-            alert(t('shopOwner.addProduct.maximumImages'));
+            Swal.fire({
+                icon: 'warning',
+                title: 'Giới hạn ảnh',
+                text: t('shopOwner.addProduct.maximumImages')
+            });
             return;
         }
 
@@ -307,7 +337,11 @@ export default function AddProductPage() {
                 };
                 reader.readAsDataURL(file);
             } else {
-                alert(t('shopOwner.addProduct.fileNotImageOrVideo', { name: file.name }));
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'File không hợp lệ',
+                    text: t('shopOwner.addProduct.fileNotImageOrVideo', { name: file.name })
+                });
             }
         });
     };
@@ -376,7 +410,11 @@ export default function AddProductPage() {
         e.preventDefault();
 
         if (!validateForm()) {
-            alert(t('shopOwner.addProduct.fillAllInformation'));
+            Swal.fire({
+                icon: 'warning',
+                title: 'Thông tin chưa đủ',
+                text: t('shopOwner.addProduct.fillAllInformation')
+            });
             return;
         }
 
@@ -414,15 +452,31 @@ export default function AddProductPage() {
 
             if (isEditMode) {
                 await updateProduct(productData, formData.images);
-                alert(t('shopOwner.addProduct.productUpdated'));
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: t('shopOwner.addProduct.productUpdated'),
+                    showConfirmButton: false,
+                    timer: 1500
+                });
             } else {
                 await addProduct(productData, formData.images);
-                alert(t('shopOwner.addProduct.productCreated'));
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: t('shopOwner.addProduct.productCreated'),
+                    showConfirmButton: false,
+                    timer: 1500
+                });
             }
             navigate('/shop-owner/products');
         } catch (error) {
             console.error('Error creating product:', error);
-            alert((isEditMode ? t('shopOwner.addProduct.errorUpdating') : t('shopOwner.addProduct.errorCreating')) + error.message);
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: (isEditMode ? t('shopOwner.addProduct.errorUpdating') : t('shopOwner.addProduct.errorCreating')) + error.message
+            });
         } finally {
             setLoading(false);
         }
@@ -851,7 +905,7 @@ export default function AddProductPage() {
                                         onChange={handleInputChange}
                                     >
                                         <option value="">{t('shopOwner.addProduct.noCategory')}</option>
-                                        {categories.map(category => (
+                                        {Array.isArray(categories) && categories.map(category => (
                                             <option key={category.id} value={category.id}>
                                                 {category.name}
                                             </option>

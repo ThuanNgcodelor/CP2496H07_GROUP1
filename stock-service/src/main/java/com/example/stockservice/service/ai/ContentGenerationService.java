@@ -44,32 +44,55 @@ public class ContentGenerationService {
     }
 
     private String buildProductDescriptionPrompt(ContentGenerationRequest request) {
+        // Determine language for prompt
+        String lang = request.getLanguage() != null ? request.getLanguage().toLowerCase() : "vi";
+        boolean isEnglish = "en".equals(lang) || "english".equals(lang);
+
         StringBuilder sb = new StringBuilder();
-        sb.append("Bạn là một chuyên gia marketing content cho thương mại điện tử.\n");
-        sb.append("Hãy viết một mô tả sản phẩm hấp dẫn, chuẩn SEO (HTML format) cho sản phẩm sau:\n\n");
-        sb.append("Tên sản phẩm: ").append(request.getProductName()).append("\n");
+
+        if (isEnglish) {
+            sb.append("You are an e-commerce marketing expert.\n");
+            sb.append(
+                    "Write an attractive, SEO-optimized product description (HTML format) for the following product:\n\n");
+            sb.append("Product name: ").append(request.getProductName()).append("\n");
+        } else {
+            sb.append("Bạn là một chuyên gia marketing content cho thương mại điện tử.\n");
+            sb.append("Hãy viết một mô tả sản phẩm hấp dẫn, chuẩn SEO (HTML format) cho sản phẩm sau:\n\n");
+            sb.append("Tên sản phẩm: ").append(request.getProductName()).append("\n");
+        }
 
         if (request.getKeywords() != null && !request.getKeywords().isEmpty()) {
-            sb.append("Từ khóa trọng tâm: ").append(request.getKeywords()).append("\n");
+            sb.append(isEnglish ? "Key keywords: " : "Từ khóa trọng tâm: ").append(request.getKeywords()).append("\n");
         }
 
         if (request.getImages() != null && !request.getImages().isEmpty()) {
-            sb.append(
-                    "LƯU Ý QUAN TRỌNG: Dựa vào các hình ảnh được cung cấp, hãy miêu tả chi tiết về màu sắc, kiểu dáng, chất liệu và các đặc điểm nổi bật nhìn thấy được.\n");
+            sb.append(isEnglish
+                    ? "IMPORTANT NOTE: Based on the provided images, describe in detail the colors, design, materials and outstanding features visible.\n"
+                    : "LƯU Ý QUAN TRỌNG: Dựa vào các hình ảnh được cung cấp, hãy miêu tả chi tiết về màu sắc, kiểu dáng, chất liệu và các đặc điểm nổi bật nhìn thấy được.\n");
         }
 
         if (request.getAttributes() != null && !request.getAttributes().isEmpty()) {
-            sb.append("Thông số kỹ thuật/Đặc điểm:\n");
+            sb.append(isEnglish ? "Specifications/Features:\n" : "Thông số kỹ thuật/Đặc điểm:\n");
             request.getAttributes().forEach((k, v) -> sb.append("- ").append(k).append(": ").append(v).append("\n"));
         }
 
-        sb.append("\nYÊU CẦU:\n");
-        sb.append("- Viết bằng Tiếng Việt (trừ khi có yêu cầu khác).\n");
-        sb.append("- Sử dụng các thẻ HTML cơ bản như <p>, <ul>, <li>, <strong>, <em> để trình bày đẹp mắt.\n");
-        sb.append("- Giọng văn: ").append(request.getTone() != null ? request.getTone() : "Chuyên nghiệp, lôi cuốn")
+        sb.append(isEnglish ? "\nREQUIREMENTS:\n" : "\nYÊU CẦU:\n");
+        sb.append(isEnglish
+                ? "- Write in English.\n"
+                : "- Viết bằng Tiếng Việt.\n");
+        sb.append(isEnglish
+                ? "- Use basic HTML tags like <p>, <ul>, <li>, <strong>, <em> for nice formatting.\n"
+                : "- Sử dụng các thẻ HTML cơ bản như <p>, <ul>, <li>, <strong>, <em> để trình bày đẹp mắt.\n");
+        sb.append(isEnglish ? "- Tone: " : "- Giọng văn: ")
+                .append(request.getTone() != null ? request.getTone()
+                        : (isEnglish ? "Professional, engaging" : "Chuyên nghiệp, lôi cuốn"))
                 .append(".\n");
-        sb.append("- Tập trung vào lợi ích của sản phẩm đối với khách hàng.\n");
-        sb.append("- KHÔNG bao gồm markdown code block ```html, chỉ trả về nội dung HTML raw inside.\n");
+        sb.append(isEnglish
+                ? "- Focus on product benefits for customers.\n"
+                : "- Tập trung vào lợi ích của sản phẩm đối với khách hàng.\n");
+        sb.append(isEnglish
+                ? "- DO NOT include markdown code block ```html, just return raw HTML content.\n"
+                : "- KHÔNG bao gồm markdown code block ```html, chỉ trả về nội dung HTML raw inside.\n");
 
         return sb.toString();
     }

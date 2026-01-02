@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -51,7 +52,11 @@ export default function LiveStreamPage() {
             setShowStreamKeyModal(true);
         } catch (error) {
             console.error('Error creating room:', error);
-            alert('Không thể tạo phòng live. Vui lòng thử lại!');
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: 'Không thể tạo phòng live. Vui lòng thử lại!'
+            });
         }
     };
 
@@ -61,18 +66,44 @@ export default function LiveStreamPage() {
             setRooms(rooms.map(r => r.id === roomId ? updated : r));
         } catch (error) {
             console.error('Error starting live:', error);
-            alert('Không thể bắt đầu live.');
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: 'Không thể bắt đầu live.'
+            });
         }
     };
 
     const handleEndLive = async (roomId) => {
-        if (!window.confirm('Bạn có chắc muốn kết thúc livestream?')) return;
+        const result = await Swal.fire({
+            title: 'Xác nhận kết thúc',
+            text: 'Bạn có chắc muốn kết thúc livestream?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Kết thúc ngay',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             const updated = await endLive(roomId);
             setRooms(rooms.map(r => r.id === roomId ? updated : r));
+            Swal.fire({
+                icon: 'success',
+                title: 'Đã kết thúc',
+                showConfirmButton: false,
+                timer: 1500
+            });
         } catch (error) {
             console.error('Error ending live:', error);
-            alert('Không thể kết thúc live.');
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: 'Không thể kết thúc live.'
+            });
         }
     };
 
@@ -88,7 +119,16 @@ export default function LiveStreamPage() {
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        alert('Đã copy vào clipboard!');
+        Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true,
+        }).fire({
+            icon: 'success',
+            title: 'Đã copy vào clipboard!'
+        });
     };
 
     const getStatusBadge = (status) => {

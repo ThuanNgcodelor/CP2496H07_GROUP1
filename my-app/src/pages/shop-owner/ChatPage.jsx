@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import Swal from 'sweetalert2';
 import { useTranslation } from 'react-i18next';
 import { getConversations, getMessages, sendMessage, markAsRead } from "../../api/chat";
 import { connectWebSocket, subscribeToConversation, disconnectWebSocket, isConnected } from "../../utils/websocket";
@@ -312,7 +313,15 @@ export default function ChatPage() {
       await sendMessage(selectedChat.id, content);
     } catch (error) {
       console.error('Error sending message:', error);
-      alert(t('shopOwner.chat.sendMessageFailed'));
+      Swal.fire({
+        icon: 'error',
+        title: 'Lỗi',
+        text: t('shopOwner.chat.sendMessageFailed'),
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+      });
     }
   };
 

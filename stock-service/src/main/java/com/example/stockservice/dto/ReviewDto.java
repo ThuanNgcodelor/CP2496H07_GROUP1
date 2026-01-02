@@ -24,4 +24,8 @@ public class ReviewDto {
     private String reply;
     private LocalDateTime repliedAt;
     private LocalDateTime createdAt;
+
+    // Extra fields for display
+    private String productName;
+    private String productImage;
 }

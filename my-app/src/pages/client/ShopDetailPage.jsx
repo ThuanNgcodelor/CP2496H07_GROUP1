@@ -3,9 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import Header from '../../components/client/Header.jsx';
-import { getShopOwnerByUserId, getFollowerCount, checkIsFollowing, followShop, unfollowShop } from '../../api/user';
+import { getShopOwnerByUserId, getFollowerCount, checkIsFollowing, followShop, unfollowShop, getShopDecoration } from '../../api/user';
 import { getShopProducts, getShopStats, fetchProductImageById } from '../../api/product';
 import imgFallback from "../../assets/images/shop/6.png";
+import DecorationRenderer from '../../components/shop-owner/decoration/DecorationRenderer';
 
 export default function ShopDetailPage() {
     const { userId } = useParams();
@@ -16,8 +17,9 @@ export default function ShopDetailPage() {
     const [isFollowing, setIsFollowing] = useState(false);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('products'); // Default to products for better UX
+    const [activeTab, setActiveTab] = useState('products'); // Default to updated later
     const [imageUrls, setImageUrls] = useState({});
+    const [decorationConfig, setDecorationConfig] = useState(null);
     const { t } = useTranslation();
 
     useEffect(() => {
@@ -27,6 +29,17 @@ export default function ShopDetailPage() {
                 // 1. Get Shop Owner Info
                 const shopData = await getShopOwnerByUserId(userId);
                 setShopInfo(shopData);
+
+                // Fetch Decoration
+                try {
+                    const decoRes = await getShopDecoration(shopData.userId || userId);
+                    if (decoRes && decoRes.content) {
+                        setDecorationConfig(JSON.parse(decoRes.content));
+                        setActiveTab('home');
+                    }
+                } catch (e) {
+                    console.error("Decoration fetch error", e);
+                }
 
                 // 2. Get Shop Stats (Product Count, Avg Rating)
                 getShopStats(userId).then(data => {
@@ -129,9 +142,9 @@ export default function ShopDetailPage() {
             <div className="wrapper">
                 <Header />
                 <div className="container py-5 text-center">
-                    <h3>Shop not found</h3>
+                    <h3>{t('shop.notFound')}</h3>
                     <button className="btn btn-primary mt-3" onClick={() => navigate('/')}>
-                        Go to Homepage
+                        {t('shop.goHome')}
                     </button>
                 </div>
             </div>
@@ -147,12 +160,12 @@ export default function ShopDetailPage() {
         const diffMonths = Math.floor(diffDays / 30);
         const diffYears = Math.floor(diffDays / 365);
 
-        if (diffYears >= 1) return `${diffYears} years ago`;
-        if (diffMonths >= 1) return `${diffMonths} months ago`;
-        if (diffDays >= 1) return `${diffDays} days ago`;
+        if (diffYears >= 1) return t('shop.yearsAgo', { count: diffYears });
+        if (diffMonths >= 1) return t('shop.monthsAgo', { count: diffMonths });
+        if (diffDays >= 1) return t('shop.daysAgo', { count: diffDays });
         const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-        if (diffHours >= 1) return `${diffHours} hours ago`;
-        return 'Just now';
+        if (diffHours >= 1) return t('shop.hoursAgo', { count: diffHours });
+        return t('shop.justNow');
     };
 
     const formatCount = (count) => {
@@ -219,7 +232,7 @@ export default function ShopDetailPage() {
                                                 {shopInfo.shopName}
                                             </h4>
                                             <div className="text-white-50 small">
-                                                <i className="fas fa-circle text-success me-1" style={{ fontSize: 8 }}></i> Online
+                                                <i className="fas fa-circle text-success me-1" style={{ fontSize: 8 }}></i> {t('shop.online')}
                                             </div>
                                         </div>
                                     </div>
@@ -228,10 +241,10 @@ export default function ShopDetailPage() {
                                             className={`btn btn-sm ${isFollowing ? 'btn-secondary' : 'btn-outline-light'}`}
                                             onClick={handleFollow}
                                         >
-                                            {isFollowing ? <><i className="fas fa-check me-1"></i> Following</> : <><i className="fas fa-plus me-1"></i> Follow</>}
+                                            {isFollowing ? <><i className="fas fa-check me-1"></i> {t('shop.followingStatus')}</> : <><i className="fas fa-plus me-1"></i> {t('shop.follow')}</>}
                                         </button>
                                         <button className="btn btn-sm btn-outline-light">
-                                            <i className="fas fa-comment me-1"></i> Chat
+                                            <i className="fas fa-comment me-1"></i> {t('shop.chat')}
                                         </button>
                                     </div>
                                 </div>
@@ -239,27 +252,27 @@ export default function ShopDetailPage() {
                                 <div className="col-md-8 mt-3 mt-md-0">
                                     <div className="row text-white">
                                         <div className="col-4 mb-3">
-                                            <div className="small text-white-50"><i className="fas fa-box me-1"></i> Products</div>
+                                            <div className="small text-white-50"><i className="fas fa-box me-1"></i> {t('shop.products')}</div>
                                             <div className="fw-bold fs-5">{formatCount(stats.productCount)}</div>
                                         </div>
                                         <div className="col-4 mb-3">
-                                            <div className="small text-white-50"><i className="fas fa-star me-1"></i> Rating</div>
-                                            <div className="fw-bold fs-5">{stats.avgRating > 0 ? stats.avgRating.toFixed(1) : 'No ratings'}</div>
+                                            <div className="small text-white-50"><i className="fas fa-star me-1"></i> {t('shop.rating')}</div>
+                                            <div className="fw-bold fs-5">{stats.avgRating > 0 ? stats.avgRating.toFixed(1) : t('shop.noRatings')}</div>
                                         </div>
                                         <div className="col-4 mb-3">
-                                            <div className="small text-white-50"><i className="fas fa-comment-dots me-1"></i> Chat Response</div>
-                                            <div className="fw-bold fs-5">N/A</div>
+                                            <div className="small text-white-50"><i className="fas fa-comment-dots me-1"></i> {t('shop.chatResponse')}</div>
+                                            <div className="fw-bold fs-5">{t('shop.na')}</div>
                                         </div>
                                         <div className="col-4">
-                                            <div className="small text-white-50"><i className="fas fa-users me-1"></i> Followers</div>
+                                            <div className="small text-white-50"><i className="fas fa-users me-1"></i> {t('shop.followers')}</div>
                                             <div className="fw-bold fs-5">{formatCount(followerCount)}</div>
                                         </div>
                                         <div className="col-4">
-                                            <div className="small text-white-50"><i className="fas fa-calendar-alt me-1"></i> Joined</div>
+                                            <div className="small text-white-50"><i className="fas fa-calendar-alt me-1"></i> {t('shop.joined')}</div>
                                             <div className="fw-bold fs-5">{formatJoinedDate(shopInfo.createdAt)}</div>
                                         </div>
                                         <div className="col-4">
-                                            <div className="small text-white-50"><i className="fas fa-user-plus me-1"></i> Following</div>
+                                            <div className="small text-white-50"><i className="fas fa-user-plus me-1"></i> {t('shop.following')}</div>
                                             <div className="fw-bold fs-5">{shopInfo.followingCount || 0}</div>
                                         </div>
                                     </div>
@@ -272,13 +285,24 @@ export default function ShopDetailPage() {
                     <div className="card shadow-sm border-0">
                         <div className="card-header bg-white border-bottom">
                             <ul className="nav nav-tabs card-header-tabs border-0">
+                                {decorationConfig && decorationConfig.length > 0 && (
+                                    <li className="nav-item">
+                                        <button
+                                            className={`nav-link border-0 ${activeTab === 'home' ? 'active text-danger border-bottom border-danger border-3' : 'text-dark'}`}
+                                            onClick={() => setActiveTab('home')}
+                                            style={{ fontWeight: activeTab === 'home' ? 'bold' : 'normal' }}
+                                        >
+                                            {t('shop.home')}
+                                        </button>
+                                    </li>
+                                )}
                                 <li className="nav-item">
                                     <button
                                         className={`nav-link border-0 ${activeTab === 'products' ? 'active text-danger border-bottom border-danger border-3' : 'text-dark'}`}
                                         onClick={() => setActiveTab('products')}
                                         style={{ fontWeight: activeTab === 'products' ? 'bold' : 'normal' }}
                                     >
-                                        Products
+                                        {t('shop.products')}
                                     </button>
                                 </li>
                                 <li className="nav-item">
@@ -287,27 +311,30 @@ export default function ShopDetailPage() {
                                         onClick={() => setActiveTab('intro')}
                                         style={{ fontWeight: activeTab === 'intro' ? 'bold' : 'normal' }}
                                     >
-                                        Introduction
+                                        {t('shop.intro')}
                                     </button>
                                 </li>
                             </ul>
                         </div>
                         <div className="card-body p-4">
+                            {activeTab === 'home' && decorationConfig && (
+                                <DecorationRenderer config={decorationConfig} />
+                            )}
                             {activeTab === 'intro' && (
                                 <div>
-                                    <h5 className="text-danger mb-3 fw-bold">About the Shop</h5>
+                                    <h5 className="text-danger mb-3 fw-bold">{t('shop.aboutShop')}</h5>
                                     <div className="row">
                                         <div className="col-md-6 mb-3">
-                                            <strong>Shop Name:</strong> {shopInfo.shopName}
+                                            <strong>{t('shop.shopName')}:</strong> {shopInfo.shopName}
                                         </div>
                                         <div className="col-md-6 mb-3">
-                                            <strong>Owner:</strong> {shopInfo.ownerName || 'N/A'}
+                                            <strong>{t('shop.owner')}:</strong> {shopInfo.ownerName || t('shop.na')}
                                         </div>
                                         <div className="col-md-6 mb-3">
-                                            <strong>Email:</strong> {shopInfo.email || 'N/A'}
+                                            <strong>{t('shop.email')}:</strong> {shopInfo.email || t('shop.na')}
                                         </div>
                                         <div className="col-md-6 mb-3">
-                                            <strong>Address:</strong> {shopInfo.address || 'Not updated'}
+                                            <strong>{t('shop.address')}:</strong> {shopInfo.address || t('shop.na')}
                                         </div>
                                     </div>
                                 </div>
@@ -317,7 +344,7 @@ export default function ShopDetailPage() {
                                     {products.length === 0 ? (
                                         <div className="text-center py-5 text-muted">
                                             <i className="fas fa-box-open fa-3x mb-3"></i>
-                                            <p>No products found in this shop.</p>
+                                            <p>{t('shop.noProducts')}</p>
                                         </div>
                                     ) : (
                                         <div className="row g-3">
@@ -349,7 +376,7 @@ export default function ShopDetailPage() {
                                                                 <div className="mt-auto">
                                                                     <div className="d-flex align-items-center justify-content-between">
                                                                         <span className="text-danger fw-bold">{formatVND(product.price)}</span>
-                                                                        {product.totalStock <= 0 && <span className="badge bg-secondary">Sold Out</span>}
+                                                                        {product.totalStock <= 0 && <span className="badge bg-secondary">{t('shop.soldOut')}</span>}
                                                                     </div>
                                                                     {product.originalPrice > product.price && (
                                                                         <div className="text-decoration-line-through text-muted small" style={{ fontSize: '0.8rem' }}>

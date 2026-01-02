@@ -11,6 +11,7 @@ const ShopOwnerHeader = ({ onMenuClick }) => {
   const [shopOwnerInfo, setShopOwnerInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -51,9 +52,10 @@ const ShopOwnerHeader = ({ onMenuClick }) => {
   };
 
   const displayName = shopOwnerInfo?.shopName || shopOwnerInfo?.ownerName || t('shopOwner.header.sellerCenter');
-  const shopImage = shopOwnerInfo?.imageUrl
-    ? `/v1/file-storage/get/${shopOwnerInfo.imageUrl}`
-    : '/src/assets/admin/img/boy.png';
+
+  // Only construct image URL if imageUrl exists and is valid
+  const hasValidImage = shopOwnerInfo?.imageUrl && !imageError;
+  const shopImage = hasValidImage ? `/v1/file-storage/get/${shopOwnerInfo.imageUrl}` : null;
 
   return (
     <header className="shop-owner-header">
@@ -81,19 +83,19 @@ const ShopOwnerHeader = ({ onMenuClick }) => {
             className="header-icon-btn user-btn"
             onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            <div className="user-avatar-wrapper">
-              <img
-                src={shopImage}
-                alt="User"
-                className="user-avatar"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
-                }}
-              />
-              <div className="user-avatar-fallback" style={{ display: shopOwnerInfo?.imageUrl ? 'none' : 'flex' }}>
-                {(displayName.charAt(0) || 'U').toUpperCase()}
-              </div>
+            <div className="header-user-avatar-wrapper">
+              {shopImage ? (
+                <img
+                  src={shopImage}
+                  alt="User"
+                  className="header-user-avatar"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <div className="header-user-avatar-fallback">
+                  {(displayName.charAt(0) || 'U').toUpperCase()}
+                </div>
+              )}
             </div>
             <span>{loading ? t('shopOwner.header.loading') : displayName}</span>
             <i className={`fas fa-chevron-${dropdownOpen ? 'up' : 'down'} chevron-icon`}></i>
@@ -102,18 +104,18 @@ const ShopOwnerHeader = ({ onMenuClick }) => {
             <div className="user-dropdown-menu">
               <div className="dropdown-header">
                 <div className="dropdown-avatar-wrapper">
-                  <img
-                    src={shopImage}
-                    alt="User"
-                    className="dropdown-avatar"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
-                  <div className="dropdown-avatar-fallback" style={{ display: shopOwnerInfo?.imageUrl ? 'none' : 'flex' }}>
-                    {(displayName.charAt(0) || 'U').toUpperCase()}
-                  </div>
+                  {shopImage ? (
+                    <img
+                      src={shopImage}
+                      alt="User"
+                      className="dropdown-avatar"
+                      onError={() => setImageError(true)}
+                    />
+                  ) : (
+                    <div className="dropdown-avatar-fallback">
+                      {(displayName.charAt(0) || 'U').toUpperCase()}
+                    </div>
+                  )}
                 </div>
                 <div className="dropdown-user-info">
                   <div className="dropdown-name">{displayName}</div>

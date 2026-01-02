@@ -9,6 +9,8 @@ import java.util.List;
 @Repository
 public interface SizeRepository extends JpaRepository<Size, String> {
     List<Size> findByProductId(String productId);
-    Size findByProductIdAndName(String productId, String name);
-}
 
+    Size findByProductIdAndName(String productId, String name);
+
+    long countByProductIdAndStockGreaterThan(String productId, int stock);
+}
