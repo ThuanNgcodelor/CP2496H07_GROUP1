@@ -172,7 +172,7 @@ export default function ProductDetailPage() {
                     <span className="text-decoration-line-through text-muted">
                         {originalPrice.toLocaleString("vi-VN")} ₫
                     </span>
-                    <span className="badge bg-danger">-{discountPercent}%</span>
+                    <span className="badge" style={{ backgroundColor: '#ee4d2d' }}>-{discountPercent}%</span>
                 </div>
             );
         }
@@ -455,9 +455,16 @@ export default function ProductDetailPage() {
                                         {product.flashSaleRemaining !== undefined && product.flashSaleRemaining !== null && (
                                             <div className="d-flex gap-2 mb-3">
                                                 <button
-                                                    className={`btn ${isFlashSale ? 'btn-danger' : 'btn-outline-danger'}`}
+                                                    className={`btn ${isFlashSale ? 'text-white' : ''}`}
                                                     onClick={() => setIsFlashSale(true)}
-                                                    style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+                                                    style={{
+                                                        flex: 1,
+                                                        position: 'relative',
+                                                        overflow: 'hidden',
+                                                        backgroundColor: isFlashSale ? '#ee4d2d' : 'transparent',
+                                                        borderColor: '#ee4d2d',
+                                                        color: isFlashSale ? '#fff' : '#ee4d2d'
+                                                    }}
                                                 >
                                                     {product.flashSaleRemaining <= 0 && <div style={{ position: 'absolute', top: 0, right: 0, background: '#333', color: '#fff', fontSize: '10px', padding: '2px 6px' }}>Hết suất</div>}
                                                     <div className="fw-bold"><i className="fas fa-bolt me-1"></i>Flash Sale</div>
@@ -481,13 +488,13 @@ export default function ProductDetailPage() {
                                             {isFlashSale && product.flashSaleRemaining !== undefined ? (
                                                 <div>
                                                     <div className="d-flex align-items-center gap-2">
-                                                        <span className="fs-4 fw-bold text-danger">
+                                                        <span className="fs-4 fw-bold" style={{ color: '#ee4d2d' }}>
                                                             {product.price?.toLocaleString("vi-VN")} ₫
                                                         </span>
                                                         <span className="text-decoration-line-through text-muted ms-2">
                                                             {product.originalPrice?.toLocaleString("vi-VN")} ₫
                                                         </span>
-                                                        <span className="badge bg-danger">Flash Sale</span>
+                                                        <span className="badge" style={{ backgroundColor: '#ee4d2d' }}>Flash Sale</span>
                                                     </div>
 
                                                     <div className="mt-2 pt-2 border-top" style={{ borderColor: '#e0e0e0' }}>
@@ -495,15 +502,15 @@ export default function ProductDetailPage() {
                                                             <span style={{ fontSize: '0.85rem', color: '#555' }}>
                                                                 Số lượng khuyến mãi:
                                                             </span>
-                                                            <span className="badge bg-danger rounded-pill px-3">
+                                                            <span className="badge rounded-pill px-3" style={{ backgroundColor: '#ee4d2d' }}>
                                                                 Còn {product.flashSaleRemaining}
                                                             </span>
                                                         </div>
                                                         <div className="progress mt-2" style={{ height: '6px' }}>
                                                             <div
-                                                                className="progress-bar bg-danger progress-bar-striped progress-bar-animated"
+                                                                className="progress-bar progress-bar-striped progress-bar-animated"
                                                                 role="progressbar"
-                                                                style={{ width: '100%' }}
+                                                                style={{ width: '100%', backgroundColor: '#ee4d2d' }}
                                                             ></div>
                                                         </div>
                                                         <small className="text-muted d-block mt-1 fst-italic" style={{ fontSize: '0.75rem' }}>
@@ -517,16 +524,16 @@ export default function ProductDetailPage() {
                                                         {/* Check if there's a regular discount (not flash sale) */}
                                                         {product.discountPercent && product.discountPercent > 0 && product.originalPrice && product.originalPrice > product.price ? (
                                                             <>
-                                                                <span className="fs-4 fw-bold text-danger">
+                                                                <span className="fs-4 fw-bold" style={{ color: '#ee4d2d' }}>
                                                                     {(product.price || 0).toLocaleString("vi-VN")} ₫
                                                                 </span>
                                                                 <span className="text-decoration-line-through text-muted">
                                                                     {product.originalPrice.toLocaleString("vi-VN")} ₫
                                                                 </span>
-                                                                <span className="badge bg-danger">-{product.discountPercent}%</span>
+                                                                <span className="badge" style={{ backgroundColor: '#ee4d2d' }}>-{product.discountPercent}%</span>
                                                             </>
                                                         ) : (
-                                                            <span className="fs-4 fw-bold">
+                                                            <span className="fs-4 fw-bold" style={{ color: '#ee4d2d' }}>
                                                                 {(product.price || 0).toLocaleString("vi-VN")} ₫
                                                             </span>
                                                         )}
@@ -542,14 +549,14 @@ export default function ProductDetailPage() {
                                         {/* Vouchers (Placeholder for future development) */}
                                         <div className="mb-4">
                                             <div className="d-flex align-items-center gap-2 mb-2">
-                                                <i className="fa fa-tag text-danger"></i>
+                                                <i className="fa fa-tag" style={{ color: '#ee4d2d' }}></i>
                                                 <strong style={{ fontSize: '0.9rem' }}>Shop Voucher</strong>
                                             </div>
                                             <div className="d-flex flex-wrap gap-2">
-                                                <span className="badge bg-danger" style={{ fontSize: '0.8rem', padding: '4px 8px' }}>
+                                                <span className="badge" style={{ fontSize: '0.8rem', padding: '4px 8px', backgroundColor: '#ee4d2d' }}>
                                                     2% OFF
                                                 </span>
-                                                <span className="badge bg-danger" style={{ fontSize: '0.8rem', padding: '4px 8px' }}>
+                                                <span className="badge" style={{ fontSize: '0.8rem', padding: '4px 8px', backgroundColor: '#ee4d2d' }}>
                                                     3% OFF
                                                 </span>
                                                 {/* Add more vouchers here */}
@@ -692,8 +699,15 @@ export default function ProductDetailPage() {
                                             <div className="d-flex gap-2">
                                                 <button
                                                     disabled={posting || (product.sizes?.length > 0 && !selectedSizeId)}
-                                                    className="btn btn-outline-danger flex-fill py-2 fw-bold"
-                                                    style={{ fontSize: '0.9rem' }}
+                                                    className="btn flex-fill py-2 fw-bold"
+                                                    style={{
+                                                        fontSize: '0.9rem',
+                                                        color: '#ee4d2d',
+                                                        borderColor: '#ee4d2d',
+                                                        backgroundColor: 'rgba(238, 77, 45, 0.1)'
+                                                    }}
+                                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(238, 77, 45, 0.2)'}
+                                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(238, 77, 45, 0.1)'}
                                                     onClick={onAddToCart}
                                                 >
                                                     {posting ? (
@@ -710,8 +724,12 @@ export default function ProductDetailPage() {
                                                 </button>
                                                 <button
                                                     disabled={posting || (product.sizes?.length > 0 && !selectedSizeId)}
-                                                    className="btn btn-danger flex-fill py-2 fw-bold"
-                                                    style={{ fontSize: '0.9rem' }}
+                                                    className="btn flex-fill py-2 fw-bold text-white"
+                                                    style={{
+                                                        fontSize: '0.9rem',
+                                                        backgroundColor: '#ee4d2d',
+                                                        borderColor: '#ee4d2d'
+                                                    }}
                                                     onClick={async () => {
                                                         if (!product) return;
                                                         if (product.sizes && product.sizes.length > 0 && !selectedSizeId) {

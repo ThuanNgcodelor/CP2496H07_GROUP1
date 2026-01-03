@@ -24,7 +24,12 @@ const ShopDecorationPage = () => {
         try {
             const data = await getMyShopDecoration();
             if (data && data.content) {
-                setDecorationConfig(JSON.parse(data.content));
+                let parsed = JSON.parse(data.content);
+                // Handle new object structure { widgets: [], globalStyles: {} }
+                if (!Array.isArray(parsed) && parsed.widgets) {
+                    parsed = parsed.widgets;
+                }
+                setDecorationConfig(Array.isArray(parsed) ? parsed : []);
             } else {
                 setDecorationConfig([]);
             }

@@ -58,7 +58,7 @@ const PreviewArea = ({ widgets, onRemove, onUpdate, onReorder }) => {
         }
     };
 
-    if (!widgets || widgets.length === 0) {
+    if (!widgets || !Array.isArray(widgets) || widgets.length === 0) {
         return <div className="text-center text-muted mt-5">{t('shopOwner.decoration.selectComponent')}</div>;
     }
 

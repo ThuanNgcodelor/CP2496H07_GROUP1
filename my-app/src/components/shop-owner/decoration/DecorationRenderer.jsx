@@ -8,7 +8,9 @@ import 'swiper/css/pagination';
 import { getImageUrl } from '../../../api/image';
 
 const DecorationRenderer = ({ config }) => {
-    if (!config || config.length === 0) return null;
+    const widgets = (config && !Array.isArray(config) && config.widgets) ? config.widgets : config;
+
+    if (!widgets || !Array.isArray(widgets) || widgets.length === 0) return null;
 
     const renderWidget = (widget) => {
         switch (widget.type) {
@@ -25,7 +27,7 @@ const DecorationRenderer = ({ config }) => {
 
     return (
         <div className="shop-decoration-renderer">
-            {config.map((widget, index) => (
+            {widgets.map((widget, index) => (
                 <div key={widget.id || index} className="mb-4">
                     {renderWidget(widget)}
                 </div>

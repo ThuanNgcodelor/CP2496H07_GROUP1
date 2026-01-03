@@ -288,9 +288,13 @@ export default function ShopDetailPage() {
                                 {decorationConfig && decorationConfig.length > 0 && (
                                     <li className="nav-item">
                                         <button
-                                            className={`nav-link border-0 ${activeTab === 'home' ? 'active text-danger border-bottom border-danger border-3' : 'text-dark'}`}
+                                            className={`nav-link border-0 ${activeTab === 'home' ? 'active border-bottom border-3' : 'text-dark'}`}
                                             onClick={() => setActiveTab('home')}
-                                            style={{ fontWeight: activeTab === 'home' ? 'bold' : 'normal' }}
+                                            style={{
+                                                fontWeight: activeTab === 'home' ? 'bold' : 'normal',
+                                                color: activeTab === 'home' ? '#ee4d2d' : '',
+                                                borderColor: activeTab === 'home' ? '#ee4d2d' : ''
+                                            }}
                                         >
                                             {t('shop.home')}
                                         </button>
@@ -298,18 +302,26 @@ export default function ShopDetailPage() {
                                 )}
                                 <li className="nav-item">
                                     <button
-                                        className={`nav-link border-0 ${activeTab === 'products' ? 'active text-danger border-bottom border-danger border-3' : 'text-dark'}`}
+                                        className={`nav-link border-0 ${activeTab === 'products' ? 'active border-bottom border-3' : 'text-dark'}`}
                                         onClick={() => setActiveTab('products')}
-                                        style={{ fontWeight: activeTab === 'products' ? 'bold' : 'normal' }}
+                                        style={{
+                                            fontWeight: activeTab === 'products' ? 'bold' : 'normal',
+                                            color: activeTab === 'products' ? '#ee4d2d' : '',
+                                            borderColor: activeTab === 'products' ? '#ee4d2d' : ''
+                                        }}
                                     >
                                         {t('shop.products')}
                                     </button>
                                 </li>
                                 <li className="nav-item">
                                     <button
-                                        className={`nav-link border-0 ${activeTab === 'intro' ? 'active text-danger border-bottom border-danger border-3' : 'text-dark'}`}
+                                        className={`nav-link border-0 ${activeTab === 'intro' ? 'active border-bottom border-3' : 'text-dark'}`}
                                         onClick={() => setActiveTab('intro')}
-                                        style={{ fontWeight: activeTab === 'intro' ? 'bold' : 'normal' }}
+                                        style={{
+                                            fontWeight: activeTab === 'intro' ? 'bold' : 'normal',
+                                            color: activeTab === 'intro' ? '#ee4d2d' : '',
+                                            borderColor: activeTab === 'intro' ? '#ee4d2d' : ''
+                                        }}
                                     >
                                         {t('shop.intro')}
                                     </button>
@@ -322,7 +334,7 @@ export default function ShopDetailPage() {
                             )}
                             {activeTab === 'intro' && (
                                 <div>
-                                    <h5 className="text-danger mb-3 fw-bold">{t('shop.aboutShop')}</h5>
+                                    <h5 className="mb-3 fw-bold" style={{ color: '#ee4d2d' }}>{t('shop.aboutShop')}</h5>
                                     <div className="row">
                                         <div className="col-md-6 mb-3">
                                             <strong>{t('shop.shopName')}:</strong> {shopInfo.shopName}
@@ -375,7 +387,7 @@ export default function ShopDetailPage() {
                                                                 </div>
                                                                 <div className="mt-auto">
                                                                     <div className="d-flex align-items-center justify-content-between">
-                                                                        <span className="text-danger fw-bold">{formatVND(product.price)}</span>
+                                                                        <span className="fw-bold" style={{ color: '#ee4d2d' }}>{formatVND(product.price)}</span>
                                                                         {product.totalStock <= 0 && <span className="badge bg-secondary">{t('shop.soldOut')}</span>}
                                                                     </div>
                                                                     {product.originalPrice > product.price && (

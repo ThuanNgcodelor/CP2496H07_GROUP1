@@ -6,10 +6,10 @@ import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 
 export default function ShopInfoBar({
-                                      shopOwner,
-                                      onChat,
-                                      onViewShop,
-                                    }) {
+  shopOwner,
+  onChat,
+  onViewShop,
+}) {
   const [stats, setStats] = useState({ productCount: 0, avgRating: 0 });
   const [followerCount, setFollowerCount] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -96,96 +96,103 @@ export default function ShopInfoBar({
   };
 
   return (
-      <div className="border rounded-3 p-3 mb-3 bg-white">
-        <div className="d-flex align-items-center gap-3 flex-wrap">
-          <div className="d-flex align-items-center gap-3 flex-grow-1">
-            {shopOwner.imageUrl ? (
-                <img
-                    src={`/v1/file-storage/get/${shopOwner.imageUrl}`}
-                    alt={shopOwner.shopName}
-                    style={{
-                      width: 64,
-                      height: 64,
-                      objectFit: "cover",
-                      borderRadius: "50%",
-                      border: "2px solid #ee4d2d"
-                    }}
-                    onError={(e) => {
-                      e.currentTarget.src = "/vite.svg";
-                    }}
-                />
-            ) : (
-                <div
-                    className="rounded-circle d-flex align-items-center justify-content-center"
-                    style={{
-                      width: 64,
-                      height: 64,
-                      background: "#ee4d2d",
-                      color: "white",
-                      fontSize: "1.5rem",
-                      fontWeight: "bold"
-                    }}
-                >
-                  {shopOwner.shopName?.charAt(0).toUpperCase()}
-                </div>
-            )}
-            <div>
-              <div className="fw-bold">
-                {shopOwner.shopName}
-                {shopOwner.verified && (
-                    <i className="fas fa-check-circle text-primary ms-2" title="Verified Shop"></i>
-                )}
-              </div>
-              <div className="text-muted" style={{ fontSize: "0.9rem" }}>
-                Online 3 minutes ago
-              </div>
+    <div className="border rounded-3 p-3 mb-3 bg-white">
+      <div className="d-flex align-items-center gap-3 flex-wrap">
+        <div className="d-flex align-items-center gap-3 flex-grow-1">
+          {shopOwner.imageUrl ? (
+            <img
+              src={`/v1/file-storage/get/${shopOwner.imageUrl}`}
+              alt={shopOwner.shopName}
+              style={{
+                width: 64,
+                height: 64,
+                objectFit: "cover",
+                borderRadius: "50%",
+                border: "2px solid #ee4d2d"
+              }}
+              onError={(e) => {
+                e.currentTarget.src = "/vite.svg";
+              }}
+            />
+          ) : (
+            <div
+              className="rounded-circle d-flex align-items-center justify-content-center"
+              style={{
+                width: 64,
+                height: 64,
+                background: "#ee4d2d",
+                color: "white",
+                fontSize: "1.5rem",
+                fontWeight: "bold"
+              }}
+            >
+              {shopOwner.shopName?.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <div className="fw-bold">
+              {shopOwner.shopName}
+              {shopOwner.verified && (
+                <i className="fas fa-check-circle text-primary ms-2" title="Verified Shop"></i>
+              )}
+            </div>
+            <div className="text-muted" style={{ fontSize: "0.9rem" }}>
+              Online 3 minutes ago
             </div>
           </div>
-
-          <div className="d-flex align-items-center gap-2">
-            <button
-                className={`btn ${isFollowing ? 'btn-secondary' : 'btn-outline-danger'}`}
-                onClick={handleFollow}
-            >
-              {isFollowing ? <><i className="fas fa-check me-1" /> Following</> : <><i className="fas fa-plus me-1" /> Follow</>}
-            </button>
-            <button className="btn btn-danger" onClick={onChat}>
-              <i className="fa fa-comments me-1" /> Chat Now
-            </button>
-            <button className="btn btn-outline-danger" onClick={onViewShop}>
-              <i className="fa fa-store me-1" /> View Shop
-            </button>
-          </div>
         </div>
 
-        <hr className="my-3" />
-
-        <div className="row text-center g-2">
-          <div className="col-6 col-md-2">
-            <div className="text-muted">Ratings</div>
-            <div className="text-danger fw-bold">{stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "0.0"}</div>
-          </div>
-          <div className="col-6 col-md-2">
-            <div className="text-muted">Response Rate</div>
-            <div className="text-danger fw-bold">N/A</div>
-          </div>
-          <div className="col-6 col-md-2">
-            <div className="text-muted">Products</div>
-            <div className="text-danger fw-bold">{formatCount(stats.productCount)}</div>
-          </div>
-          <div className="col-6 col-md-2">
-            <div className="text-muted">Response Time</div>
-            <div className="text-danger fw-bold">N/A</div>
-          </div>
-          <div className="col-6 col-md-2">
-            <div className="text-muted">Joined</div>
-            <div className="text-danger fw-bold">{joinedText}</div>
-          </div>
-          <div className="col-6 col-md-2">
-            <div className="text-muted">Followers</div>
-            <div className="text-danger fw-bold">{formatCount(followerCount)}</div>
-          </div>
+        <div className="d-flex align-items-center gap-2">
+          <button
+            className="btn"
+            style={{ color: '#ee4d2d', borderColor: '#ee4d2d' }}
+            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#ee4d2d'; e.currentTarget.style.color = 'white'; }}
+            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#ee4d2d'; }}
+            onClick={handleFollow}
+          >
+            {isFollowing ? <><i className="fas fa-check me-1" /> Following</> : <><i className="fas fa-plus me-1" /> Follow</>}
+          </button>
+          <button className="btn text-white" onClick={onChat} style={{ backgroundColor: '#ee4d2d', borderColor: '#ee4d2d' }}>
+            <i className="fa fa-comments me-1" /> Chat Now
+          </button>
+          <button className="btn" onClick={onViewShop}
+            style={{ color: '#ee4d2d', borderColor: '#ee4d2d' }}
+            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#ee4d2d'; e.currentTarget.style.color = 'white'; }}
+            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#ee4d2d'; }}
+          >
+            <i className="fa fa-store me-1" /> View Shop
+          </button>
         </div>
       </div>
+
+      <hr className="my-3" />
+
+      <div className="row text-center g-2">
+        <div className="col-6 col-md-2">
+          <div className="text-muted">Ratings</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>{stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "0.0"}</div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="text-muted">Response Rate</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>N/A</div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="text-muted">Products</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>{formatCount(stats.productCount)}</div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="text-muted">Response Time</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>N/A</div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="text-muted">Joined</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>{joinedText}</div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="text-muted">Followers</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>{formatCount(followerCount)}</div>
+        </div>
+      </div>
+    </div >
   );
 }
