@@ -32,12 +32,22 @@ export const getOrdersByUser = async () => {
 };
 
 /**
- * Xóa người dùng theo ID (Admin only)
+ * Xóa người dùng theo ID (Admin only) - DEPRECATED
  * @param {string} id - ID của người dùng cần xóa
  * @returns {Promise} - Promise trả về kết quả xóa
  */
-export async function deleteUserById(id) {
-    const { data } = await api.delete(`/deleteUserById/${id}`);
+// export async function deleteUserById(id) {
+//     const { data } = await api.delete(`/deleteUserById/${id}`);
+//     return data;
+// }
+
+/**
+ * Toggle active status của user (Lock/Unlock account)
+ * @param {string} id - ID của user
+ * @returns {Promise} - Promise trả về user đã cập nhật
+ */
+export async function toggleUserActive(id) {
+    const { data } = await api.put(`/toggleActive/${id}`);
     return data;
 }
 
@@ -104,7 +114,13 @@ export const updateUser = async (data, file) => {
         id: data.id,
         email: data.email,
         username: data.username,
-        userDetails: data.userDetails || {}
+        userDetails: {
+            firstName: data.firstName || "",
+            lastName: data.lastName || "",
+            phoneNumber: data.phoneNumber || "",
+            gender: data.gender || null,
+            birthDate: data.birthDate || null
+        }
     };
     if (data.password && String(data.password).trim()) {
         requestData.password = String(data.password).trim();
@@ -153,7 +169,7 @@ export const getShopOwnerByUserId = async (userId) => {
     try {
         const response = await api.get(`/shop-owners/${userId}`);
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch shop owner");
     }
 };
@@ -326,7 +342,7 @@ export const getUserRoleRequests = async () => {
     try {
         const response = await api.get("/role-requests/user");
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to fetch user role requests");
     }
 };
@@ -352,7 +368,7 @@ export const checkDefaultAddress = async () => {
     try {
         const response = await api.get('/location/check-default-address');
         return response.data;
-    } catch  {
+    } catch {
         throw new Error("Failed to check default address");
     }
 };

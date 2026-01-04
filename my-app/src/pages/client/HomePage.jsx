@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import Header from "../../components/client/Header.jsx";
 import Footer from "../../components/client/Footer.jsx";
 import ShopeeBanner from "../../components/client/ShopeeBanner.jsx";
@@ -6,9 +7,14 @@ import FlashSale from "../../components/client/FlashSale.jsx";
 import TopSearch from "../../components/client/TopSearch.jsx";
 import TodaysSuggestions from "../../components/client/TodaysSuggestions.jsx";
 import AdDisplay from "../../components/client/ads/AdDisplay.jsx";
+import { trackSiteVisit } from "../../api/analyticsApi.js";
 
 
 export default function HomePage() {
+  useEffect(() => {
+    trackSiteVisit();
+  }, []);
+
   return (
     <div className="wrapper" style={{ background: '#F5F5F5', minHeight: '100vh' }}>
       <AdDisplay placement="POPUP" />
