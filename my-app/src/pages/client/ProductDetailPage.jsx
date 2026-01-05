@@ -164,17 +164,28 @@ export default function ProductDetailPage() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [lightboxOpen, activeLightboxImages.length]);
 
+    // Calculate size modifier
+    const sizeModifier = useMemo(() => {
+        if (!product || !selectedSizeId || !product.sizes) return 0;
+        const size = product.sizes.find(s => s.id === selectedSizeId);
+        return size?.priceModifier || 0;
+    }, [product, selectedSizeId]);
+
     const priceDisplay = useMemo(() => {
         if (!product) return "";
         const { price, originalPrice, discountPercent } = product;
+
+        const finalPrice = (price || 0) + sizeModifier;
+        const finalOriginal = (originalPrice || 0) + sizeModifier;
+
         if (discountPercent && discountPercent > 0 && originalPrice && originalPrice > price) {
             return (
                 <div className="d-flex align-items-center gap-2">
                     <span className="fs-4 fw-bold">
-                        {price.toLocaleString("vi-VN")} ₫
+                        {finalPrice.toLocaleString("vi-VN")} ₫
                     </span>
                     <span className="text-decoration-line-through text-muted">
-                        {originalPrice.toLocaleString("vi-VN")} ₫
+                        {finalOriginal.toLocaleString("vi-VN")} ₫
                     </span>
                     <span className="badge" style={{ backgroundColor: '#ee4d2d' }}>-{discountPercent}%</span>
                 </div>
@@ -182,10 +193,10 @@ export default function ProductDetailPage() {
         }
         return (
             <span className="fs-4 fw-bold">
-                {(product.price || 0).toLocaleString("vi-VN")} ₫
+                {finalPrice.toLocaleString("vi-VN")} ₫
             </span>
         );
-    }, [product]);
+    }, [product, sizeModifier]);
 
     const onAddToCart = async () => {
         if (!product) return;
@@ -475,7 +486,7 @@ export default function ProductDetailPage() {
                                                 >
                                                     {product.flashSaleRemaining <= 0 && <div style={{ position: 'absolute', top: 0, right: 0, background: '#333', color: '#fff', fontSize: '10px', padding: '2px 6px' }}>Hết suất</div>}
                                                     <div className="fw-bold"><i className="fas fa-bolt me-1"></i>Flash Sale</div>
-                                                    <div style={{ fontSize: '0.9em' }}>{product.price?.toLocaleString("vi-VN")}₫</div>
+                                                    <div style={{ fontSize: '0.9em' }}>{((product.price || 0) + sizeModifier).toLocaleString("vi-VN")}₫</div>
                                                     <div style={{ fontSize: '0.75em' }}>Còn: {product.flashSaleRemaining}</div>
                                                 </button>
                                                 <button
@@ -484,7 +495,7 @@ export default function ProductDetailPage() {
                                                     style={{ flex: 1 }}
                                                 >
                                                     <div className="fw-bold">Giá Thường</div>
-                                                    <div style={{ fontSize: '0.9em' }}>{product.originalPrice?.toLocaleString("vi-VN")}₫</div>
+                                                    <div style={{ fontSize: '0.9em' }}>{((product.originalPrice || 0) + sizeModifier).toLocaleString("vi-VN")}₫</div>
                                                     <div style={{ fontSize: '0.75em' }}>Có sẵn</div>
                                                 </button>
                                             </div>
@@ -496,10 +507,10 @@ export default function ProductDetailPage() {
                                                 <div>
                                                     <div className="d-flex align-items-center gap-2">
                                                         <span className="fs-4 fw-bold" style={{ color: '#ee4d2d' }}>
-                                                            {product.price?.toLocaleString("vi-VN")} ₫
+                                                            {((product.price || 0) + sizeModifier).toLocaleString("vi-VN")} ₫
                                                         </span>
                                                         <span className="text-decoration-line-through text-muted ms-2">
-                                                            {product.originalPrice?.toLocaleString("vi-VN")} ₫
+                                                            {((product.originalPrice || 0) + sizeModifier).toLocaleString("vi-VN")} ₫
                                                         </span>
                                                         <span className="badge" style={{ backgroundColor: '#ee4d2d' }}>Flash Sale</span>
                                                     </div>
@@ -532,16 +543,16 @@ export default function ProductDetailPage() {
                                                         {product.discountPercent && product.discountPercent > 0 && product.originalPrice && product.originalPrice > product.price ? (
                                                             <>
                                                                 <span className="fs-4 fw-bold" style={{ color: '#ee4d2d' }}>
-                                                                    {(product.price || 0).toLocaleString("vi-VN")} ₫
+                                                                    {((product.price || 0) + sizeModifier).toLocaleString("vi-VN")} ₫
                                                                 </span>
                                                                 <span className="text-decoration-line-through text-muted">
-                                                                    {product.originalPrice.toLocaleString("vi-VN")} ₫
+                                                                    {((product.originalPrice || 0) + sizeModifier).toLocaleString("vi-VN")} ₫
                                                                 </span>
                                                                 <span className="badge" style={{ backgroundColor: '#ee4d2d' }}>-{product.discountPercent}%</span>
                                                             </>
                                                         ) : (
                                                             <span className="fs-4 fw-bold" style={{ color: '#ee4d2d' }}>
-                                                                {(product.price || 0).toLocaleString("vi-VN")} ₫
+                                                                {((product.price || 0) + sizeModifier).toLocaleString("vi-VN")} ₫
                                                             </span>
                                                         )}
                                                         {/* Show "Giá gốc" label when user explicitly chose regular price over flash sale */}

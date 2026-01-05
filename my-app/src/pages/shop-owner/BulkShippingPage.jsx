@@ -42,6 +42,19 @@ const formatTrackingTime = (ts) => {
     }
 };
 
+const formatDate = (ts) => {
+    if (!ts) return 'N/A';
+    try {
+        const date = new Date(ts);
+        return date.toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch {
+        return 'N/A';
+    }
+};
+
 export default function BulkShippingPage() {
     const { t } = useTranslation();
     const [searchParams] = useSearchParams();
@@ -55,6 +68,7 @@ export default function BulkShippingPage() {
     const [pageSize] = useState(10);
     const [usernames, setUsernames] = useState({});
     const [selectedOrders, setSelectedOrders] = useState(new Set());
+    const [bulkStatus, setBulkStatus] = useState('');
 
     const [imageUrls, setImageUrls] = useState({});
     const [productDetails, setProductDetails] = useState({}); // Store fetched product info (name, size)
@@ -503,22 +517,25 @@ export default function BulkShippingPage() {
     };
 
     const toggleSelectAll = () => {
-        // Filter only editable orders on current page
-        const editableOrders = orders.filter(o => canEditOrder(o.orderStatus));
+        const currentList = searchResults || orders;
+        // Filter only editable orders on current page/view
+        const editableOrders = currentList.filter(o => canEditOrder(o.orderStatus));
         const editableOrderIds = editableOrders.map(o => o.id);
 
-        // Check if all editable orders are already selected
-        const allEditableSelected = editableOrderIds.every(id => selectedOrders.has(id));
+        // Check if all editable orders on THIS page are already selected
+        const allOnPageSelected = editableOrderIds.length > 0 && editableOrderIds.every(id => selectedOrders.has(id));
 
-        if (allEditableSelected && editableOrderIds.length > 0) {
-            // Deselect all
-            setSelectedOrders(new Set());
+        const newSelected = new Set(selectedOrders);
+
+        if (allOnPageSelected) {
+            // Deselect all ON THIS PAGE/VIEW only
+            editableOrderIds.forEach(id => newSelected.delete(id));
         } else {
-            // Select only editable orders
-            setSelectedOrders(new Set(editableOrderIds));
+            // Select all ON THIS PAGE/VIEW
+            editableOrderIds.forEach(id => newSelected.add(id));
 
             // Show info if some orders were skipped
-            const skippedCount = orders.length - editableOrders.length;
+            const skippedCount = currentList.length - editableOrders.length;
             if (skippedCount > 0) {
                 const Toast = Swal.mixin({
                     toast: true,
@@ -532,6 +549,7 @@ export default function BulkShippingPage() {
                 });
             }
         }
+        setSelectedOrders(newSelected);
     };
 
     // Select all EDITABLE orders across all pages
@@ -1023,18 +1041,22 @@ export default function BulkShippingPage() {
                                 <th style={{ width: '4%' }}>
                                     <input
                                         type="checkbox"
-                                        checked={selectedOrders.size === orders.length && orders.length > 0}
+                                        checked={(() => {
+                                            const currentList = searchResults || orders;
+                                            const editableOnPage = currentList.filter(o => canEditOrder(o.orderStatus));
+                                            return editableOnPage.length > 0 && editableOnPage.every(o => selectedOrders.has(o.id));
+                                        })()}
                                         onChange={toggleSelectAll}
                                     />
                                 </th>
                                 <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.ghnOrderCode', 'GHN Code')}</th>
                                 <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.recipient')}</th>
-                                <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.subtotal')}</th>
-                                <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.shipping')}</th>
-                                <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.total')}</th>
-                                <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.orderDate')}</th>
-                                <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.status', 'Status')}</th>
-                                <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.actions')}</th>
+                                <th style={{ width: '10%' }} className="text-end">{t('shopOwner.manageOrder.subtotal')}</th>
+                                <th style={{ width: '10%' }} className="text-end">{t('shopOwner.manageOrder.shipping')}</th>
+                                <th style={{ width: '10%' }} className="text-end">{t('shopOwner.manageOrder.total')}</th>
+                                <th style={{ width: '12%' }} className="text-center">{t('shopOwner.manageOrder.orderDate')}</th>
+                                <th style={{ width: '12%' }} className="text-center">{t('shopOwner.manageOrder.status', 'Status')}</th>
+                                <th style={{ width: '10%' }} className="text-center">{t('shopOwner.manageOrder.actions')}</th>
                                 <th style={{ width: '5%' }}></th>
                             </tr>
                         </thead>
@@ -1076,10 +1098,11 @@ export default function BulkShippingPage() {
                                     const total = order.totalPrice || (subtotal + shippingFee - voucherDiscount);
                                     return (
                                         <React.Fragment key={order.id}>
-                                            <tr data-order-id={order.id} style={{
-                                                opacity: canEditOrder(order.orderStatus) ? 1 : 0.6,
-                                                backgroundColor: !canEditOrder(order.orderStatus) ? '#f8f9fa' : 'inherit'
-                                            }}>
+                                            <tr
+                                                data-order-id={order.id}
+                                                className={`align-middle ${!canEditOrder(order.orderStatus) ? 'table-light text-muted' : ''}`}
+                                                style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                                            >
                                                 <td>
                                                     <input
                                                         type="checkbox"
@@ -1096,33 +1119,33 @@ export default function BulkShippingPage() {
                                                 </td>
                                                 <td>
                                                     <span className="fw-medium text-dark" style={{ fontSize: '0.85rem' }}>
-                                                        {order.recipientName || usernames[order.userId] || 'N/A'}
+                                                        {order.recipientName || t('common.unknown')}
                                                     </span>
                                                 </td>
 
-                                                <td>
+                                                <td className="text-end">
                                                     <strong style={{ color: '#555' }}>
                                                         {formatPrice(subtotal)}
                                                     </strong>
                                                 </td>
-                                                <td>
+                                                <td className="text-end">
                                                     <span style={{ color: '#666', fontSize: '0.9rem' }}>
                                                         {formatPrice(shippingFee)}
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td className="text-end">
                                                     <strong style={{ color: '#ee4d2d' }}>
                                                         {formatPrice(total)}
                                                     </strong>
                                                 </td>
-                                                <td>{formatDate(order.creationTimestamp)}</td>
-                                                <td>
+                                                <td className="text-center">{formatDate(order.createdAt || order.creationTimestamp)}</td>
+                                                <td className="text-center">
                                                     <span className={`badge ${statusInfo.class}`}>
                                                         {statusInfo.label}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                <td className="text-center">
+                                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                                                         <button
                                                             className="btn btn-sm btn-outline-primary"
                                                             onClick={() => toggleRowExpansion(order.id)}
@@ -1159,7 +1182,7 @@ export default function BulkShippingPage() {
                                                                         </div>
                                                                         <div className="text-end">
                                                                             <div className="text-muted small mb-1">{t('shopOwner.manageOrder.orderDate')}</div>
-                                                                            <div className="fw-bold text-dark">{formatDate(order.creationTimestamp)}</div>
+                                                                            <div className="fw-bold text-dark">{formatDate(order.createdAt || order.creationTimestamp)}</div>
                                                                         </div>
                                                                     </div>
 
@@ -1169,8 +1192,8 @@ export default function BulkShippingPage() {
                                                                                 <h6 className="text-muted text-uppercase small fw-bold mb-3 border-bottom pb-2">
                                                                                     <i className="fas fa-user mb-1 me-2"></i>{t('shopOwner.manageOrder.customer')}
                                                                                 </h6>
-                                                                                <div className="fw-bold text-dark mb-1">{order.recipientName || usernames[order.userId] || 'N/A'}</div>
-                                                                                <div className="text-muted small">{t('shopOwner.manageOrder.customer')} ID: {order.userId}</div>
+                                                                                <div className="fw-bold text-dark mb-1">{order.recipientName || t('common.unknown')}</div>
+                                                                                {/* Customer ID removed */}
                                                                             </div>
                                                                         </div>
                                                                         <div className="col-md-4">
@@ -1180,7 +1203,7 @@ export default function BulkShippingPage() {
                                                                                 </h6>
                                                                                 <div className="mb-2">
                                                                                     <span className="text-muted small d-block">{t('shopOwner.manageOrder.recipient')}:</span>
-                                                                                    <span className="fw-medium text-dark">{order.recipientName || usernames[order.userId] || 'N/A'}</span>
+                                                                                    <span className="fw-medium text-dark">{order.recipientName || t('common.unknown')}</span>
                                                                                 </div>
                                                                                 <div className="mb-2">
                                                                                     <span className="text-muted small d-block">{t('shopOwner.manageOrder.phone')}:</span>

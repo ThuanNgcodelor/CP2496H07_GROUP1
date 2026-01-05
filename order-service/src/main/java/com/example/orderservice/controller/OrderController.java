@@ -58,6 +58,14 @@ public class OrderController {
                         dto.setRecipientPhone(address.getRecipientPhone());
                     }
 
+                    // Set recipient name - FIX UNKNOWN
+                    if (address.getRecipientName() != null && !address.getRecipientName().isBlank()) {
+                         dto.setRecipientName(address.getRecipientName());
+                    } else if (order.getRecipientName() != null) {
+                         // Fallback to Order entity if address fetch fails or has no name
+                         dto.setRecipientName(order.getRecipientName());
+                    }
+
                     // Build full address string
                     StringBuilder fullAddressBuilder = new StringBuilder();
                     if (address.getStreetAddress() != null && !address.getStreetAddress().trim().isEmpty()) {

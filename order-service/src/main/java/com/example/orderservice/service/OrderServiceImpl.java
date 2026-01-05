@@ -1397,6 +1397,16 @@ public class OrderServiceImpl implements OrderService {
             throw e;
         }
 
+        // Fetch Address info once to populate order details
+        com.example.orderservice.dto.AddressDto addressInfo = null;
+        try {
+            if (msg.getAddressId() != null) {
+                addressInfo = userServiceClient.getAddressById(msg.getAddressId()).getBody();
+            }
+        } catch (Exception e) {
+            log.error("[CONSUMER] Failed to fetch address info: {}", e.getMessage());
+        }
+
         // ==================== ORDER SPLITTING BY SHOP ====================
         // Group items by shop owner - each shop gets its own order
         Map<String, List<SelectedItemDto>> itemsByShop = groupItemsByShopOwner(msg.getSelectedItems());
@@ -1425,6 +1435,15 @@ public class OrderServiceImpl implements OrderService {
             // 1) Create order skeleton
             Order order = initPendingOrder(msg.getUserId(), msg.getAddressId(),
                     msg.getPaymentMethod() != null ? msg.getPaymentMethod() : "COD");
+
+            // Populate Recipient Info
+            if (addressInfo != null) {
+                order.setRecipientName(addressInfo.getRecipientName());
+                order.setRecipientPhone(addressInfo.getRecipientPhone());
+            } else {
+                 // Fallback if fetch failed (should rarely happen if addressId is valid)
+                 log.warn("[CONSUMER] Address info missing for order creation, recipient info will be null");
+            }
 
             // Set voucher data ONLY if this shop owns the voucher
             boolean shouldApplyVoucher = msg.getVoucherId() != null &&

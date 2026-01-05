@@ -29,6 +29,12 @@ public class Order extends BaseEntity {
     // Tổng tiền CUỐI CÙNG user phải trả
     private double totalPrice;
 
+    @Column(name = "recipient_name")
+    private String recipientName;
+
+    @Column(name = "recipient_phone")
+    private String recipientPhone;
+
     @Column(name = "shipping_fee", precision = 10, scale = 2)
     private BigDecimal shippingFee; // Phí ship
 
