@@ -79,19 +79,19 @@ public class CartItemServiceImpl implements CartItemService {
 
         cartItem.setQuantity(newQuantity);
         cartItem.setTotalPrice(unitPrice * newQuantity);
-        
+
         cartItem = cartItemRepository.save(cartItem);
 
         // Update cart total
         cart.updateTotalAmount();
         cartRepository.save(cart);
 
-        log.info("Added item to cart: userId={}, productId={}, quantity={}", userId, request.getProductId(), newQuantity);
+        log.info("Added item to cart: userId={}, productId={}, quantity={}", userId, request.getProductId(),
+                newQuantity);
         return cartItem;
     }
 
     @Override
-    @Transactional
     public CartItem addLiveCartItem(AddLiveCartItemRequest request, String userId) {
         Cart cart = getOrCreateCart(userId);
         Product product = productService.getProductById(request.getProductId());
@@ -105,12 +105,11 @@ public class CartItemServiceImpl implements CartItemService {
         if (request.getSizeId() != null && !request.getSizeId().isEmpty()) {
             size = sizeRepository.findById(request.getSizeId())
                     .orElseThrow(() -> new RuntimeException("Size not found with id: " + request.getSizeId()));
-            finalLivePrice = request.getLivePrice() != null 
-                    ? request.getLivePrice() + size.getPriceModifier() 
+            finalLivePrice = request.getLivePrice() != null
+                    ? request.getLivePrice()
                     : product.getPrice() + size.getPriceModifier();
         }
 
-        // For live items, we create a new item each time (different liveRoomId makes them unique)
         CartItem cartItem = CartItem.builder()
                 .cart(cart)
                 .product(product)
@@ -118,7 +117,6 @@ public class CartItemServiceImpl implements CartItemService {
                 .quantity(request.getQuantity())
                 .unitPrice(finalLivePrice)
                 .totalPrice(finalLivePrice * request.getQuantity())
-                // Live commerce fields
                 .liveRoomId(request.getLiveRoomId())
                 .liveProductId(request.getLiveProductId())
                 .livePrice(request.getLivePrice())
@@ -132,7 +130,7 @@ public class CartItemServiceImpl implements CartItemService {
         cart.updateTotalAmount();
         cartRepository.save(cart);
 
-        log.info("Added live item to cart: userId={}, productId={}, liveRoomId={}, livePrice={}", 
+        log.info("Added live item to cart: userId={}, productId={}, liveRoomId={}, livePrice={}",
                 userId, request.getProductId(), request.getLiveRoomId(), request.getLivePrice());
         return cartItem;
     }
@@ -172,14 +170,14 @@ public class CartItemServiceImpl implements CartItemService {
 
         cartItem.setQuantity(request.getQuantity());
         cartItem.setTotalPrice(cartItem.getUnitPrice() * request.getQuantity());
-        
+
         cartItem = cartItemRepository.save(cartItem);
 
         // Update cart total
         cart.updateTotalAmount();
         cartRepository.save(cart);
 
-        log.info("Updated cart item: userId={}, productId={}, newQuantity={}", 
+        log.info("Updated cart item: userId={}, productId={}, newQuantity={}",
                 request.getUserId(), request.getProductId(), request.getQuantity());
         return cartItem;
     }
@@ -188,7 +186,7 @@ public class CartItemServiceImpl implements CartItemService {
     @Transactional
     public void removeCartItem(String userId, String productId, String sizeId) {
         log.info("Removing cart item - userId: {}, productId: {}, sizeId: {}", userId, productId, sizeId);
-        
+
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
 
@@ -210,7 +208,7 @@ public class CartItemServiceImpl implements CartItemService {
     @Transactional
     public void removeCartItemByCartItemId(String userId, String cartItemId) {
         log.info("Removing cart item by ID - userId: {}, cartItemId: {}", userId, cartItemId);
-        
+
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
 

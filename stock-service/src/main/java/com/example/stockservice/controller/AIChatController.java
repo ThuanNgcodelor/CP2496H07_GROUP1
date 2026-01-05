@@ -6,6 +6,7 @@ import com.example.stockservice.service.ai.AIChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/stock/ai-chat")
 @RequiredArgsConstructor
 @Tag(name = "AI Chat", description = "AI Chatbot powered by Ollama + Qwen")
+@ConditionalOnClass(name = "org.springframework.ai.chat.model.ChatModel")
 public class AIChatController {
 
     private final AIChatService aiChatService;

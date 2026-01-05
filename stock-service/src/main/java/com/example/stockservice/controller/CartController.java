@@ -29,80 +29,80 @@ import java.util.Map;
 @RestController
 @RequestMapping("/v1/stock/cart")
 public class CartController {
-   private final CartService cartService;
-   private final CartItemService cartItemService;
-   private final ModelMapper modelMapper;
-   private final FlashSaleService flashSaleService;
-   private final JwtUtil jwtUtil;
+    private final CartService cartService;
+    private final CartItemService cartItemService;
+    private final ModelMapper modelMapper;
+    private final FlashSaleService flashSaleService;
+    private final JwtUtil jwtUtil;
 
-   @PostMapping("/item/add")
-   ResponseEntity<?> addToCart(@RequestBody AddCartItemRequest request, HttpServletRequest httpRequest){
-       try {
-           String userId = jwtUtil.ExtractUserId(httpRequest);
-           CartItem cartItem = cartItemService.addCartItem(request,userId);
-           CartItemDto cartItemDto = mapToDto(cartItem);
-           return ResponseEntity.ok(cartItemDto);
-       } catch (Exception e) {
-           e.printStackTrace();
-           return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-       }
-   }
+    @PostMapping("/item/add")
+    ResponseEntity<?> addToCart(@RequestBody AddCartItemRequest request, HttpServletRequest httpRequest) {
+        try {
+            String userId = jwtUtil.ExtractUserId(httpRequest);
+            CartItem cartItem = cartItemService.addCartItem(request, userId);
+            CartItemDto cartItemDto = mapToDto(cartItem);
+            return ResponseEntity.ok(cartItemDto);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
 
-   /**
-    * Thêm sản phẩm từ Live Stream vào giỏ hàng với giá live
-    */
-   @PostMapping("/item/add-live")
-   ResponseEntity<CartItemDto> addLiveItemToCart(
-           @RequestBody AddLiveCartItemRequest request, 
-           HttpServletRequest httpRequest
-   ) {
-       String userId = jwtUtil.ExtractUserId(httpRequest);
-       CartItem cartItem = cartItemService.addLiveCartItem(request, userId);
-       CartItemDto cartItemDto = mapToDto(cartItem);
-       return ResponseEntity.ok(cartItemDto);
-   }
+    /**
+     * Thêm sản phẩm từ Live Stream vào giỏ hàng với giá live
+     */
+    @PostMapping("/item/add-live")
+    ResponseEntity<CartItemDto> addLiveItemToCart(
+            @RequestBody AddLiveCartItemRequest request,
+            HttpServletRequest httpRequest) {
+        String userId = jwtUtil.ExtractUserId(httpRequest);
+        CartItem cartItem = cartItemService.addLiveCartItem(request, userId);
+        CartItemDto cartItemDto = mapToDto(cartItem);
+        return ResponseEntity.ok(cartItemDto);
+    }
 
-   @PutMapping("/item/update")
-   ResponseEntity<?> updateCartItem(@RequestBody UpdateCartItemRequest request, HttpServletRequest httpRequest){
-       try {
-           String userId = jwtUtil.ExtractUserId(httpRequest);
-           request.setUserId(userId);
-           CartItem cartItem = cartItemService.updateCartItem(request);
-           CartItemDto cartItemDto = mapToDto(cartItem);
-           return ResponseEntity.ok(cartItemDto);
-       } catch (Exception e) {
-           e.printStackTrace();
-           return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-       }
-   }
+    @PutMapping("/item/update")
+    ResponseEntity<?> updateCartItem(@RequestBody UpdateCartItemRequest request, HttpServletRequest httpRequest) {
+        try {
+            String userId = jwtUtil.ExtractUserId(httpRequest);
+            request.setUserId(userId);
+            CartItem cartItem = cartItemService.updateCartItem(request);
+            CartItemDto cartItemDto = mapToDto(cartItem);
+            return ResponseEntity.ok(cartItemDto);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
 
-   @DeleteMapping("/item/remove/{cartItemId}")
-   ResponseEntity<Void> removeCartItem(@PathVariable String cartItemId, HttpServletRequest httpRequest){
-       String userId = jwtUtil.ExtractUserId(httpRequest);
-       cartItemService.removeCartItemByCartItemId(userId, cartItemId);
-       return ResponseEntity.ok().build();
-   }
-   
-   @DeleteMapping("/item/remove/legacy/{productId}")
-   ResponseEntity<Void> removeCartItemLegacy(@PathVariable String productId, HttpServletRequest httpRequest){
-       String userId = jwtUtil.ExtractUserId(httpRequest);
-       cartItemService.removeCartItem(userId, productId, null);
-       return ResponseEntity.ok().build();
-   }
-   
-   @DeleteMapping("/item/remove/legacy/{productId}/{sizeId}")
-   ResponseEntity<Void> removeCartItemWithSize(@PathVariable String productId, @PathVariable(required = false) String sizeId, HttpServletRequest httpRequest){
-       String userId = jwtUtil.ExtractUserId(httpRequest);
-       cartItemService.removeCartItem(userId, productId, sizeId);
-       return ResponseEntity.ok().build();
-   }
+    @DeleteMapping("/item/remove/{cartItemId}")
+    ResponseEntity<Void> removeCartItem(@PathVariable String cartItemId, HttpServletRequest httpRequest) {
+        String userId = jwtUtil.ExtractUserId(httpRequest);
+        cartItemService.removeCartItemByCartItemId(userId, cartItemId);
+        return ResponseEntity.ok().build();
+    }
 
-   @GetMapping("/user")
-   public ResponseEntity<CartDto> getCart(HttpServletRequest request) {
-       return getCartDtoResponseEntity(request);
-   }
+    @DeleteMapping("/item/remove/legacy/{productId}")
+    ResponseEntity<Void> removeCartItemLegacy(@PathVariable String productId, HttpServletRequest httpRequest) {
+        String userId = jwtUtil.ExtractUserId(httpRequest);
+        cartItemService.removeCartItem(userId, productId, null);
+        return ResponseEntity.ok().build();
+    }
 
-   private void GetCartDto(Cart cart, CartDto cartDto) {
+    @DeleteMapping("/item/remove/legacy/{productId}/{sizeId}")
+    ResponseEntity<Void> removeCartItemWithSize(@PathVariable String productId,
+            @PathVariable(required = false) String sizeId, HttpServletRequest httpRequest) {
+        String userId = jwtUtil.ExtractUserId(httpRequest);
+        cartItemService.removeCartItem(userId, productId, sizeId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/user")
+    public ResponseEntity<CartDto> getCart(HttpServletRequest request) {
+        return getCartDtoResponseEntity(request);
+    }
+
+    private void GetCartDto(Cart cart, CartDto cartDto) {
         cartDto.setId(cart.getId());
         cartDto.setUserId(cart.getUserId());
         cartDto.setTotalAmount(cart.getTotalAmount());
@@ -114,30 +114,30 @@ public class CartController {
         } else {
             cartDto.setItems(Collections.emptyList());
         }
-   }
+    }
 
-   @DeleteMapping("/clear/{cartId}")
-   ResponseEntity<Void> clearCartByCartId(@PathVariable String cartId){
-       cartService.clearCartByCartId(cartId);
-       return ResponseEntity.ok().build();
-   }
+    @DeleteMapping("/clear/{cartId}")
+    ResponseEntity<Void> clearCartByCartId(@PathVariable String cartId) {
+        cartService.clearCartByCartId(cartId);
+        return ResponseEntity.ok().build();
+    }
 
-   @PostMapping("/removeItems")
-   ResponseEntity<Void> removeCartItems(@RequestBody RemoveCartItemRequest request){
-       cartService.removeCartItemsAndUpdateCart(request.getCartId(), request.getProductIds());
-       return ResponseEntity.ok().build();
-   }
+    @PostMapping("/removeItems")
+    ResponseEntity<Void> removeCartItems(@RequestBody RemoveCartItemRequest request) {
+        cartService.removeCartItemsAndUpdateCart(request.getCartId(), request.getProductIds());
+        return ResponseEntity.ok().build();
+    }
 
-   @PostMapping("/removeItemsByUserId")
-   ResponseEntity<Void> removeCartItemsByUserId(@RequestBody RemoveCartItemByUserIdRequest request){
-       cartItemService.removeCartItem(request.getUserId(), request.getProductId(), request.getSizeId());
-       return ResponseEntity.ok().build();
-   }
+    @PostMapping("/removeItemsByUserId")
+    ResponseEntity<Void> removeCartItemsByUserId(@RequestBody RemoveCartItemByUserIdRequest request) {
+        cartItemService.removeCartItem(request.getUserId(), request.getProductId(), request.getSizeId());
+        return ResponseEntity.ok().build();
+    }
 
-   @GetMapping("/getCartByUserId")
-   ResponseEntity<CartDto> getCartByUserId(HttpServletRequest request){
-       return getCartDtoResponseEntity(request);
-   }
+    @GetMapping("/getCartByUserId")
+    ResponseEntity<CartDto> getCartByUserId(HttpServletRequest request) {
+        return getCartDtoResponseEntity(request);
+    }
 
     private ResponseEntity<CartDto> getCartDtoResponseEntity(HttpServletRequest request) {
         String userId = jwtUtil.ExtractUserId(request);
@@ -160,11 +160,11 @@ public class CartController {
     }
 
     private CartItemDto mapToDto(CartItem cartItem) {
-       CartItemDto dto = modelMapper.map(cartItem, CartItemDto.class);
-       
-       if (cartItem.getId() != null) {
-           dto.setId(cartItem.getId());
-       }
+        CartItemDto dto = modelMapper.map(cartItem, CartItemDto.class);
+
+        if (cartItem.getId() != null) {
+            dto.setId(cartItem.getId());
+        }
 
         if (cartItem.getProduct() != null) {
             ProductDto productDto = modelMapper.map(cartItem.getProduct(), ProductDto.class);
@@ -194,6 +194,20 @@ public class CartController {
                 } catch (Exception e) {
                 }
             }
+            // Check for Live Stream Item
+            else if (Boolean.TRUE.equals(cartItem.getIsFromLive()) && cartItem.getLivePrice() != null) {
+                productDto.setPrice(cartItem.getLivePrice());
+                if (cartItem.getOriginalPrice() != null) {
+                    productDto.setOriginalPrice(cartItem.getOriginalPrice());
+                    if (cartItem.getOriginalPrice() > 0) {
+                        double discount = (1 - (cartItem.getLivePrice() / cartItem.getOriginalPrice())) * 100;
+                        productDto.setDiscountPercent(Math.round(discount * 10.0) / 10.0);
+                    }
+                }
+                // Ensure unit price reflects the live price (which includes size modifiers from
+                // DB logic)
+                // cartItem.getUnitPrice() is the authority
+            }
 
             dto.setProduct(productDto);
 
@@ -203,16 +217,16 @@ public class CartController {
             dto.setImageId(cartItem.getProduct().getImageId());
         }
 
-
         if (cartItem.getSize() != null) {
             dto.setSizeId(cartItem.getSize().getId());
             dto.setSizeName(cartItem.getSize().getName());
-            
+
             SizeDto sizeDto = modelMapper.map(cartItem.getSize(), SizeDto.class);
             dto.setSize(sizeDto);
         }
 
-        // Map transient availability fields (populated by CartServiceImpl.refreshCartItems)
+        // Map transient availability fields (populated by
+        // CartServiceImpl.refreshCartItems)
         dto.setPriceChanged(cartItem.getPriceChanged());
         dto.setOldPrice(cartItem.getOldPrice());
         dto.setAvailableStock(cartItem.getAvailableStock());
@@ -220,5 +234,5 @@ public class CartController {
         dto.setSizeAvailable(cartItem.getSizeAvailable());
 
         return dto;
-   }
+    }
 }

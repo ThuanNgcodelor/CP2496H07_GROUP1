@@ -2,6 +2,7 @@ package com.example.stockservice.config;
 
 import com.example.stockservice.service.ai.OrderTools;
 import com.example.stockservice.service.ai.ProductTools;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Description;
@@ -12,6 +13,7 @@ import java.util.function.Function;
  * Configuration để đăng ký các Function Beans cho Spring AI
  */
 @Configuration
+@ConditionalOnClass(name = "org.springframework.ai.chat.model.ChatModel")
 public class AiFunctionConfig {
 
     private final ProductTools productTools;
@@ -23,7 +25,7 @@ public class AiFunctionConfig {
     }
 
     // ============ Product Tools ============
-    
+
     @Bean
     @Description("Search products by name or keyword. Use this when user wants to find products.")
     public Function<ProductTools.SearchRequest, ProductTools.SearchResponse> searchProducts() {
@@ -47,31 +49,30 @@ public class AiFunctionConfig {
     public Function<ProductTools.ProductDetailRequest, ProductTools.ProductDetailResponse> getProductDetails() {
         return productTools.getProductDetails();
     }
-    
+
     // ============ Order Tools ============
-    
+
     @Bean
     @Description("MUST USE when user asks about orders, my orders, order history, order status, đơn hàng, đơn của tôi, xem đơn, check order. Returns list of user's orders with status. Parameter: userId (string)")
     public Function<OrderTools.GetMyOrdersRequest, OrderTools.GetMyOrdersResponse> getMyOrders() {
         return orderTools.getMyOrders();
     }
-    
+
     @Bean
     @Description("Get details of a specific order by its ID. Use when user provides an order ID to check. Parameter: orderId (string)")
     public Function<OrderTools.GetOrderStatusRequest, OrderTools.GetOrderStatusResponse> getOrderStatus() {
         return orderTools.getOrderStatus();
     }
-    
+
     @Bean
     @Description("Filter orders by payment method. Use when user asks 'đơn VNPAY', 'đơn COD', 'orders paid by VNPAY'. Parameters: userId, paymentMethod (VNPAY/COD/WALLET)")
     public Function<OrderTools.GetOrdersByPaymentRequest, OrderTools.GetOrdersByPaymentResponse> getOrdersByPayment() {
         return orderTools.getOrdersByPayment();
     }
-    
+
     @Bean
     @Description("Calculate spending statistics. Use when user asks 'chi tiêu tháng này', 'tuần này bao nhiêu', 'tổng đã chi', 'total spent'. Parameters: userId, period (week/month/all)")
     public Function<OrderTools.GetSpendingStatsRequest, OrderTools.GetSpendingStatsResponse> getSpendingStats() {
         return orderTools.getSpendingStats();
     }
 }
-

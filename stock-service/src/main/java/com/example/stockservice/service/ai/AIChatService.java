@@ -5,6 +5,7 @@ import com.example.stockservice.dto.AIChatResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -18,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
+@ConditionalOnClass(name = "org.springframework.ai.chat.model.ChatModel")
 public class AIChatService {
 
     private final ChatClient chatClient;
@@ -25,50 +27,51 @@ public class AIChatService {
 
     // Lưu conversation history (conversationId -> list of messages)
     private final Map<String, List<ChatMessage>> conversationHistory = new ConcurrentHashMap<>();
-    
+
     // Record để lưu message
-    private record ChatMessage(String role, String content) {}
+    private record ChatMessage(String role, String content) {
+    }
 
     private static final String SYSTEM_PROMPT = """
-        ROLE:
-        Bạn là VIBE AI, trợ lý mua sắm thông minh của VIBE E-commerce.
-        Bạn thân thiện, hữu ích và chuyên nghiệp.
-        
-        CONTEXT:
-        - Thời gian hiện tại: {current_time}
-        - Ngày: {current_date} ({day_of_week})
-        - Ngôn ngữ ưu tiên: {language}
-        - User ID: {user_id}
-        
-        CẢNH BÁO QUAN TRỌNG - ĐỌC KỸ
-        
-        BẠN TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ BỊA DỮ LIỆU!
-        BẠN BẮT BUỘC PHẢI GỌI TOOL VÀ COPY CHÍNH XÁC KẾT QUẢ!
-        
-        AVAILABLE TOOLS VÀ CÁCH DÙNG:
-        
-        📦 PRODUCT TOOLS:
-        - "tìm sản phẩm X" → searchProducts(keyword="X")
-        - "giá sản phẩm X" → getProductPrice(productName="X")
-        - "sản phẩm giảm giá" → getDiscountedProducts()
-        
-        📋 ORDER TOOLS:
-        - "đơn hàng của tôi" → getMyOrders(userId="{user_id}")
-        - "đơn VNPAY/COD" → getOrdersByPayment(userId="{user_id}", paymentMethod="VNPAY" hoặc "COD")
-        - "chi tiêu tháng này" → getSpendingStats(userId="{user_id}", period="month")
-        - "chi tiêu tuần này" → getSpendingStats(userId="{user_id}", period="week")
-        - "tổng đã chi" → getSpendingStats(userId="{user_id}", period="all")
-        
-        QUAN TRỌNG: Message từ tool đã được format sẵn, bạn CHỈ CẦN COPY và hiển thị.
-        KHÔNG ĐƯỢC thêm, bớt, hoặc thay đổi dữ liệu từ tool.
-        
-        QUY TẮC NGÔN NGỮ:
-        - Tiếng Việt → trả lời tiếng Việt
-        - English → reply in English
-        - KHÔNG dùng tiếng Trung, Nhật, Hàn
-        
-        {conversation_history}
-        """;
+            ROLE:
+            Bạn là VIBE AI, trợ lý mua sắm thông minh của VIBE E-commerce.
+            Bạn thân thiện, hữu ích và chuyên nghiệp.
+
+            CONTEXT:
+            - Thời gian hiện tại: {current_time}
+            - Ngày: {current_date} ({day_of_week})
+            - Ngôn ngữ ưu tiên: {language}
+            - User ID: {user_id}
+
+            CẢNH BÁO QUAN TRỌNG - ĐỌC KỸ
+
+            BẠN TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ BỊA DỮ LIỆU!
+            BẠN BẮT BUỘC PHẢI GỌI TOOL VÀ COPY CHÍNH XÁC KẾT QUẢ!
+
+            AVAILABLE TOOLS VÀ CÁCH DÙNG:
+
+            📦 PRODUCT TOOLS:
+            - "tìm sản phẩm X" → searchProducts(keyword="X")
+            - "giá sản phẩm X" → getProductPrice(productName="X")
+            - "sản phẩm giảm giá" → getDiscountedProducts()
+
+            📋 ORDER TOOLS:
+            - "đơn hàng của tôi" → getMyOrders(userId="{user_id}")
+            - "đơn VNPAY/COD" → getOrdersByPayment(userId="{user_id}", paymentMethod="VNPAY" hoặc "COD")
+            - "chi tiêu tháng này" → getSpendingStats(userId="{user_id}", period="month")
+            - "chi tiêu tuần này" → getSpendingStats(userId="{user_id}", period="week")
+            - "tổng đã chi" → getSpendingStats(userId="{user_id}", period="all")
+
+            QUAN TRỌNG: Message từ tool đã được format sẵn, bạn CHỈ CẦN COPY và hiển thị.
+            KHÔNG ĐƯỢC thêm, bớt, hoặc thay đổi dữ liệu từ tool.
+
+            QUY TẮC NGÔN NGỮ:
+            - Tiếng Việt → trả lời tiếng Việt
+            - English → reply in English
+            - KHÔNG dùng tiếng Trung, Nhật, Hàn
+
+            {conversation_history}
+            """;
 
     public AIChatService(ChatModel chatModel, LanguageFilter languageFilter, ProductTools productTools) {
         this.languageFilter = languageFilter;
@@ -78,22 +81,21 @@ public class AIChatService {
                 .defaultFunctions(
                         // Product tools
                         "searchProducts",
-                        "getProductPrice", 
+                        "getProductPrice",
                         "getDiscountedProducts",
                         "getProductDetails",
                         // Order tools
                         "getMyOrders",
                         "getOrderStatus",
                         "getOrdersByPayment",
-                        "getSpendingStats"
-                )
+                        "getSpendingStats")
                 .build();
     }
 
     public AIChatResponse chat(AIChatRequest request) {
         try {
             String userMessage = request.getMessage();
-            
+
             // 1. Check blocked languages
             if (languageFilter.containsBlockedLanguage(userMessage)) {
                 boolean isVi = languageFilter.isVietnamese(userMessage);
@@ -123,9 +125,8 @@ public class AIChatService {
 
             // 5. Get conversation history
             List<ChatMessage> history = conversationHistory.computeIfAbsent(
-                conversationId, k -> new ArrayList<>()
-            );
-            
+                    conversationId, k -> new ArrayList<>());
+
             // Build history string for prompt
             StringBuilder historyBuilder = new StringBuilder();
             if (!history.isEmpty()) {
@@ -144,7 +145,8 @@ public class AIChatService {
 
             // 6. Get userId from request
             String userId = request.getUserId();
-            if (userId == null) userId = "not_logged_in";
+            if (userId == null)
+                userId = "not_logged_in";
 
             String systemPrompt = SYSTEM_PROMPT
                     .replace("{current_time}", currentTime)
@@ -154,7 +156,7 @@ public class AIChatService {
                     .replace("{user_id}", userId)
                     .replace("{conversation_history}", historyBuilder.toString());
 
-            log.info("Processing: '{}' (ConvId: {}, UserId: {}, History: {} msgs)", 
+            log.info("Processing: '{}' (ConvId: {}, UserId: {}, History: {} msgs)",
                     userMessage, conversationId.substring(0, 8), userId, history.size());
 
             // 6. Call AI with Function Calling
@@ -172,7 +174,7 @@ public class AIChatService {
             // 8. Save to history
             history.add(new ChatMessage("user", userMessage));
             history.add(new ChatMessage("assistant", aiResponse));
-            
+
             // Keep history size manageable (max 20 messages)
             while (history.size() > 20) {
                 history.removeFirst();

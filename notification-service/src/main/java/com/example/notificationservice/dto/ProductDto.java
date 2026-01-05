@@ -14,5 +14,5 @@ public class ProductDto {
     private String name;
     private String imageId;
     private Double price;
+    private Integer totalStock; // Total stock from all sizes
 }
-
