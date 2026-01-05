@@ -213,12 +213,12 @@ const ShopFlashSale = () => {
                                                     onChange={e => setSalePrice(e.target.value)}
                                                     required
                                                     min="1000"
-                                                    placeholder="Nhập giá khuyến mãi"
+                                                    placeholder={t('shopOwner.flashSale.salePrice')} // Or specific placeholder key if needed, or just use salePrice label
                                                 />
                                                 {selectedProductData && salePrice && (
                                                     <small className={`d-block mt-1 ${parseFloat(salePrice) >= selectedProductData.price ? 'text-danger' : 'text-success'}`}>
                                                         {parseFloat(salePrice) >= selectedProductData.price
-                                                            ? t('shopOwner.flashSale.priceWarning') // 'Lưu ý: Giá sale phải thấp hơn giá gốc!'
+                                                            ? t('shopOwner.flashSale.priceWarning')
                                                             : `Giảm: ${Math.round((1 - parseFloat(salePrice) / selectedProductData.price) * 100)}%`}
                                                     </small>
                                                 )}
@@ -238,7 +238,7 @@ const ShopFlashSale = () => {
                                                     required
                                                     min="1"
                                                     max={selectedProductData?.totalStock}
-                                                    placeholder="Số lượng bán trong khung giờ"
+                                                    placeholder={t('shopOwner.flashSale.stock')}
                                                 />
                                                 {selectedProductData && (
                                                     <>
