@@ -26,4 +26,8 @@ public class LiveProductDto {
     private Boolean isFeatured;
     private Integer displayOrder;
     private LocalDateTime createdAt;
+
+    // Computed fields
+    private Integer remainingQuantity; // quantityLimit - soldCount
+    private Boolean isOutOfStock; // remainingQuantity <= 0
 }

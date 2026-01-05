@@ -79,7 +79,7 @@ public class CartItemServiceImpl implements CartItemService {
 
         cartItem.setQuantity(newQuantity);
         cartItem.setTotalPrice(unitPrice * newQuantity);
-
+        
         cartItem = cartItemRepository.save(cartItem);
 
         // Update cart total
@@ -106,7 +106,7 @@ public class CartItemServiceImpl implements CartItemService {
             size = sizeRepository.findById(request.getSizeId())
                     .orElseThrow(() -> new RuntimeException("Size not found with id: " + request.getSizeId()));
             finalLivePrice = request.getLivePrice() != null
-                    ? request.getLivePrice() + size.getPriceModifier()
+                    ? request.getLivePrice()
                     : product.getPrice() + size.getPriceModifier();
         }
 
@@ -132,7 +132,7 @@ public class CartItemServiceImpl implements CartItemService {
         cart.updateTotalAmount();
         cartRepository.save(cart);
 
-        log.info("Added live item to cart: userId={}, productId={}, liveRoomId={}, livePrice={}",
+        log.info("Added live item to cart: userId={}, productId={}, liveRoomId={}, livePrice={}", 
                 userId, request.getProductId(), request.getLiveRoomId(), request.getLivePrice());
         return cartItem;
     }
@@ -188,7 +188,7 @@ public class CartItemServiceImpl implements CartItemService {
     @Transactional
     public void removeCartItem(String userId, String productId, String sizeId) {
         log.info("Removing cart item - userId: {}, productId: {}, sizeId: {}", userId, productId, sizeId);
-
+        
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
 
@@ -210,7 +210,7 @@ public class CartItemServiceImpl implements CartItemService {
     @Transactional
     public void removeCartItemByCartItemId(String userId, String cartItemId) {
         log.info("Removing cart item by ID - userId: {}, cartItemId: {}", userId, cartItemId);
-
+        
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
 

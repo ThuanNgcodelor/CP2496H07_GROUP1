@@ -1,6 +1,7 @@
 package com.example.notificationservice.client;
 
 import com.example.notificationservice.config.FeignConfig;
+import com.example.notificationservice.dto.ShopOwnerDto;
 import com.example.notificationservice.dto.UserDto;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
@@ -12,4 +13,7 @@ public interface UserServiceClient {
 
     @GetMapping(value = "/{userId}", headers = "X-Internal-Call=true")
     ResponseEntity<UserDto> getUserById(@PathVariable String userId);
+
+    @GetMapping(value = "/shop-owners/{userId}", headers = "X-Internal-Call=true")
+    ResponseEntity<ShopOwnerDto> getShopOwnerByUserId(@PathVariable String userId);
 }

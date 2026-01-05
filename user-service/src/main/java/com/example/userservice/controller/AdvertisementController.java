@@ -21,6 +21,11 @@ public class AdvertisementController {
         return ResponseEntity.ok(advertisementService.createAdvertisement(request));
     }
 
+    @PostMapping("/system")
+    public ResponseEntity<Advertisement> createSystemAd(@RequestBody AdvertisementRequest request) {
+        return ResponseEntity.ok(advertisementService.createSystemAdvertisement(request));
+    }
+
     @PutMapping("/{id}/approve")
     public ResponseEntity<Advertisement> approveAd(@PathVariable String id, @RequestParam String placement) {
         return ResponseEntity.ok(advertisementService.approveAdvertisement(id, placement));

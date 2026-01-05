@@ -11,4 +11,5 @@ public class AdvertisementRequest {
     private String imageUrl;
     private String targetUrl;
     private Integer durationDays;
+    private String placement;
 }

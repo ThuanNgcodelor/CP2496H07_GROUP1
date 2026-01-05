@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import Hls from 'hls.js';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
@@ -7,16 +7,25 @@ import Cookies from 'js-cookie';
 import Header from '../../components/client/Header';
 import Footer from '../../components/client/Footer';
 import { getLiveRoom, getRecentChats, getLiveProducts, addLiveItemToCart } from '../../api/live';
+import { fetchProductById } from '../../api/product';
 import { getUser } from '../../api/user';
 import { LOCAL_BASE_URL } from '../../config/config.js';
 
 export default function LiveWatchPage() {
     const { roomId } = useParams();
+    const navigate = useNavigate();
     const videoRef = useRef(null);
     const chatContainerRef = useRef(null);
     const stompClientRef = useRef(null);
     const [room, setRoom] = useState(null);
     const [messages, setMessages] = useState([]);
+
+    // Size Selection Modal State
+    const [showSizeModal, setShowSizeModal] = useState(false);
+    const [selectedLiveProduct, setSelectedLiveProduct] = useState(null);
+    const [productSizes, setProductSizes] = useState([]);
+    const [loadingSizes, setLoadingSizes] = useState(false);
+    const [selectedSizeId, setSelectedSizeId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [viewerCount, setViewerCount] = useState(0);
@@ -25,6 +34,7 @@ export default function LiveWatchPage() {
     const [userInfo, setUserInfo] = useState(null);
     const [products, setProducts] = useState([]);
     const [addingToCart, setAddingToCart] = useState(null);
+    const [reactions, setReactions] = useState([]); // Floating reactions
 
     // Check if user is logged in via cookie
     const token = Cookies.get('accessToken');
@@ -83,6 +93,14 @@ export default function LiveWatchPage() {
                     const productData = JSON.parse(message.body);
                     console.log('Product update:', productData);
                     setProducts(Array.isArray(productData) ? productData : [productData]);
+                });
+
+                // Subscribe to reactions
+                client.subscribe(`/topic/live/${roomId}/reaction`, (message) => {
+                    const reaction = JSON.parse(message.body);
+                    if (reaction && reaction.type) {
+                        handleAddReaction(reaction.type);
+                    }
                 });
 
                 // Join room to increment viewer count
@@ -191,25 +209,56 @@ export default function LiveWatchPage() {
         }
     }, [room]);
 
-    // Handle add to cart
-    const handleAddToCart = async (product) => {
+    // Open Size Modal
+    const handleOpenSizeModal = async (product) => {
         if (!isLoggedIn) {
             alert('Vui lòng đăng nhập để mua hàng');
             return;
         }
+        setSelectedLiveProduct(product);
+        setShowSizeModal(true);
+        setLoadingSizes(true);
+        setProductSizes([]);
+        setSelectedSizeId(null);
 
-        setAddingToCart(product.id);
+        try {
+            const response = await fetchProductById(product.productId);
+            const details = response.data;
+            if (details && details.sizes) {
+                setProductSizes(details.sizes);
+                // Auto select first available if any
+                const available = details.sizes.find(s => s.stock > 0);
+                if (available) setSelectedSizeId(available.id);
+            }
+        } catch (error) {
+            console.error("Error fetching product details", error);
+        } finally {
+            setLoadingSizes(false);
+        }
+    };
+
+    // Confirm Add to Cart
+    const handleConfirmAddToCart = async () => {
+        if (!selectedSizeId) {
+            alert("Vui lòng chọn phân loại hàng");
+            return;
+        }
+        if (!selectedLiveProduct) return;
+
+        setAddingToCart(selectedLiveProduct.id);
         try {
             await addLiveItemToCart({
-                productId: product.productId,
-                sizeId: null,
+                productId: selectedLiveProduct.productId,
+                sizeId: selectedSizeId,
                 quantity: 1,
                 liveRoomId: roomId,
-                liveProductId: product.id,
-                livePrice: product.livePrice,
-                originalPrice: product.originalPrice
+                liveProductId: selectedLiveProduct.id,
+                livePrice: selectedLiveProduct.livePrice,
+                originalPrice: selectedLiveProduct.originalPrice
             });
-            alert('Đã thêm vào giỏ hàng với giá live!');
+            alert('Đã thêm vào giỏ hàng!');
+            setShowSizeModal(false);
+            // navigate('/cart'); // Optional: user might want to stay in live stream
         } catch (err) {
             console.error('Error adding to cart:', err);
             alert('Không thể thêm vào giỏ hàng');
@@ -217,6 +266,49 @@ export default function LiveWatchPage() {
             setAddingToCart(null);
         }
     };
+
+    // --- Reaction Logic ---
+    const handleAddReaction = (type) => {
+        const id = Date.now() + Math.random();
+        // Random position for variety
+        const randomX = Math.floor(Math.random() * 100);
+
+        const newReaction = { id, type, x: randomX };
+
+        setReactions(prev => [...prev, newReaction]);
+
+        // Remove after animation
+        setTimeout(() => {
+            setReactions(prev => prev.filter(r => r.id !== id));
+        }, 2000); // 2s duration
+    };
+
+    const sendReaction = (type) => {
+        if (!stompClientRef.current?.connected) return;
+
+        // Optimistic update (show immediate on own screen)
+        // handleAddReaction(type); // Optional: WebSocket broadcast doubles it? No, usually fine.
+
+        stompClientRef.current.publish({
+            destination: `/app/live/${roomId}/reaction`,
+            body: JSON.stringify({
+                type: type,
+                userId: userInfo?.id || null, // Optional
+                // username: ...
+            })
+        });
+    };
+
+    const REACTION_ICONS = {
+        LIKE: '👍',
+        HEART: '❤️',
+        HAHA: '😂',
+        WOW: '😮',
+        SAD: '😢',
+        ANGRY: '😡'
+    };
+
+
 
     // Send chat message
     const sendChat = () => {
@@ -359,6 +451,33 @@ export default function LiveWatchPage() {
                                 zIndex: 10
                             }}>
                                 👁 {viewerCount} đang xem
+                            </div>
+
+                            {/* Floating Reactions Overlay */}
+                            <div style={{
+                                position: 'absolute',
+                                bottom: '20px',
+                                right: '20px',
+                                width: '100px',
+                                height: '300px',
+                                pointerEvents: 'none',
+                                zIndex: 20,
+                                overflow: 'hidden'
+                            }}>
+                                {reactions.map(r => (
+                                    <div
+                                        key={r.id}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: '-20px',
+                                            left: `${r.x}%`,
+                                            fontSize: '24px',
+                                            animation: 'floatUp 2s ease-out forwards'
+                                        }}
+                                    >
+                                        {REACTION_ICONS[r.type] || '❤️'}
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
@@ -514,36 +633,51 @@ export default function LiveWatchPage() {
                                                 }}>
                                                     {product.productName}
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                                                    <span style={{ color: '#ee4d2d', fontWeight: '600', fontSize: '14px' }}>
-                                                        ₫{(product.livePrice || 0).toLocaleString()}
-                                                    </span>
-                                                    {product.originalPrice > product.livePrice && (
-                                                        <span style={{
-                                                            color: '#888',
-                                                            fontSize: '11px',
-                                                            textDecoration: 'line-through'
-                                                        }}>
-                                                            ₫{product.originalPrice.toLocaleString()}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                                                    {product.isOutOfStock ? (
+                                                        <span style={{ color: '#999', fontSize: '13px', fontWeight: '600' }}>
+                                                            ❌ Hết hàng
                                                         </span>
+                                                    ) : (
+                                                        <>
+                                                            <span style={{ color: '#ee4d2d', fontWeight: '600', fontSize: '14px' }}>
+                                                                ₫{(product.livePrice || 0).toLocaleString()}
+                                                            </span>
+                                                            {product.originalPrice > product.livePrice && (
+                                                                <span style={{
+                                                                    color: '#888',
+                                                                    fontSize: '11px',
+                                                                    textDecoration: 'line-through'
+                                                                }}>
+                                                                    ₫{product.originalPrice.toLocaleString()}
+                                                                </span>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
+                                                {/* Remaining Quantity */}
+                                                {!product.isOutOfStock && product.remainingQuantity != null && (
+                                                    <div style={{ fontSize: '11px', color: '#ffc107', marginBottom: '10px' }}>
+                                                        Còn lại: {product.remainingQuantity}/{product.quantityLimit}
+                                                    </div>
+                                                )}
                                                 <button
-                                                    onClick={() => handleAddToCart(product)}
-                                                    disabled={addingToCart === product.id}
+                                                    onClick={() => handleOpenSizeModal(product)}
+                                                    disabled={addingToCart === product.id || product.isOutOfStock}
                                                     style={{
                                                         width: '100%',
-                                                        background: addingToCart === product.id ? '#666' : '#ee4d2d',
+                                                        background: product.isOutOfStock ? '#666' : (addingToCart === product.id ? '#999' : '#ee4d2d'),
                                                         color: 'white',
                                                         border: 'none',
                                                         borderRadius: '4px',
                                                         padding: '8px',
                                                         fontSize: '12px',
                                                         fontWeight: '600',
-                                                        cursor: addingToCart === product.id ? 'not-allowed' : 'pointer'
+                                                        cursor: (addingToCart === product.id || product.isOutOfStock) ? 'not-allowed' : 'pointer',
+                                                        opacity: product.isOutOfStock ? 0.6 : 1
                                                     }}
                                                 >
-                                                    {addingToCart === product.id ? 'Đang thêm...' : '🛒 Thêm vào giỏ'}
+                                                    {product.isOutOfStock ? '❌ Hết hàng' : (addingToCart === product.id ? 'Đang thêm...' : '🛒 Thêm vào giỏ')}
                                                 </button>
                                             </div>
                                         </div>
@@ -570,6 +704,8 @@ export default function LiveWatchPage() {
                         }}>
                             💬 Chat trực tiếp
                         </div>
+
+
 
                         {/* Chat Messages */}
                         <div
@@ -603,6 +739,34 @@ export default function LiveWatchPage() {
                             padding: '15px',
                             borderTop: '1px solid #444'
                         }}>
+                            {/* Quick Reactions Bar */}
+                            <div style={{
+                                display: 'flex',
+                                gap: '15px',
+                                marginBottom: '10px',
+                                paddingLeft: '5px'
+                            }}>
+                                {Object.keys(REACTION_ICONS).map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => sendReaction(type)}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: '20px',
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.1s',
+                                            padding: '0'
+                                        }}
+                                        onMouseDown={e => e.currentTarget.style.transform = 'scale(1.2)'}
+                                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                                        title={type}
+                                    >
+                                        {REACTION_ICONS[type]}
+                                    </button>
+                                ))}
+                            </div>
                             {isLoggedIn ? (
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <input
@@ -667,7 +831,101 @@ export default function LiveWatchPage() {
                     0%, 100% { opacity: 1; }
                     50% { opacity: 0.5; }
                 }
+                @keyframes floatUp {
+                    0% { transform: translateY(0) scale(1); opacity: 1; }
+                    100% { transform: translateY(-200px) scale(1.5); opacity: 0; }
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
+                @keyframes floatUp {
+                    0% { transform: translateY(0) scale(1); opacity: 1; }
+                    100% { transform: translateY(-200px) scale(1.5); opacity: 0; }
+                }
             `}</style>
+            {/* Size Selection Modal */}
+            {showSizeModal && selectedLiveProduct && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <div style={{
+                        background: '#333', padding: '20px', borderRadius: '8px',
+                        width: '90%', maxWidth: '400px', color: 'white'
+                    }}>
+                        <h3 style={{ marginTop: 0 }}>Chọn phân loại hàng</h3>
+
+                        <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                            {selectedLiveProduct.productImageUrl && (
+                                <img src={selectedLiveProduct.productImageUrl} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} alt="" />
+                            )}
+                            <div>
+                                <div style={{ fontWeight: 'bold' }}>{selectedLiveProduct.productName}</div>
+                                <div style={{ color: '#ee4d2d' }}>₫{selectedLiveProduct.livePrice?.toLocaleString()}</div>
+                            </div>
+                        </div>
+
+                        {loadingSizes ? (
+                            <div>Đang tải thông tin...</div>
+                        ) : (
+                            <div style={{ marginBottom: '20px' }}>
+                                <div style={{ marginBottom: '8px', fontSize: '14px', color: '#ccc' }}>Kích thước:</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                    {productSizes.map(size => {
+                                        const isSelected = selectedSizeId === size.id;
+                                        const isOutOfStock = size.stock <= 0;
+                                        return (
+                                            <button
+                                                key={size.id}
+                                                onClick={() => !isOutOfStock && setSelectedSizeId(size.id)}
+                                                disabled={isOutOfStock}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    border: isSelected ? '1px solid #ee4d2d' : '1px solid #555',
+                                                    background: isSelected ? 'rgba(238, 77, 45, 0.1)' : (isOutOfStock ? '#444' : 'transparent'),
+                                                    color: isSelected ? '#ee4d2d' : (isOutOfStock ? '#888' : 'white'),
+                                                    borderRadius: '4px',
+                                                    cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                                    opacity: isOutOfStock ? 0.5 : 1
+                                                }}
+                                            >
+                                                {size.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                            <button
+                                onClick={() => setShowSizeModal(false)}
+                                style={{
+                                    flex: 1, padding: '10px',
+                                    background: '#555', border: 'none', borderRadius: '4px',
+                                    color: 'white', cursor: 'pointer'
+                                }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleConfirmAddToCart}
+                                disabled={!selectedSizeId || addingToCart}
+                                style={{
+                                    flex: 1, padding: '10px',
+                                    background: (!selectedSizeId || addingToCart) ? '#777' : '#ee4d2d',
+                                    border: 'none', borderRadius: '4px',
+                                    color: 'white', cursor: (!selectedSizeId || addingToCart) ? 'not-allowed' : 'pointer',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                {addingToCart ? 'Đang thêm...' : 'Thêm vào giỏ'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

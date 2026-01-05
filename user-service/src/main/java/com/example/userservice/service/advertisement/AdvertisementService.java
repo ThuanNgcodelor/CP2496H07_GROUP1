@@ -35,6 +35,26 @@ public class AdvertisementService {
     }
 
     @Transactional
+    public Advertisement createSystemAdvertisement(AdvertisementRequest request) {
+        Advertisement ad = Advertisement.builder()
+                .shopId("ADMIN") // Force ADMIN shopId
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .adType(request.getAdType())
+                .imageUrl(request.getImageUrl())
+                .targetUrl(request.getTargetUrl())
+                .durationDays(request.getDurationDays())
+                .status(AdvertisementStatus.APPROVED) // Auto-approve
+                .placement(request.getPlacement() != null ? request.getPlacement() : "POPUP") // Default to POPUP if
+                                                                                              // missing
+                .startDate(LocalDateTime.now())
+                .endDate(request.getDurationDays() != null ? LocalDateTime.now().plusDays(request.getDurationDays())
+                        : null)
+                .build();
+        return advertisementRepository.save(ad);
+    }
+
+    @Transactional
     public Advertisement approveAdvertisement(String id, String placement) {
         Advertisement ad = advertisementRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Advertisement not found"));

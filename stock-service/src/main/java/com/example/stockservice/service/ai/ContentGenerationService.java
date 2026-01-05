@@ -4,10 +4,12 @@ import com.example.stockservice.dto.ContentGenerationRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
+@ConditionalOnClass(name = "org.springframework.ai.chat.model.ChatModel")
 public class ContentGenerationService {
 
     private final ChatClient chatClient;
