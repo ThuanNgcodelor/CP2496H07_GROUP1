@@ -19,8 +19,15 @@ public interface StockServiceClient {
     @GetMapping("/reviews/count/shop/{shopId}")
     ResponseEntity<Long> getShopReviewCount(@PathVariable("shopId") String shopId);
 
+    @GetMapping("/product/internal/count/shop/{shopId}")
+    ResponseEntity<Long> getShopProductCount(@PathVariable("shopId") String shopId);
+
     @GetMapping("/cart/user")
     ResponseEntity<CartDto> getCart(@RequestHeader("Authorization") String token);
-    @GetMapping(value = "/product/{productId}",headers = "X-Internal-Call=true")
+
+    @GetMapping(value = "/product/{productId}", headers = "X-Internal-Call=true")
     ResponseEntity<List<ReviewDto>> getReviewsByProductId(@PathVariable String productId);
+
+    @GetMapping("/product/internal/category-stats/shop/{shopId}")
+    ResponseEntity<List<java.util.Map<String, Object>>> getShopCategoryStats(@PathVariable("shopId") String shopId);
 }

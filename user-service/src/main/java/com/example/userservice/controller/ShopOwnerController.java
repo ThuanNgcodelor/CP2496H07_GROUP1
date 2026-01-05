@@ -45,11 +45,16 @@ public class ShopOwnerController {
 
     @PutMapping(value = "/update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ShopOwnerDto> updateShopOwner(@Valid @RequestPart("request") UpdateShopOwnerRequest request,
-                                                        @RequestPart(value = "file", required = false) MultipartFile file, 
-                                                        HttpServletRequest requestHttp) {
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            HttpServletRequest requestHttp) {
         String userId = jwtUtil.ExtractUserId(requestHttp);
         request.setUserId(userId);
         ShopOwner updated = shopOwnerService.updateShopOwner(request, file);
         return ResponseEntity.ok(modelMapper.map(updated, ShopOwnerDto.class));
+    }
+
+    @GetMapping("/admin/list")
+    public ResponseEntity<java.util.List<com.example.userservice.dto.ShopOwnerStatsDto>> getAllShopOwnersAdmin() {
+        return ResponseEntity.ok(shopOwnerService.getAllShopOwnersWithStats());
     }
 }

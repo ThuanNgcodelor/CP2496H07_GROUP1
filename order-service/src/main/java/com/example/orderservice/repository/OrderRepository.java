@@ -75,4 +75,17 @@ public interface OrderRepository extends JpaRepository<Order, String> {
         Long countByProductIdsAndDateRangeAndStatus(@Param("productIds") List<String> productIds,
                         @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate,
                         @Param("status") OrderStatus status);
+
+        @Query("SELECT SUM(o.totalPrice) FROM Order o JOIN o.orderItems oi WHERE oi.productId IN :productIds AND o.orderStatus = 'COMPLETED'")
+        Double sumTotalRevenueByProductIds(@Param("productIds") List<String> productIds);
+
+        @Query("SELECT COUNT(DISTINCT o) FROM Order o JOIN o.orderItems oi WHERE oi.productId IN :productIds")
+        Long countByProductIds(@Param("productIds") List<String> productIds);
+
+        @Query("SELECT MONTH(o.createdAt), YEAR(o.createdAt), SUM(oi.totalPrice) FROM Order o JOIN o.orderItems oi WHERE oi.productId IN :productIds AND o.orderStatus = 'COMPLETED' AND o.createdAt >= :startDate GROUP BY YEAR(o.createdAt), MONTH(o.createdAt) ORDER BY YEAR(o.createdAt), MONTH(o.createdAt)")
+        List<Object[]> getMonthlyRevenueByProductIds(@Param("productIds") List<String> productIds,
+                        @Param("startDate") LocalDateTime startDate);
+
+        @Query("SELECT o.orderStatus, COUNT(DISTINCT o) FROM Order o JOIN o.orderItems oi WHERE oi.productId IN :productIds GROUP BY o.orderStatus")
+        List<Object[]> countByStatusForProductIds(@Param("productIds") List<String> productIds);
 }
