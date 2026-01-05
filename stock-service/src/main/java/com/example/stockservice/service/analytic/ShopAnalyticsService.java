@@ -60,7 +60,8 @@ public class ShopAnalyticsService {
         log.info("Getting shop analytics for shopId: {}", shopId);
         
         // Lấy tổng stats một lần để tránh query nhiều lần
-        Object[] stats = analyticsRepository.getShopTotalStats(shopId);
+        List<Object[]> statsList = analyticsRepository.getShopTotalStats(shopId);
+        Object[] stats = (statsList != null && !statsList.isEmpty()) ? statsList.get(0) : null;
         
         Long totalViews = extractLongValue(stats, 0);
         Long totalCarts = extractLongValue(stats, 1);

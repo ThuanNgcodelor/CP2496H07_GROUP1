@@ -12,9 +12,10 @@ import java.util.List;
 
 /**
  * Repository for ProductAnalytics entity - stores aggregated product metrics
+ * Renamed to ShopProductAnalyticsRepository to avoid bean name conflict with base package repo
  */
 @Repository
-public interface ProductAnalyticsRepository extends JpaRepository<ProductAnalytics, String> {
+public interface ShopProductAnalyticsRepository extends JpaRepository<ProductAnalytics, String> {
     
     /**
      * Find analytics for all products of a shop

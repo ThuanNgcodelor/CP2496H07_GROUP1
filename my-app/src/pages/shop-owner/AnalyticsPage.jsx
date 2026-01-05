@@ -121,7 +121,7 @@ export default function AnalyticsPage() {
             link.click();
             link.remove();
             toast.success("Report downloaded");
-        } catch (error) {
+        } catch {
             toast.error("Failed to export report");
         }
     };

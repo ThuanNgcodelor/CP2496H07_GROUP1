@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { useSearchParams } from 'react-router-dom';
-import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders, getShippingByOrderId, bulkUpdateOrderStatus, searchOrders, getAllOrderIds } from '../../api/order';
+import { getShopOwnerOrders, updateOrderStatusForShopOwner, getAllShopOwnerOrders, getShippingByOrderId, bulkUpdateOrderStatus, searchOrders, getAllOrderIds, getShopOwnerOrderById } from '../../api/order';
 import { getUserById } from '../../api/user';
 import { getImageUrl } from '../../api/image';
 import { useTranslation } from 'react-i18next';
@@ -105,9 +105,43 @@ export default function BulkShippingPage() {
         }
     }, [searchParams]);
 
-    // Auto-expand order if orderId is in URL
+    // Auto-expand order if orderId is in URL AND handle deep linking
     useEffect(() => {
         const orderIdFromUrl = searchParams.get('orderId');
+
+        const handleDeepLink = async () => {
+            if (orderIdFromUrl) {
+                // If order is NOT in current list, we might need to switch tabs
+                const orderExists = orders.some(order => order.id === orderIdFromUrl);
+
+                if (!orderExists) {
+                    try {
+                        // Fetch order details to know its status
+                        setLoading(true);
+                        const orderDetail = await getShopOwnerOrderById(orderIdFromUrl);
+
+                        if (orderDetail) {
+                            // If status is different from current filter, switch filter
+                            // Normalize statuses for comparison
+                            const orderStatus = orderDetail.orderStatus || 'PENDING';
+                            if (orderStatus !== statusFilter) {
+                                console.log(`Deep link: Switching from ${statusFilter} to ${orderStatus} for order ${orderIdFromUrl}`);
+                                setStatusFilter(orderStatus);
+                                // The statusFilter change will trigger loadOrders
+                                // We'll handle expansion in the next render cycle or separate effect
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Failed to fetch order for deep link:", err);
+                    } finally {
+                        setLoading(false);
+                    }
+                }
+            }
+        };
+
+        handleDeepLink();
+
         if (orderIdFromUrl && orders.length > 0) {
             // Check if order exists in current orders list
             const orderExists = orders.some(order => order.id === orderIdFromUrl);
@@ -123,10 +157,10 @@ export default function BulkShippingPage() {
                             element.style.backgroundColor = '';
                         }, 2000);
                     }
-                }, 300);
+                }, 500); // Increased delay slightly
             }
         }
-    }, [searchParams, orders, expandedRow]);
+    }, [searchParams, orders]); // Removed expandedRow from dep to prevent loop, logic handles it
 
     const loadOrders = async () => {
         try {
@@ -833,10 +867,21 @@ export default function BulkShippingPage() {
                                     style={{ width: '170px' }}
                                 >
                                     <option value="">{t('shopOwner.manageOrder.selectStatus')}</option>
-                                    <option value="CONFIRMED">{t('common.status.confirmed')}</option>
-                                    <option value="READY_TO_SHIP">{t('common.status.readyToShip', 'Sẵn sàng giao')}</option>
-                                    <option value="CANCELLED">{t('common.status.cancelled')}</option>
-                                    <option value="RETURNED">{t('common.status.returned')}</option>
+
+                                    {/* Smart content based on current filter */}
+                                    {statusFilter === 'PENDING' && (
+                                        <>
+                                            <option value="CONFIRMED">{t('common.status.confirmed')}</option>
+                                            <option value="CANCELLED">{t('common.status.cancelled')}</option>
+                                        </>
+                                    )}
+
+                                    {statusFilter === 'CONFIRMED' && (
+                                        <option value="READY_TO_SHIP">{t('common.status.readyToShip', 'Sẵn sàng giao')}</option>
+                                    )}
+
+                                    {/* Fallback or other statuses if needed, but per requirement we restrict flow */}
+                                    {/* If user selects other tabs, bulk update might be disabled or limited */}
                                 </select>
                                 <button
                                     className="btn btn-primary-shop"

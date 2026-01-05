@@ -19,7 +19,7 @@ const createApiInstance = (baseURL) => {
                 '/verifyOtp',
                 '/updatePassword',
                 '/login/google',
-                '/refresh', // Refresh endpoint
+                '/refresh',
                 '/order/track/',
             ];
 
@@ -96,8 +96,6 @@ const createApiInstance = (baseURL) => {
             if (status === 401) {
                 const reqUrl = error?.config?.url || "";
                 const currentPath = window.location.pathname;
-                // Check if URL matches any public endpoint pattern
-                // reqUrl can be relative (e.g., "/shop-owners/123") or full path
                 const isPublicEndpointMatch = PUBLIC_401_ALLOWLIST.some((p) => {
                     // Remove leading slash for comparison
                     const pattern = p.replace(/^\//, '');
@@ -109,11 +107,8 @@ const createApiInstance = (baseURL) => {
                 // Thêm các trang public (home, shop list, product detail) vào danh sách để không redirect
                 const onPublicPage = currentPath === "/" || currentPath.startsWith("/shop") || currentPath.startsWith("/product/");
 
-                // Kiểm tra xem có token trong cookie không
                 const hasToken = Cookies.get("accessToken");
 
-                // Nếu là public endpoint hoặc đang ở trang auth/public → chỉ reject, không redirect
-                // QUAN TRỌNG: Không redirect khi ở trang public, kể cả khi có token invalid
                 if (isPublicEndpointMatch || onAuthPage || onPublicPage) {
                     // Nếu có token invalid ở trang public, xóa token nhưng không redirect
                     if (hasToken && !isPublicEndpointMatch) {
@@ -122,9 +117,6 @@ const createApiInstance = (baseURL) => {
                     return Promise.reject(error);
                 }
 
-                // If refresh token failed or other 401 issues, redirect to login
-                // But wait, the refresh logic above handles the main 401 case.
-                // This block is fallback or for public endpoints.
             }
             return Promise.reject(error);
         }

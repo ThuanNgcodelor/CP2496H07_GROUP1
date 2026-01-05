@@ -11,7 +11,6 @@ import com.example.stockservice.request.cart.AddCartItemRequest;
 import com.example.stockservice.request.cart.AddLiveCartItemRequest;
 import com.example.stockservice.request.cart.UpdateCartItemRequest;
 import com.example.stockservice.service.product.ProductService;
-import com.example.stockservice.service.analytics.RedisAnalyticsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,6 @@ public class CartItemServiceImpl implements CartItemService {
     private final CartItemRepository cartItemRepository;
     private final ProductService productService;
     private final SizeRepository sizeRepository;
-    private final RedisAnalyticsService redisAnalyticsService;
 
     @Override
     @Transactional
@@ -88,11 +86,7 @@ public class CartItemServiceImpl implements CartItemService {
         cart.updateTotalAmount();
         cartRepository.save(cart);
 
-        // Analytics
-        redisAnalyticsService.incrementAddToCart(request.getProductId());
-
-        log.info("Added item to cart: userId={}, productId={}, quantity={}", userId, request.getProductId(),
-                newQuantity);
+        log.info("Added item to cart: userId={}, productId={}, quantity={}", userId, request.getProductId(), newQuantity);
         return cartItem;
     }
 
@@ -116,8 +110,7 @@ public class CartItemServiceImpl implements CartItemService {
                     : product.getPrice() + size.getPriceModifier();
         }
 
-        // For live items, we create a new item each time (different liveRoomId makes
-        // them unique)
+        // For live items, we create a new item each time (different liveRoomId makes them unique)
         CartItem cartItem = CartItem.builder()
                 .cart(cart)
                 .product(product)
@@ -138,9 +131,6 @@ public class CartItemServiceImpl implements CartItemService {
         // Update cart total
         cart.updateTotalAmount();
         cartRepository.save(cart);
-
-        // Analytics
-        redisAnalyticsService.incrementAddToCart(request.getProductId());
 
         log.info("Added live item to cart: userId={}, productId={}, liveRoomId={}, livePrice={}",
                 userId, request.getProductId(), request.getLiveRoomId(), request.getLivePrice());
