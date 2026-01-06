@@ -13,9 +13,10 @@ import lombok.NoArgsConstructor;
 public class DecreaseStockRequest {
     @NotBlank(message = "Size ID is required")
     private String sizeId;
-    
+
     @NotNull(message = "Quantity is required")
     @Min(value = 1, message = "Quantity must be at least 1")
     private Integer quantity;
-}
 
+    private Boolean isFlashSale;
+}

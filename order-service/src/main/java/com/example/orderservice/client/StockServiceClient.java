@@ -61,4 +61,7 @@ public interface StockServiceClient {
 
     @GetMapping(value = "/analytics/system/cart-adds", headers = "X-Internal-Call=true")
     ResponseEntity<Long> getSystemAddToCart();
+
+    @GetMapping(value = "/flash-sale/available-stock/{productId}", headers = "X-Internal-Call=true")
+    int getFlashSaleStock(@PathVariable String productId);
 }

@@ -54,13 +54,28 @@ export default function ProductDetailPage() {
     const [isFlashSale, setIsFlashSale] = useState(true);
 
     // Sync Flash Sale state with product data
+    // Calculate total actual stock
+    const totalStock = useMemo(() => {
+        if (!product) return 0;
+        if (product.sizes && product.sizes.length > 0) {
+            return product.sizes.reduce((acc, size) => acc + (size.stock || 0), 0);
+        }
+        return product.stock || 0;
+    }, [product]);
+
+    // Sync Flash Sale state with product data
     useEffect(() => {
-        if (product && product.flashSaleRemaining !== undefined && product.flashSaleRemaining !== null) {
+        // Only active if remaining > 0 AND there is actual physical stock
+        if (product &&
+            typeof product.flashSaleRemaining === 'number' &&
+            product.flashSaleRemaining > 0 &&
+            totalStock > 0
+        ) {
             setIsFlashSale(true);
         } else {
             setIsFlashSale(false);
         }
-    }, [product]);
+    }, [product, totalStock]);
 
     // Note: ProductDetailPage is now public - guest can view products
     // But some actions (add to cart, buy now) require authentication
@@ -459,36 +474,7 @@ export default function ProductDetailPage() {
                                             )}
                                         </div>
                                         {/* Price Option Selection */}
-                                        {product.flashSaleRemaining !== undefined && product.flashSaleRemaining !== null && (
-                                            <div className="d-flex gap-2 mb-3">
-                                                <button
-                                                    className={`btn ${isFlashSale ? 'text-white' : ''}`}
-                                                    onClick={() => setIsFlashSale(true)}
-                                                    style={{
-                                                        flex: 1,
-                                                        position: 'relative',
-                                                        overflow: 'hidden',
-                                                        backgroundColor: isFlashSale ? '#ee4d2d' : 'transparent',
-                                                        borderColor: '#ee4d2d',
-                                                        color: isFlashSale ? '#fff' : '#ee4d2d'
-                                                    }}
-                                                >
-                                                    {product.flashSaleRemaining <= 0 && <div style={{ position: 'absolute', top: 0, right: 0, background: '#333', color: '#fff', fontSize: '10px', padding: '2px 6px' }}>Hết suất</div>}
-                                                    <div className="fw-bold"><i className="fas fa-bolt me-1"></i>Flash Sale</div>
-                                                    <div style={{ fontSize: '0.9em' }}>{product.price?.toLocaleString("vi-VN")}₫</div>
-                                                    <div style={{ fontSize: '0.75em' }}>Còn: {product.flashSaleRemaining}</div>
-                                                </button>
-                                                <button
-                                                    className={`btn ${!isFlashSale ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                    onClick={() => setIsFlashSale(false)}
-                                                    style={{ flex: 1 }}
-                                                >
-                                                    <div className="fw-bold">Giá Thường</div>
-                                                    <div style={{ fontSize: '0.9em' }}>{product.originalPrice?.toLocaleString("vi-VN")}₫</div>
-                                                    <div style={{ fontSize: '0.75em' }}>Có sẵn</div>
-                                                </button>
-                                            </div>
-                                        )}
+
 
                                         {/* Price Display */}
                                         <div className="mb-4" style={{ padding: '16px', background: '#fafafa', borderRadius: '8px' }}>
@@ -510,7 +496,7 @@ export default function ProductDetailPage() {
                                                                 Số lượng khuyến mãi:
                                                             </span>
                                                             <span className="badge rounded-pill px-3" style={{ backgroundColor: '#ee4d2d' }}>
-                                                                Còn {product.flashSaleRemaining}
+                                                                Còn {Math.min(product.flashSaleRemaining, totalStock)}
                                                             </span>
                                                         </div>
                                                         <div className="progress mt-2" style={{ height: '6px' }}>
@@ -743,6 +729,16 @@ export default function ProductDetailPage() {
                                                             setError("Please select a size before buying.");
                                                             return;
                                                         }
+
+                                                        // Flash Sale Validation
+                                                        if (isFlashSale && product.flashSaleRemaining !== undefined) {
+                                                            const maxLimit = Math.min(product.flashSaleRemaining, totalStock);
+                                                            if (Number(qty) > maxLimit) {
+                                                                setError(`Chỉ được mua tối đa ${maxLimit} sản phẩm Flash Sale.`);
+                                                                return;
+                                                            }
+                                                        }
+
                                                         try {
                                                             setPosting(true);
                                                             setError(null);

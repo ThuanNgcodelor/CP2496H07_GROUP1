@@ -87,7 +87,8 @@ public class ProductController {
 
     @PostMapping("/decreaseStock")
     public ResponseEntity<ProductDto> decreaseStock(@Valid @RequestBody DecreaseStockRequest request) {
-        productService.decreaseStockBySize(request.getSizeId(), request.getQuantity());
+        boolean isFlashSale = request.getIsFlashSale() != null ? request.getIsFlashSale() : false;
+        productService.decreaseStockBySize(request.getSizeId(), request.getQuantity(), isFlashSale);
 
         // Get product by finding the size first
         Product product = productService.findProductBySizeId(request.getSizeId());

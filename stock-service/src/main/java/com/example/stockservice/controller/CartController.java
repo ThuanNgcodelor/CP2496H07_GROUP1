@@ -231,7 +231,9 @@ public class CartController {
         dto.setOldPrice(cartItem.getOldPrice());
         dto.setAvailableStock(cartItem.getAvailableStock());
         dto.setProductAvailable(cartItem.getProductAvailable());
+        dto.setProductAvailable(cartItem.getProductAvailable());
         dto.setSizeAvailable(cartItem.getSizeAvailable());
+        dto.setIsFlashSale(cartItem.isFlashSale());
 
         return dto;
     }

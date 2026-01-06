@@ -6,4 +6,5 @@ import lombok.Data;
 public class DecreaseStockRequest {
     private String sizeId;
     private int quantity;
+    private Boolean isFlashSale;
 }

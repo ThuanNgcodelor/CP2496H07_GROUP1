@@ -27,6 +27,8 @@ import com.example.stockservice.repository.SizeRepository;
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
     private final com.example.stockservice.repository.CartItemRepository cartItemRepository;
+    private final com.example.stockservice.service.flashsale.FlashSaleService flashSaleService;
+
     @Override
     public long countProductsByUserId(String userId) {
         return productRepository.countByUserId(userId);
@@ -50,7 +52,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @org.springframework.transaction.annotation.Transactional
-    public void decreaseStockBySize(String sizeId, int quantity) {
+    public void decreaseStockBySize(String sizeId, int quantity, boolean isFlashSale) {
         Size size = sizeRepository.findById(sizeId)
                 .orElseThrow(() -> new RuntimeException("Size not found with id: " + sizeId));
 
@@ -61,6 +63,11 @@ public class ProductServiceImpl implements ProductService {
 
         size.setStock(size.getStock() - quantity);
         sizeRepository.save(size);
+
+        // Update Flash Sale Sold Count if applicable
+        if (isFlashSale) {
+            flashSaleService.incrementSoldCount(size.getProduct().getId(), quantity);
+        }
 
         // Update product status
         checkAndUpdateProductStatus(size.getProduct());
@@ -296,7 +303,8 @@ public class ProductServiceImpl implements ProductService {
             List<Size> managedSizes = toUpdate.getSizes();
             if (managedSizes != null && !managedSizes.isEmpty()) {
                 // Detach cart items from sizes before deleting sizes
-                // This prevents FK constraint violation and keeps cart items with sizeAvailable=false
+                // This prevents FK constraint violation and keeps cart items with
+                // sizeAvailable=false
                 for (Size size : managedSizes) {
                     if (size.getCartItems() != null) {
                         for (com.example.stockservice.model.CartItem cartItem : size.getCartItems()) {

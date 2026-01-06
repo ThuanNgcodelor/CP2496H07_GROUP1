@@ -19,4 +19,6 @@ public class SelectedItemDto {
 
     @NotNull
     private String sizeId;
+
+    private Boolean isFlashSale;
 }

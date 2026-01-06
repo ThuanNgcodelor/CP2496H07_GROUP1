@@ -570,6 +570,7 @@ public class OrderServiceImpl implements OrderService {
                     DecreaseStockRequest dec = new DecreaseStockRequest();
                     dec.setSizeId(si.getSizeId());
                     dec.setQuantity(si.getQuantity());
+                    dec.setIsFlashSale(si.getIsFlashSale());
                     stockServiceClient.decreaseStock(dec);
 
                     return OrderItem.builder()
@@ -600,6 +601,7 @@ public class OrderServiceImpl implements OrderService {
                         DecreaseStockRequest dec = new DecreaseStockRequest();
                         dec.setSizeId(si.getSizeId());
                         dec.setQuantity(si.getQuantity());
+                        dec.setIsFlashSale(si.getIsFlashSale());
                         try {
                             stockServiceClient.decreaseStock(dec);
                         } catch (Exception e) {
