@@ -68,8 +68,35 @@ const BannerRenderer = ({ data }) => {
 };
 
 const VideoRenderer = ({ data }) => {
-    if (!data.url) return null;
+    // Lazy import or use global/prop passed helper if possible, but importing here is fine
+    const [videoUrl, setVideoUrl] = React.useState(null);
+
+    React.useEffect(() => {
+        if (data.videoId) {
+            import('../../../api/image').then(({ getVideoUrl }) => {
+                setVideoUrl(getVideoUrl(data.videoId));
+            });
+        }
+    }, [data.videoId]);
+
+    if (!data.url && !data.videoId) return null;
+
+    if (data.videoId && videoUrl) {
+        return (
+            <div className="ratio ratio-16x9 bg-dark">
+                <video
+                    controls
+                    src={videoUrl}
+                    style={{ width: '100%', height: '100%' }}
+                >
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        );
+    }
+
     const getEmbedUrl = (url) => {
+        if (!url) return '';
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
         const match = url.match(regExp);
         if (match && match[2].length === 11) {

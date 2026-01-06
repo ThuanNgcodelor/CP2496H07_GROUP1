@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { useSearchParams } from 'react-router-dom';
-import { getShopOwnerOrders, updateOrderStatusForShopOwner, returnOrder, getAllShopOwnerOrders } from '../../api/order';
+import { getShopOwnerOrders, updateOrderStatusForShopOwner, returnOrder, getAllShopOwnerOrders, searchOrders } from '../../api/order';
 import { getUserById } from '../../api/user';
 import { useTranslation } from 'react-i18next';
 import '../../components/shop-owner/ShopOwnerLayout.css';
@@ -18,6 +18,8 @@ export default function ReturnOrderPage() {
     const [pageSize] = useState(10);
     const [usernames, setUsernames] = useState({});
     const [expandedRows, setExpandedRows] = useState(new Set());
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState(null); // null = not searching
 
     // Load orders
     useEffect(() => {
@@ -28,7 +30,6 @@ export default function ReturnOrderPage() {
     useEffect(() => {
         const orderIdFromUrl = searchParams.get('orderId');
         if (orderIdFromUrl && orders.length > 0) {
-            // Check if order exists in current orders list
             const orderExists = orders.some(order => order.id === orderIdFromUrl);
             if (orderExists) {
                 setExpandedRows(prev => {
@@ -37,7 +38,6 @@ export default function ReturnOrderPage() {
                     }
                     return prev;
                 });
-                // Scroll to the order after a short delay to ensure it's rendered
                 setTimeout(() => {
                     const element = document.querySelector(`[data-order-id="${orderIdFromUrl}"]`);
                     if (element) {
@@ -58,23 +58,18 @@ export default function ReturnOrderPage() {
             setError(null);
 
             // Filter for CANCELLED and RETURNED orders if no specific filter is selected
-            // If statusFilter is provided, use it. Otherwise default to CANCELLED and RETURNED.
             let filterValue = statusFilter && statusFilter.trim() !== '' ? statusFilter : ['CANCELLED', 'RETURNED'];
 
             const response = await getShopOwnerOrders(filterValue, currentPage, pageSize);
 
-            // Handle both paginated response and simple array
             let ordersList = [];
             if (response && response.content && Array.isArray(response.content)) {
-                // Paginated response
                 ordersList = response.content;
                 setTotalPages(response.totalPages || 1);
             } else if (Array.isArray(response)) {
-                // Simple array response
                 ordersList = response;
                 setTotalPages(1);
             } else if (response && response.data && Array.isArray(response.data)) {
-                // Response wrapped in data property
                 ordersList = response.data;
                 setTotalPages(response.totalPages || 1);
             } else {
@@ -84,7 +79,6 @@ export default function ReturnOrderPage() {
 
             setOrders(ordersList);
 
-            // Fetch usernames for all orders
             const userIds = [...new Set(ordersList.map(order => order.userId).filter(Boolean))];
             const usernameMap = {};
 
@@ -108,6 +102,33 @@ export default function ReturnOrderPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSearch = async () => {
+        if (!searchQuery.trim()) {
+            setSearchResults(null);
+            return;
+        }
+        try {
+            const results = await searchOrders(searchQuery.trim());
+            // Filter results to only show Return/Cancel related orders if needed, 
+            // or just show what matches. Since this is the "Return Order Page", 
+            // maybe we should filter. But usually search overrides default filters.
+            // Let's filter to keep context relevant.
+            const relevantResults = results.filter(o =>
+                ['CANCELLED', 'RETURNED', 'DELIVERED', 'COMPLETED'].includes(o.orderStatus)
+            );
+            // Note: DELIVERED/COMPLETED might be here because you can Return a DELIVERED order.
+            setSearchResults(relevantResults);
+        } catch (err) {
+            console.error('Search error:', err);
+            setSearchResults([]);
+        }
+    };
+
+    const clearSearch = () => {
+        setSearchQuery('');
+        setSearchResults(null);
     };
 
     const handleStatusUpdate = async (orderId, newStatus) => {
@@ -134,7 +155,7 @@ export default function ReturnOrderPage() {
                 showConfirmButton: false,
                 timer: 1500
             });
-            loadOrders(); // Reload orders
+            loadOrders();
         } catch (err) {
             console.error('Error updating order status:', err);
             Swal.fire({
@@ -182,8 +203,6 @@ export default function ReturnOrderPage() {
         }
     };
 
-
-
     const toggleRowExpand = (orderId) => {
         const newExpanded = new Set(expandedRows);
         if (newExpanded.has(orderId)) {
@@ -214,14 +233,14 @@ export default function ReturnOrderPage() {
     const getStatusBadge = (status) => {
         const normalizedStatus = normalizeStatus(status);
         const statusMap = {
-            PENDING: { label: 'Chờ xác nhận', class: 'bg-warning' },
-            CONFIRMED: { label: 'Đã xác nhận', class: 'bg-info' },
-            READY_TO_SHIP: { label: 'Sẵn sàng giao', class: 'bg-primary' },
-            SHIPPED: { label: 'Đang giao', class: 'bg-success' },
-            DELIVERED: { label: 'Đã giao', class: 'bg-success' },
-            CANCELLED: { label: 'Đã hủy', class: 'bg-danger' },
-            COMPLETED: { label: 'Hoàn thành', class: 'bg-success' },
-            RETURNED: { label: 'Đã hoàn', class: 'bg-secondary' }
+            PENDING: { label: t('common.status.pending'), class: 'bg-warning' },
+            CONFIRMED: { label: t('common.status.confirmed'), class: 'bg-info' },
+            READY_TO_SHIP: { label: t('common.status.readyToShip') || 'Sẵn sàng giao', class: 'bg-primary' },
+            SHIPPED: { label: t('common.status.shipped'), class: 'bg-success' },
+            DELIVERED: { label: t('common.status.delivered'), class: 'bg-success' },
+            CANCELLED: { label: t('common.status.cancelled'), class: 'bg-danger' },
+            COMPLETED: { label: t('common.status.completed'), class: 'bg-success' },
+            RETURNED: { label: t('common.status.returned'), class: 'bg-secondary' }
         };
 
         return statusMap[normalizedStatus] || { label: status || 'N/A', class: 'bg-secondary' };
@@ -256,21 +275,9 @@ export default function ReturnOrderPage() {
         }
     };
 
-    const formatProducts = (orderItems) => {
-        if (!orderItems || orderItems.length === 0) return 'No products';
-
-        return orderItems
-            .map(item => {
-                const productName = item.productName || `Product ${item.productId}`;
-                const sizeName = item.sizeName ? ` (${item.sizeName})` : '';
-                return `${productName}${sizeName} x${item.quantity || 1}`;
-            })
-            .join(', ');
-    };
-
     const formatPrice = (price) => {
-        if (price == null) return '$0';
-        return '$' + new Intl.NumberFormat('en-US').format(price);
+        if (price == null) return '0 đ';
+        return new Intl.NumberFormat('vi-VN').format(price) + ' đ';
     };
 
     const getNextStatus = (currentStatus) => {
@@ -285,7 +292,6 @@ export default function ReturnOrderPage() {
     const handleExportExcel = async () => {
         try {
             setLoading(true);
-            // Strictly export only CANCELLED and RETURNED orders, regardless of current view filter
             const filter = ['CANCELLED', 'RETURNED'];
             const allOrders = await getAllShopOwnerOrders(filter);
 
@@ -298,11 +304,10 @@ export default function ReturnOrderPage() {
                 return;
             }
 
-            // Define headers
             const headers = [
                 "Order ID",
                 "Customer Name",
-                "Product", // Simple aggregation
+                "Product",
                 "Subtotal",
                 "Shipping Fee",
                 "Total",
@@ -312,7 +317,6 @@ export default function ReturnOrderPage() {
                 "Return Reason"
             ];
 
-            // Helper to escape CSV fields
             const escapeCsv = (str) => {
                 if (str === null || str === undefined) return '';
                 return `"${String(str).replace(/"/g, '""')}"`;
@@ -321,16 +325,12 @@ export default function ReturnOrderPage() {
             const csvRows = [headers.join(',')];
 
             for (const order of allOrders) {
-                const subtotal = order.totalPrice; // As per table logic, totalPrice seems to be subtotal? Or need verify. 
-                // Table: Subtotal = formatPrice(order.totalPrice)
-                // Table: Total = formatPrice((order.totalPrice || 0) + (order.shippingFee || 0))
-
+                const subtotal = order.totalPrice;
                 const shipping = order.shippingFee || 0;
                 const total = (order.totalPrice || 0) + shipping;
                 const date = new Date(order.creationTimestamp).toLocaleDateString('vi-VN');
                 const customerName = usernames[order.userId] || `User: ${order.userId}`;
 
-                // Format Products string
                 const productStr = order.orderItems ? order.orderItems.map(item => {
                     const name = item.productName || `Product ${item.productId}`;
                     const size = item.sizeName ? ` (${item.sizeName})` : '';
@@ -393,6 +393,7 @@ export default function ReturnOrderPage() {
         <div className="dashboard-container">
             <div className="dashboard-header">
                 <h1>{t('shopOwner.returnOrder.title')}</h1>
+                <p className="text-muted">{t('shopOwner.manageOrder.subtitle', 'Quản lý đơn hàng trả lại và hủy')}</p>
             </div>
 
             {error && (
@@ -404,30 +405,55 @@ export default function ReturnOrderPage() {
             <div className="orders-table">
                 <div className="table-header">
                     <div className="table-title">{t('shopOwner.returnOrder.tableTitle')}</div>
-                    <div className="table-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <select
-                            className="form-select"
-                            value={statusFilter}
-                            onChange={(e) => {
-                                setStatusFilter(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            style={{ width: 'auto' }}
-                        >
-                            <option value="">{t('shopOwner.manageOrder.allStatus')}</option>
-                            <option value="PENDING">{t('common.status.pending')}</option>
-                            <option value="CONFIRMED">{t('common.status.confirmed')}</option>
-                            <option value="READY_TO_SHIP">Sẵn sàng giao</option>
-                            <option value="SHIPPED">{t('common.status.shipped')}</option>
-                            <option value="DELIVERED">{t('common.status.delivered')}</option>
-                            <option value="COMPLETED">{t('common.status.completed')}</option>
-                            <option value="CANCELLED">{t('common.status.cancelled')}</option>
-                            <option value="RETURNED">{t('common.status.returned')}</option>
-                        </select>
+                    <div className="table-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Search Box */}
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                            <input
+                                type="text"
+                                className="form-control"
+                                placeholder="Tìm theo mã đơn..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                style={{ width: '180px' }}
+                            />
+                            <button className="btn btn-outline-secondary" onClick={handleSearch}>
+                                <i className="fas fa-search"></i>
+                            </button>
+                            {searchResults !== null && (
+                                <button className="btn btn-outline-secondary" onClick={clearSearch}>
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="search-filter">
+                            <select
+                                className="form-select"
+                                value={statusFilter}
+                                onChange={(e) => {
+                                    setStatusFilter(e.target.value);
+                                    setCurrentPage(1);
+                                    setSearchResults(null);
+                                }}
+                                style={{ width: '180px' }}
+                            >
+                                <option value="">{t('shopOwner.manageOrder.allStatus')}</option>
+                                <option value="PENDING">{t('common.status.pending')}</option>
+                                <option value="CONFIRMED">{t('common.status.confirmed')}</option>
+                                <option value="READY_TO_SHIP">Sẵn sàng giao</option>
+                                <option value="SHIPPED">{t('common.status.shipped')}</option>
+                                <option value="DELIVERED">{t('common.status.delivered')}</option>
+                                <option value="COMPLETED">{t('common.status.completed')}</option>
+                                <option value="CANCELLED">{t('common.status.cancelled')}</option>
+                                <option value="RETURNED">{t('common.status.returned')}</option>
+                            </select>
+                        </div>
+
                         <button className="btn btn-secondary-shop" onClick={loadOrders}>
                             <i className="fas fa-sync-alt"></i> {t('shopOwner.manageOrder.refresh')}
                         </button>
-                        <button className="btn btn-secondary-shop" onClick={handleExportExcel}>
+                        <button className="btn btn-primary-shop" onClick={handleExportExcel}>
                             <i className="fas fa-download"></i> {t('shopOwner.manageOrder.exportExcel')}
                         </button>
                     </div>
@@ -437,50 +463,59 @@ export default function ReturnOrderPage() {
                     <table className="table table-hover">
                         <thead>
                             <tr>
-                                <th>No.</th>
-                                <th>{t('shopOwner.manageOrder.customer')}</th>
-                                <th>{t('shopOwner.analytics.product')}</th>
-                                <th>{t('shopOwner.manageOrder.subtotal')}</th>
-                                <th>{t('shopOwner.manageOrder.shipping')}</th>
-                                <th>{t('shopOwner.manageOrder.total')}</th>
-                                <th>{t('shopOwner.manageOrder.orderDate')}</th>
-                                <th>{t('common.status.title')}</th>
-                                <th>{t('shopOwner.manageOrder.actions')}</th>
+                                <th style={{ width: '12%' }}>{t('shopOwner.manageOrder.customer')}</th>
+                                <th style={{ width: '10%' }}>{t('shopOwner.manageOrder.phone')}</th>
+                                <th style={{ width: '18%' }}>{t('shopOwner.manageOrder.address')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.subtotal')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.shipping')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.total')}</th>
+                                <th style={{ width: '9%' }}>{t('shopOwner.manageOrder.orderDate')}</th>
+                                <th style={{ width: '9%' }}>{t('common.status.title')}</th>
+                                <th style={{ width: '11%' }}>{t('shopOwner.manageOrder.actions')}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {orders.length === 0 ? (
+                            {/* Search Results Info */}
+                            {searchResults !== null && (
+                                <tr>
+                                    <td colSpan="9" className="bg-info bg-opacity-10 py-2 px-3">
+                                        <i className="fas fa-search me-2"></i>
+                                        Tìm thấy <strong>{searchResults.length}</strong> đơn hàng với từ khóa "{searchQuery}"
+                                        <button className="btn btn-link btn-sm" onClick={clearSearch}>Xóa tìm kiếm</button>
+                                    </td>
+                                </tr>
+                            )}
+
+                            {(searchResults || orders).length === 0 ? (
                                 <tr>
                                     <td colSpan="9" className="text-center py-4">
-                                        <p className="text-muted">{t('shopOwner.manageOrder.noOrders')}</p>
+                                        <p className="text-muted">{searchResults !== null ? 'Không tìm thấy đơn hàng' : t('shopOwner.manageOrder.noOrders')}</p>
                                     </td>
                                 </tr>
                             ) : (
-                                orders.map((order, index) => {
+                                (searchResults || orders).map((order) => {
                                     const statusInfo = getStatusBadge(order.orderStatus);
                                     const nextStatus = getNextStatus(order.orderStatus);
                                     const isExpanded = expandedRows.has(order.id);
-                                    const orderNumber = (currentPage - 1) * pageSize + index + 1;
+
+                                    // Calculate financials
+                                    const subtotal = order.totalPrice; // Assuming backend sends subtotal as totalPrice or we stick to existing logic
+                                    // In BulkShippingPage logic was: subtotal + shipping - voucher = total.
+                                    // Here ReturnOrderPage logic was: totalPrice is subtotal, + shipping = total. 
+                                    // Let's stick to consistent logic: order.totalPrice usually means the final price in many systems, 
+                                    // but let's check the existing logic in this file: 
+                                    // <td>{formatPrice(order.totalPrice)}</td> (Subtotal Col)
+                                    // <td>{formatPrice((order.totalPrice || 0) + (order.shippingFee || 0))}</td> (Total Col)
+                                    // I will PRESERVE this existing calculation logic for safety.
 
                                     return (
                                         <React.Fragment key={order.id}>
                                             <tr data-order-id={order.id}>
-                                                <td><strong>{orderNumber}</strong></td>
                                                 <td>{usernames[order.userId] || order.userId || 'N/A'}</td>
-                                                <td style={{ maxWidth: '300px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span title={formatProducts(order.orderItems)}>
-                                                            {formatProducts(order.orderItems)}
-                                                        </span>
-                                                        {order.orderItems && order.orderItems.length > 0 && (
-                                                            <button
-                                                                className="btn btn-sm btn-link p-0"
-                                                                onClick={() => toggleRowExpand(order.id)}
-                                                                title={isExpanded ? "Hide details" : "Show details"}
-                                                            >
-                                                                <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'}`}></i>
-                                                            </button>
-                                                        )}
+                                                <td>{order.recipientPhone || 'N/A'}</td>
+                                                <td>
+                                                    <div style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={order.fullAddress || order.shippingAddress}>
+                                                        {order.fullAddress || order.shippingAddress || 'N/A'}
                                                     </div>
                                                 </td>
                                                 <td>
@@ -490,7 +525,7 @@ export default function ReturnOrderPage() {
                                                 </td>
                                                 <td>
                                                     <span style={{ color: '#666', fontSize: '0.9rem' }}>
-                                                        {order.shippingFee ? formatPrice(order.shippingFee) : 'N/A'}
+                                                        {order.shippingFee ? formatPrice(order.shippingFee) : '0 đ'}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -508,12 +543,10 @@ export default function ReturnOrderPage() {
                                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                                         <button
                                                             className="btn btn-sm btn-outline-primary"
-                                                            onClick={() => {
-                                                                toggleRowExpand(order.id);
-                                                            }}
-                                                            title="View details"
+                                                            onClick={() => toggleRowExpand(order.id)}
+                                                            title={isExpanded ? "Hide details" : "Show details"}
                                                         >
-                                                            <i className="fas fa-eye"></i>
+                                                            <i className={`fas fa-${isExpanded ? 'chevron-up' : 'eye'}`}></i>
                                                         </button>
                                                         {nextStatus && (
                                                             <button
@@ -536,10 +569,17 @@ export default function ReturnOrderPage() {
                                                     </div>
                                                 </td>
                                             </tr>
-                                            {isExpanded && order.orderItems && order.orderItems.length > 0 && (
+                                            {isExpanded && (
                                                 <tr>
                                                     <td colSpan="9" style={{ backgroundColor: '#f8f9fa', padding: '20px' }}>
                                                         <div style={{ paddingLeft: '20px' }}>
+                                                            {/* Additional Order Info that was in Columns */}
+                                                            <div className="row mb-3">
+                                                                <div className="col-md-6">
+                                                                    <strong>Recipient:</strong> {order.recipientName}
+                                                                </div>
+                                                            </div>
+
                                                             <h6 style={{ marginBottom: '15px', fontWeight: 'bold' }}>{t('shopOwner.returnOrder.productDetails')}:</h6>
                                                             <div className="table-responsive">
                                                                 <table className="table table-sm table-bordered">
@@ -553,9 +593,20 @@ export default function ReturnOrderPage() {
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody>
-                                                                        {order.orderItems.map((item, itemIndex) => (
+                                                                        {order.orderItems && order.orderItems.map((item, itemIndex) => (
                                                                             <tr key={itemIndex}>
-                                                                                <td>{item.productName || `Product ${item.productId}`}</td>
+                                                                                <td>
+                                                                                    <div className="d-flex align-items-center">
+                                                                                        {item.productImage && (
+                                                                                            <img
+                                                                                                src={item.productImage}
+                                                                                                alt=""
+                                                                                                style={{ width: '40px', height: '40px', objectFit: 'cover', marginRight: '10px' }}
+                                                                                            />
+                                                                                        )}
+                                                                                        {item.productName || `Product ${item.productId}`}
+                                                                                    </div>
+                                                                                </td>
                                                                                 <td>{item.sizeName || 'N/A'}</td>
                                                                                 <td>{item.quantity || 1}</td>
                                                                                 <td>{formatPrice(item.price || item.unitPrice || 0)}</td>
