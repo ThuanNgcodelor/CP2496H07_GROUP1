@@ -15,7 +15,7 @@ public class ShopOwnerDto {
     private String shopName;
     private String ownerName;
     private String address;
-    
+
     // GHN Address Fields
     private Integer provinceId;
     private String provinceName;
@@ -27,12 +27,14 @@ public class ShopOwnerDto {
     private String phone;
     private Double latitude;
     private Double longitude;
-    
+
     private Boolean verified;
     private Integer totalRatings;
     private Integer followersCount;
     private Integer followingCount;
     private String imageUrl;
+    private String headerImageUrl;
+    private String headerStyle;
     private String email;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -90,6 +90,9 @@ export default function SettingsPage() {
         if (data.imageUrl) {
           setImagePreview(`/v1/file-storage/get/${data.imageUrl}`);
         }
+        if (data.headerImageUrl) {
+          setHeaderImagePreview(`/v1/file-storage/get/${data.headerImageUrl}`);
+        }
       } catch (error) {
         console.error('Error loading shop owner info:', error);
         Swal.fire({
@@ -277,6 +280,46 @@ export default function SettingsPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  /* Header Image Logic */
+  const [headerImageFile, setHeaderImageFile] = useState(null);
+  const [headerImagePreview, setHeaderImagePreview] = useState('');
+
+  const handleHeaderImageChange = (e) => {
+    const file = e.target.files[0];
+
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        Swal.fire({
+          icon: 'warning',
+          title: t('shopOwner.settings.invalidFileTitle', 'File không hợp lệ'),
+          text: t('shopOwner.settings.selectImageFile')
+        });
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        Swal.fire({
+          icon: 'warning',
+          title: t('shopOwner.settings.fileTooLargeTitle', 'File quá lớn'),
+          text: t('shopOwner.settings.imageSizeLimit')
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setHeaderImagePreview(reader.result);
+        setHeaderImageFile(file);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeHeaderImage = () => {
+    setHeaderImagePreview('');
+    setHeaderImageFile(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -292,7 +335,7 @@ export default function SettingsPage() {
     setLoading(true);
 
     try {
-      await updateShopOwner(settings, imageFile);
+      await updateShopOwner(settings, imageFile, headerImageFile);
       Swal.fire({
         icon: 'success',
         title: t('shopOwner.settings.saveSuccess'),
@@ -528,6 +571,47 @@ export default function SettingsPage() {
                         right: '10px'
                       }}
                       onClick={removeImage}
+                    >
+                      <i className="fas fa-times"></i> {t('shopOwner.settings.remove')}
+                    </button>
+                  </div>
+                )}
+
+                <h5 className="mb-3 mt-4" style={{ color: '#ee4d2d' }}>{t('shopOwner.settings.coverImage')}</h5>
+
+                <div className="mb-3">
+                  <label className="form-label">{t('shopOwner.settings.uploadCoverImage')}</label>
+                  <input
+                    type="file"
+                    className="form-control"
+                    onChange={handleHeaderImageChange}
+                    accept="image/*"
+                  />
+                  <small className="text-muted">{t('shopOwner.settings.maxSize')}</small>
+                </div>
+
+                {headerImagePreview && (
+                  <div className="position-relative mb-3">
+                    <img
+                      src={headerImagePreview}
+                      alt="Shop cover preview"
+                      style={{
+                        width: '100%',
+                        maxHeight: '150px',
+                        objectFit: 'cover',
+                        borderRadius: '8px',
+                        border: '2px solid #e0e0e0'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px'
+                      }}
+                      onClick={removeHeaderImage}
                     >
                       <i className="fas fa-times"></i> {t('shopOwner.settings.remove')}
                     </button>

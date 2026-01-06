@@ -81,6 +81,12 @@ public class ShopOwner {
     @Column(name = "profile_image_url")
     private String imageUrl;
 
+    @Column(name = "header_image_url")
+    private String headerImageUrl;
+
+    @Column(name = "header_style")
+    private String headerStyle;
+
     @Column(name = "email")
     private String email;
 

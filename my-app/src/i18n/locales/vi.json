@@ -845,6 +845,7 @@
       "sellerCenter": "Kênh Người Bán",
       "loading": "Đang tải...",
       "settings": "Cài đặt",
+      "viewShop": "Xem Shop Của Tôi",
       "logout": "Đăng xuất",
       "menu": "Menu",
       "apps": "Ứng dụng",
@@ -1368,7 +1369,9 @@
       "addressLegacyHint": "Tùy chọn: Chỉ để hiển thị",
       "shopLogo": "Logo / Ảnh đại diện cửa hàng",
       "uploadImage": "Tải ảnh lên",
-      "maxSize": "Kích thước tối đa: 5MB",
+      "maxSize": "Dung lượng tối đa: 5MB",
+      "coverImage": "Ảnh bìa",
+      "uploadCoverImage": "Tải lên ảnh bìa",
       "remove": "Xóa",
       "saveSettings": "Lưu cài đặt",
       "saving": "Đang lưu...",
@@ -1714,6 +1717,11 @@
     "justNow": "Vừa xong",
     "na": "N/A",
     "soldOut": "Hết hàng",
-    "noRatings": "Chưa có đánh giá"
+    "noRatings": "Chưa có đánh giá",
+    "recentlyJoined": "Mới tham gia",
+    "responseTime": "Thời gian phản hồi",
+    "viewShop": "Xem Shop",
+    "loadingShopInfo": "Đang tải thông tin cửa hàng...",
+    "within": "trong"
   }
 }

@@ -855,20 +855,20 @@ export default function ProductDetailPage() {
                             <div className="row mt-4">
                                 <div className="col-12">
                                     <div className="bg-white border rounded-3 p-3" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                                        <div className="d-flex gap-3 border-bottom mb-3">
+                                        <div className="d-flex gap-3 border-bottom mb-3 pb-2">
                                             <button
                                                 type="button"
-                                                className={`btn ${detailTab === "spec" ? "btn-light border" : "btn-link text-decoration-none text-dark"}`}
+                                                className={`btn ${detailTab === "spec" ? "btn-shop-primary" : "btn-shop-outline"}`}
                                                 onClick={() => setDetailTab("spec")}
-                                                style={{ borderBottom: detailTab === "spec" ? "2px solid #0d6efd" : "2px solid transparent", borderRadius: 0 }}
+                                                style={{ minWidth: '150px' }}
                                             >
                                                 {t('product.specifications.tab', 'Specifications')}
                                             </button>
                                             <button
                                                 type="button"
-                                                className={`btn ${detailTab === "reviews" ? "btn-light border" : "btn-link text-decoration-none text-dark"}`}
+                                                className={`btn ${detailTab === "reviews" ? "btn-shop-primary" : "btn-shop-outline"}`}
                                                 onClick={() => setDetailTab("reviews")}
-                                                style={{ borderBottom: detailTab === "reviews" ? "2px solid #0d6efd" : "2px solid transparent", borderRadius: 0 }}
+                                                style={{ minWidth: '150px' }}
                                             >
                                                 {t('product.reviews.tab', 'Reviews')}
                                             </button>
