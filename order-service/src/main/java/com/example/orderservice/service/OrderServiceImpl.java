@@ -74,7 +74,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public AnalyticsDto getAnalytics(String shopOwnerId, java.time.LocalDate startDate, java.time.LocalDate endDate) {
+    public AnalyticsDto getAnalytics(String shopOwnerId, LocalDate startDate, LocalDate endDate) {
         // 1. Get product IDs
         List<String> productIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
         if (productIds == null || productIds.isEmpty()) {
@@ -83,10 +83,10 @@ public class OrderServiceImpl implements OrderService {
                     .todayOrders(0L)
                     .todayProducts(0L)
                     .growth("+0%")
-                    .chartLabels(new java.util.ArrayList<>())
-                    .chartData(new java.util.ArrayList<>())
-                    .topProducts(new java.util.ArrayList<>())
-                    .ordersByStatus(new java.util.HashMap<>())
+                    .chartLabels(new ArrayList<>())
+                    .chartData(new ArrayList<>())
+                    .topProducts(new ArrayList<>())
+                    .ordersByStatus(new HashMap<>())
                     .totalCancelled(0L)
                     .totalReturned(0L)
                     .averageOrderValue(0.0)
@@ -95,12 +95,12 @@ public class OrderServiceImpl implements OrderService {
 
         // Default to last 7 days if dates are null
         if (startDate == null)
-            startDate = java.time.LocalDate.now().minusDays(6);
+            startDate = LocalDate.now().minusDays(6);
         if (endDate == null)
-            endDate = java.time.LocalDate.now();
+            endDate = LocalDate.now();
 
         LocalDateTime startDateTime = startDate.atStartOfDay();
-        LocalDateTime endDateTime = endDate.atTime(java.time.LocalTime.MAX);
+        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         // 2. Revenue (Only DELIVERED/COMPLETED within range)
         Double totalRevenue = orderRepository.sumSalesByProductIdsAndDateRangeAndStatus(productIds, startDateTime,
@@ -158,13 +158,13 @@ public class OrderServiceImpl implements OrderService {
 
         // 6. Top Products
         Pageable pageable = PageRequest.of(0, 5);
-        List<com.example.orderservice.dto.TopProductDto> topProducts = orderRepository
+        List<TopProductDto> topProducts = orderRepository
                 .findTopSellingProducts(productIds, List.of(OrderStatus.CANCELLED, OrderStatus.RETURNED), pageable);
 
-        for (com.example.orderservice.dto.TopProductDto top : topProducts) {
+        for (TopProductDto top : topProducts) {
             try {
                 // Fetch product details logic... (simplified for brevity)
-                com.example.orderservice.dto.ProductDto p = stockServiceClient.getProductById(top.getProductId())
+                ProductDto p = stockServiceClient.getProductById(top.getProductId())
                         .getBody();
                 if (p != null) {
                     top.setProductName(p.getName());

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Cookies from 'js-cookie';
 import { sendAIChatMessage, clearAIConversation } from '../../api/ai-chat';
+import { getImageUrl } from '../../api/image';
 import './AIChatWidget.css';
 
 export default function AIChatWidget() {
@@ -13,6 +14,7 @@ export default function AIChatWidget() {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [conversationId, setConversationId] = useState(null);
+    const [failedImages, setFailedImages] = useState(new Set());
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
@@ -47,12 +49,19 @@ export default function AIChatWidget() {
                 setConversationId(response.conversationId);
             }
 
+            console.log('🔍 AI Response:', response);
+            console.log('📦 Product Suggestions from API:', response.productSuggestions);
+            console.log('📊 Type:', response.type);
+
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: response.message,
+                suggestedProducts: response.productSuggestions || [],
                 type: response.type,
                 success: response.success
             }]);
+
+
         } catch (error) {
             console.error('AI Chat error:', error);
             setMessages(prev => [...prev, {
@@ -106,55 +115,124 @@ export default function AIChatWidget() {
         setIsOpen(false); // Close chat widget
     };
 
+    // ProductCard Component
+    const ProductCard = ({ product }) => {
+        const formatPrice = (price) => {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(price);
+        };
+
+        const handleImageError = (e, imageId) => {
+            if (!failedImages.has(imageId)) {
+                setFailedImages(prev => new Set([...prev, imageId]));
+                console.warn('Failed to load image:', imageId);
+                e.target.style.display = 'none'; // Hide broken image instead of placeholder
+            }
+        };
+
+        const shouldShowImage = product.imageUrl && !failedImages.has(product.imageUrl);
+
+        return (
+            <div className="ai-product-card">
+                {shouldShowImage && (
+                    <div className="ai-product-image">
+                        <img
+                            src={getImageUrl(product.imageUrl)}
+                            alt={product.name}
+                            onError={(e) => handleImageError(e, product.imageUrl)}
+                        />
+                    </div>
+                )}
+                <div className="ai-product-info">
+                    <h4 className="ai-product-name">{product.name}</h4>
+                    <p className="ai-product-price">{formatPrice(product.price)}</p>
+                    <button
+                        className="ai-product-btn"
+                        onClick={() => {
+                            navigate(`/product/${product.id}`);
+                            setIsOpen(false);
+                        }}
+                    >
+                        {t('aiChat.viewProduct', 'Xem chi tiết')}
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     // Render message content với markdown đơn giản và clickable IDs
     const renderMessageContent = (msg) => {
-        if (!msg.content) return null;
+        if (!msg.content && (!msg.suggestedProducts || msg.suggestedProducts.length === 0)) return null;
+
+        console.log('🎨 Rendering message:', msg);
+        console.log('🛍️ Suggested Products:', msg.suggestedProducts);
 
         // UUID pattern for IDs
         const uuidPattern = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
 
-        let formattedContent = msg.content
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code>$1</code>')
-            .replace(/\n- /g, '<br/>• ')
-            .replace(/\n\d\. /g, (match) => '<br/>' + match.trim() + ' ')
-            .replace(/\n/g, '<br/>');
+        let formattedContent = '';
+        if (msg.content) {
+            formattedContent = msg.content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n- /g, '<br/>• ')
+                .replace(/\n\d\. /g, (match) => '<br/>' + match.trim() + ' ')
+                .replace(/\n/g, '<br/>');
 
-        // Determine if this is about orders or products based on content
-        const isOrderContext = /order|đơn hàng|đơn|trạng thái/i.test(msg.content);
-        const isProductContext = /sản phẩm|product|giá|price/i.test(msg.content) && !isOrderContext;
+            // Determine if this is about orders or products based on content
+            const isOrderContext = /order|đơn hàng|đơn|trạng thái/i.test(msg.content);
+            const isProductContext = /sản phẩm|product|giá|price/i.test(msg.content) && !isOrderContext;
 
-        // Replace UUIDs with clickable links based on context
-        formattedContent = formattedContent.replace(uuidPattern, (match) => {
-            if (isOrderContext) {
+            // Replace UUIDs with clickable links based on context
+            formattedContent = formattedContent.replace(uuidPattern, (match) => {
+                if (isOrderContext) {
+                    return `<span class="ai-order-link" data-id="${match}" data-type="order">${match}</span>`;
+                } else if (isProductContext) {
+                    return `<span class="ai-order-link ai-product-link" data-id="${match}" data-type="product">${match}</span>`;
+                }
+                // Default to order link for unknown context
                 return `<span class="ai-order-link" data-id="${match}" data-type="order">${match}</span>`;
-            } else if (isProductContext) {
-                return `<span class="ai-order-link ai-product-link" data-id="${match}" data-type="product">${match}</span>`;
-            }
-            // Default to order link for unknown context
-            return `<span class="ai-order-link" data-id="${match}" data-type="order">${match}</span>`;
-        });
+            });
+        }
 
         return (
-            <div
-                className="ai-message-content"
-                dangerouslySetInnerHTML={{ __html: formattedContent }}
-                onClick={(e) => {
-                    // Check if clicked on a link
-                    if (e.target.classList.contains('ai-order-link') || e.target.classList.contains('ai-product-link')) {
-                        const id = e.target.getAttribute('data-id');
-                        const type = e.target.getAttribute('data-type');
-                        if (id) {
-                            if (type === 'product') {
-                                handleProductClick(id);
-                            } else {
-                                handleOrderClick(id);
+            <div className="ai-message-wrapper">
+                {/* Text Content */}
+                {msg.content && (
+                    <div
+                        className="ai-message-content"
+                        dangerouslySetInnerHTML={{ __html: formattedContent }}
+                        onClick={(e) => {
+                            // Check if clicked on a link
+                            if (e.target.classList.contains('ai-order-link') || e.target.classList.contains('ai-product-link')) {
+                                const id = e.target.getAttribute('data-id');
+                                const type = e.target.getAttribute('data-type');
+                                if (id) {
+                                    if (type === 'product') {
+                                        handleProductClick(id);
+                                    } else {
+                                        handleOrderClick(id);
+                                    }
+                                }
                             }
-                        }
-                    }
-                }}
-            />
+                        }}
+                    />
+                )}
+
+                {/* Product Carousel */}
+                {msg.suggestedProducts && msg.suggestedProducts.length > 0 && (
+                    <div className="ai-product-carousel">
+                        <div className="ai-carousel-wrapper">
+                            {msg.suggestedProducts.map((product, index) => (
+                                <ProductCard key={product.id || index} product={product} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
         );
     };
 

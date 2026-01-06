@@ -16,6 +16,8 @@ public class AIChatResponse {
     private String conversationId;
     private boolean success;
     private String error;
+
+    private List<ProductSuggestionDto> productSuggestions;
     
     /**
      * Loại response: text, products, cart_action, faq

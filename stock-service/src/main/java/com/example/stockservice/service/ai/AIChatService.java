@@ -2,6 +2,8 @@ package com.example.stockservice.service.ai;
 
 import com.example.stockservice.dto.AIChatRequest;
 import com.example.stockservice.dto.AIChatResponse;
+import com.example.stockservice.dto.ProductSuggestionDto;
+import com.example.stockservice.service.product.ProductService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -24,6 +26,7 @@ public class AIChatService {
 
     private final ChatClient chatClient;
     private final LanguageFilter languageFilter;
+    private final ProductService productService;
 
     // Lưu conversation history (conversationId -> list of messages)
     private final Map<String, List<ChatMessage>> conversationHistory = new ConcurrentHashMap<>();
@@ -50,12 +53,32 @@ public class AIChatService {
 
             AVAILABLE TOOLS VÀ CÁCH DÙNG:
 
-            📦 PRODUCT TOOLS:
+            PRODUCT TOOLS:
             - "tìm sản phẩm X" → searchProducts(keyword="X")
             - "giá sản phẩm X" → getProductPrice(productName="X")
             - "sản phẩm giảm giá" → getDiscountedProducts()
-
-            📋 ORDER TOOLS:
+            
+            CONTEXTUAL SUGGESTIONS (TỰ ĐỘNG GỌI):
+            Khi user đề cập đến hoạt động/scenario, BẠN PHẢI TỰ ĐỘNG GỌI suggestProductsByScenario:
+            
+            Vietnamese:
+            - "đi biển" / "ra biển" / "beach" → suggestProductsByScenario(scenario="đồ bơi,kính râm,kem chống nắng,nón")
+            - "đi party" / "tiệc" → suggestProductsByScenario(scenario="váy,áo,giày cao gót,trang sức")
+            - "đi gym" / "tập gym" → suggestProductsByScenario(scenario="quần thể thao,áo thể thao,giày thể thao")
+            - "đi du lịch" → suggestProductsByScenario(scenario="ba lô,mũ,kem chống nắng,túi xách")
+            
+            English:
+            - "go to beach" / "going beach" / "beach trip" → suggestProductsByScenario(scenario="swimsuit,sunglasses,sunscreen,hat")
+            - "party" / "go to party" → suggestProductsByScenario(scenario="dress,shoes,jewelry,accessories")
+            - "gym" / "workout" → suggestProductsByScenario(scenario="sports wear,sneakers,sports bra")
+            - "travel" / "trip" → suggestProductsByScenario(scenario="backpack,hat,sunscreen,travel bag")
+            
+            QUAN TRỌNG: 
+            - KHÔNG HỎI LẠI USER, TỰ ĐỘNG GỌI FUNCTION NGAY!
+            - Extract keywords phù hợp với scenario
+            - Tool sẽ trả về products, bạn chỉ cần hiển thị
+            
+            ORDER TOOLS:
             - "đơn hàng của tôi" → getMyOrders(userId="{user_id}")
             - "đơn VNPAY/COD" → getOrdersByPayment(userId="{user_id}", paymentMethod="VNPAY" hoặc "COD")
             - "chi tiêu tháng này" → getSpendingStats(userId="{user_id}", period="month")
@@ -73,7 +96,7 @@ public class AIChatService {
             {conversation_history}
             """;
 
-    public AIChatService(ChatModel chatModel, LanguageFilter languageFilter, ProductTools productTools) {
+    public AIChatService(ChatModel chatModel, LanguageFilter languageFilter, ProductTools productTools, ProductService productService) {
         this.languageFilter = languageFilter;
 
         // Build ChatClient với các tools (Product + Order)
@@ -88,8 +111,10 @@ public class AIChatService {
                         "getMyOrders",
                         "getOrderStatus",
                         "getOrdersByPayment",
-                        "getSpendingStats")
+                        "getSpendingStats",
+                        "suggestProductsByScenario")
                 .build();
+        this.productService = productService;
     }
 
     public AIChatResponse chat(AIChatRequest request) {
@@ -182,6 +207,20 @@ public class AIChatService {
 
             log.info("AI Response: {}", aiResponse);
 
+            // 9. Check if contextual products were suggested (stored in ThreadLocal by tool)
+            List<ProductSuggestionDto> productSuggestions = ContextualSuggestTool.getLastProducts();
+            
+            if (productSuggestions != null && !productSuggestions.isEmpty()) {
+                log.info("✅ Retrieved {} product suggestions from ThreadLocal", productSuggestions.size());
+                return AIChatResponse.builder()
+                        .message(aiResponse)
+                        .conversationId(conversationId)
+                        .type("products")
+                        .productSuggestions(productSuggestions)
+                        .success(true)
+                        .build();
+            }
+
             return AIChatResponse.builder()
                     .message(aiResponse)
                     .conversationId(conversationId)
@@ -191,6 +230,7 @@ public class AIChatService {
 
         } catch (Exception e) {
             log.error("Error in AI chat: ", e);
+            ContextualSuggestTool.getLastProducts(); // Clean up ThreadLocal
             return AIChatResponse.builder()
                     .message("Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.")
                     .type("error")
@@ -203,5 +243,29 @@ public class AIChatService {
     public void clearConversation(String conversationId) {
         conversationHistory.remove(conversationId);
         log.info("Cleared conversation: {}", conversationId);
+    }
+    
+    /**
+     * Simple helper to extract value from JSON string
+     * Format: "key":"value"
+     */
+    private String extractJsonValue(String json, String key) {
+        String searchKey = "\"" + key + "\":\"";
+        int startIdx = json.indexOf(searchKey);
+        if (startIdx == -1) {
+            // Try without quotes for number values
+            searchKey = "\"" + key + "\":";
+            startIdx = json.indexOf(searchKey);
+            if (startIdx == -1) return null;
+            startIdx += searchKey.length();
+            int endIdx = json.indexOf(",", startIdx);
+            if (endIdx == -1) endIdx = json.indexOf("}", startIdx);
+            if (endIdx == -1) return null;
+            return json.substring(startIdx, endIdx).trim();
+        }
+        startIdx += searchKey.length();
+        int endIdx = json.indexOf("\"", startIdx);
+        if (endIdx == -1) return null;
+        return json.substring(startIdx, endIdx);
     }
 }

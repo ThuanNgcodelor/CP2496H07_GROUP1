@@ -106,26 +106,21 @@ sequenceDiagram
 
 ---
 
-### 🟢 PHASE 5: AI Chat Enhancement (Ưu tiên SAU)
-> **Mục tiêu**: Nâng cấp AI chat với data từ behavior
+### 🟢 PHASE 5: AI Smart Shopping Assistant (Thiết thực & Nổi bật)
+> **Mục tiêu**: AI không chỉ chat mà còn HIỂU ngữ cảnh và TÌM sản phẩm thông minh (kết hợp cả Text & Ảnh)
 
 | # | Feature | Mô tả | Độ phức tạp | Thời gian |
 |---|---------|-------|-------------|-----------|
-| 5.1 | **RecommendationTool** | AI function gọi recommendation API | Medium | 2 ngày |
-| 5.2 | **Quick Actions** | Thêm giỏ hàng từ chat | Medium | 2 ngày |
-| 5.3 | **AI Insights cho Shop** | Ollama phân tích data shop | High | 3 ngày |
+| 5.1 | **Contextual Recommendation** | Hiểu ngữ cảnh: "Đi biển" -> Gợi ý đồ bơi, kính râm, kem chống nắng | High | 3 ngày |
+| 5.2 | **Smart Product Carousel** | Hiển thị list sản phẩm dạng thẻ ngay trong khung chat | Medium | 2 ngày |
+| 5.3 | **Visual Search (Image)** | (Gộp từ Phase 6) Gửi ảnh -> Tìm sản phẩm tương tự | Very High | 4 ngày |
 
-**Tổng: ~7 ngày**
+**Tổng: ~9 ngày**
 
 ---
 
-### 🟢 PHASE 6: Advanced Features (Future)
-
-| # | Feature | Mô tả | Độ phức tạp |
-|---|---------|-------|-------------|
-| 6.1 | **Image Search** | Upload ảnh → tìm sản phẩm tương tự | Very High |
-| 6.2 | **Voice Input** | Speech-to-text cho search/chat | Medium |
-| 6.3 | **Push Notifications** | Thông báo sản phẩm đang xem giảm giá | Medium |
+### 🟢 PHASE 6: (Đã gộp vào Phase 5 hoặc Future)
+> Các tính năng Voice/Push đã được loại bỏ theo yêu cầu để tập trung vào trải nghiệm cốt lõi.
 
 ---
 

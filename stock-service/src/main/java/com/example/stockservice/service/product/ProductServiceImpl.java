@@ -369,7 +369,9 @@ public class ProductServiceImpl implements ProductService {
 
     protected Page<Product> fetchPageFromDB(String keyword, Integer pageNo, Integer pageSize) {
         List<Product> fullList = productRepository.searchProductByName(keyword);
-        Pageable pageable = PageRequest.of(pageNo - 1, pageSize);
+        // Handle both 0-based and 1-based page numbers
+        int actualPageNo = pageNo > 0 ? pageNo - 1 : Math.max(0, pageNo);
+        Pageable pageable = PageRequest.of(actualPageNo, pageSize);
         return getProductsPage(pageable, fullList);
     }
 

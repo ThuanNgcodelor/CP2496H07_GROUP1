@@ -1,0 +1,203 @@
+/* Unified Chat Widget Styles */
+
+/* Unified FAB Button */
+.unified-chat-fab {
+    position: fixed;
+    bottom: 100px;
+    right: 24px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ee4d2d 0%, #d73211 100%);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(238, 77, 45, 0.4);
+    transition: all 0.3s ease;
+    z-index: 9998;
+}
+
+.unified-chat-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(238, 77, 45, 0.5);
+}
+
+.unified-chat-fab svg {
+    width: 26px;
+    height: 26px;
+}
+
+.unified-chat-fab span {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.unified-chat-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #ff0000;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    text-align: center;
+    border: 2px solid white;
+}
+
+/* Unified Chat Panel */
+.unified-chat-panel {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 420px;
+    height: 600px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    z-index: 9999;
+    overflow: hidden;
+}
+
+/* Header with Tabs */
+.unified-chat-header {
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+}
+
+.unified-chat-tabs {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+}
+
+.unified-chat-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.unified-chat-tab:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.unified-chat-tab.active {
+    background: linear-gradient(135deg, #ee4d2d 0%, #d73211 100%);
+    color: white;
+}
+
+.unified-chat-tab svg {
+    width: 18px;
+    height: 18px;
+}
+
+.unified-tab-badge {
+    background: #ff0000;
+    color: white;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    text-align: center;
+}
+
+.unified-chat-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.unified-chat-close:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* Content Area */
+.unified-chat-content {
+    flex: 1;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+.unified-chat-widget-wrapper {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* Hide FAB and panel from embedded widgets */
+.unified-chat-widget-wrapper .shopee-chat-fab,
+.unified-chat-widget-wrapper .ai-chat-fab,
+.unified-chat-widget-wrapper .shopee-chat-panel,
+.unified-chat-widget-wrapper .ai-chat-panel {
+    display: none !important;
+}
+
+/* Make embedded widget content fill the space */
+.unified-chat-widget-wrapper .shopee-chat-container {
+    position: static;
+    width: 100%;
+    height: 100%;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .unified-chat-panel {
+        width: calc(100% - 32px);
+        height: calc(100% - 100px);
+        bottom: 16px;
+        right: 16px;
+        left: 16px;
+        border-radius: 12px;
+    }
+
+    .unified-chat-fab {
+        bottom: 80px;
+        right: 16px;
+        width: 56px;
+        height: 56px;
+    }
+
+    .unified-chat-tab span {
+        display: none;
+    }
+
+    .unified-chat-tab {
+        padding: 10px 12px;
+    }
+}
