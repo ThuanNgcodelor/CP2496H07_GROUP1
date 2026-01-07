@@ -33,6 +33,8 @@ public class ShopOwnerDto {
     private Integer followersCount;
     private Integer followingCount;
     private String imageUrl;
+    private String headerImageUrl;
+    private String headerStyle;
     private String email;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

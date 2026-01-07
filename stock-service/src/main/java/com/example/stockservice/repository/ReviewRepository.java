@@ -18,16 +18,25 @@ public interface ReviewRepository extends JpaRepository<Review, String> {
 
     @Query("SELECT AVG(r.rating) FROM reviews r, products p WHERE r.productId = p.id AND p.userId = :userId")
     Double getAverageRatingByShopId(@Param("userId") String userId);
-    
+
     @Query("SELECT AVG(r.rating) FROM reviews r WHERE r.productId = :productId")
     Double getAverageRatingByProductId(@Param("productId") String productId);
 
     @Query("SELECT count(r) FROM reviews r WHERE r.productId IN (SELECT p.id FROM products p WHERE p.userId = :shopId)")
     long countReviewsByShopId(@Param("shopId") String shopId);
 
+    @Query("SELECT count(r) FROM reviews r WHERE r.productId IN (SELECT p.id FROM products p WHERE p.userId = :shopId) AND ((r.comment IS NOT NULL AND r.comment <> '') OR (size(r.imageIds) > 0))")
+    long countVisibleReviewsByShopId(@Param("shopId") String shopId);
+
+    @Query("SELECT count(r) FROM reviews r WHERE r.reply IS NOT NULL AND r.reply <> '' AND r.productId IN (SELECT p.id FROM products p WHERE p.userId = :shopId) AND ((r.comment IS NOT NULL AND r.comment <> '') OR (size(r.imageIds) > 0))")
+    long countRepliedReviewsByShopId(@Param("shopId") String shopId);
+
+    @Query("SELECT r FROM reviews r WHERE r.reply IS NOT NULL AND r.reply <> '' AND r.productId IN (SELECT p.id FROM products p WHERE p.userId = :shopId) AND ((r.comment IS NOT NULL AND r.comment <> '') OR (size(r.imageIds) > 0))")
+    List<Review> findRepliedReviewsByShopId(@Param("shopId") String shopId);
+
     @Query("SELECT r FROM reviews r WHERE r.productId IN (SELECT p.id FROM products p WHERE p.userId = :shopId) ORDER BY r.createdAt DESC")
     List<Review> findByShopId(@Param("shopId") String shopId);
 
     boolean existsByUserIdAndCreatedAtBetween(String userId, java.time.LocalDateTime start,
-                                              java.time.LocalDateTime end);
+            java.time.LocalDateTime end);
 }

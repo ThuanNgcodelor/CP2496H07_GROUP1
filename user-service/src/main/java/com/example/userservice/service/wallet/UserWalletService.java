@@ -18,5 +18,10 @@ public interface UserWalletService {
     UserWallet paySubscription(String userId, BigDecimal amount, String planName);
 
     UserWalletEntry createEntry(String userId, String orderId, String paymentId, WalletEntryType entryType,
-                                BigDecimal amount, String description);
+            BigDecimal amount, String description);
+
+    org.springframework.data.domain.Page<UserWalletEntry> getEntries(String userId, int page, int size);
+
+    // Direct Deposit (Manual)
+    UserWallet depositDirect(String userId, BigDecimal amount);
 }

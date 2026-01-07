@@ -62,6 +62,23 @@
     "date": "Ngày",
     "selectAll": "Chọn tất cả"
   },
+  "wallet": {
+    "title": "Ví của tôi",
+    "deposit": "Nạp tiền",
+    "withdraw": "Rút tiền",
+    "availableBalance": "Số dư khả dụng",
+    "pendingBalance": "Số dư đang chờ",
+    "history": "Lịch sử giao dịch",
+    "date": "Ngày",
+    "type": "Loại",
+    "description": "Mô tả",
+    "amount": "Số tiền",
+    "noTransactions": "Không có giao dịch nào",
+    "refund": "Hoàn tiền",
+    "withdrawal": "Rút tiền",
+    "payment": "Thanh toán",
+    "fillTestData": "Điền mẫu"
+  },
   "header": {
     "sellerCenter": "Kênh Người Bán",
     "registerShopOwner": "Đăng ký bán hàng",
@@ -847,6 +864,7 @@
       "sellerCenter": "Kênh Người Bán",
       "loading": "Đang tải...",
       "settings": "Cài đặt",
+      "viewShop": "Xem Shop Của Tôi",
       "logout": "Đăng xuất",
       "menu": "Menu",
       "apps": "Ứng dụng",
@@ -1049,6 +1067,11 @@
       "widgets": {
         "banner": "Ảnh chạy (Banner)",
         "bannerTitle": "Cài đặt Banner",
+        "bannerHeight": "Chiều cao Banner",
+        "imageFit": "Chế độ hiển thị ảnh",
+        "fitCover": "Cắt ảnh (Cover)",
+        "fitContain": "Toàn bộ ảnh (Contain)",
+        "fitFill": "Kéo dãn (Fill)",
         "video": "Video",
         "videoTitle": "Cài đặt Video",
         "products": "Danh sách sản phẩm",
@@ -1402,7 +1425,9 @@
       "addressLegacyHint": "Tùy chọn: Chỉ để hiển thị",
       "shopLogo": "Logo / Ảnh đại diện cửa hàng",
       "uploadImage": "Tải ảnh lên",
-      "maxSize": "Kích thước tối đa: 5MB",
+      "maxSize": "Dung lượng tối đa: 5MB",
+      "coverImage": "Ảnh bìa",
+      "uploadCoverImage": "Tải lên ảnh bìa",
       "remove": "Xóa",
       "saveSettings": "Lưu cài đặt",
       "saving": "Đang lưu...",
@@ -1697,6 +1722,11 @@
     "justNow": "Vừa xong",
     "na": "N/A",
     "soldOut": "Hết hàng",
-    "noRatings": "Chưa có đánh giá"
+    "noRatings": "Chưa có đánh giá",
+    "recentlyJoined": "Mới tham gia",
+    "responseTime": "Thời gian phản hồi",
+    "viewShop": "Xem Shop",
+    "loadingShopInfo": "Đang tải thông tin cửa hàng...",
+    "within": "trong"
   }
 }

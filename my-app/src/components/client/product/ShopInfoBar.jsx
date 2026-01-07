@@ -23,7 +23,10 @@ export default function ShopInfoBar({
       getShopStats(shopOwner.userId).then((data) => {
         setStats({
           productCount: data.productCount || 0,
-          avgRating: data.avgRating || 0
+          avgRating: data.avgRating || 0,
+          responseRate: data.responseRate || 0,
+          totalReviews: data.totalReviews || 0,
+          responseTime: data.responseTime || t('shop.na')
         });
       }).catch(err => console.error("Failed to fetch shop stats", err));
 
@@ -47,22 +50,22 @@ export default function ShopInfoBar({
         const diffYears = Math.floor(diffDays / 365);
 
         if (diffYears >= 1) {
-          setJoinedText(`${diffYears} years ago`);
+          setJoinedText(t('shop.yearsAgo', { count: diffYears }));
         } else if (diffMonths >= 1) {
-          setJoinedText(`${diffMonths} months ago`);
+          setJoinedText(t('shop.monthsAgo', { count: diffMonths }));
         } else if (diffDays >= 1) {
-          setJoinedText(`${diffDays} days ago`);
+          setJoinedText(t('shop.daysAgo', { count: diffDays }));
         } else {
           const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
           if (diffHours >= 1) {
-            setJoinedText(`${diffHours} hours ago`);
+            setJoinedText(t('shop.hoursAgo', { count: diffHours }));
           } else {
-            setJoinedText("Just now");
+            setJoinedText(t('shop.justNow'));
           }
         }
       }
     }
-  }, [shopOwner]);
+  }, [shopOwner, t]);
 
   if (!shopOwner) {
     return null;
@@ -137,30 +140,23 @@ export default function ShopInfoBar({
               )}
             </div>
             <div className="text-muted" style={{ fontSize: "0.9rem" }}>
-              Online 3 minutes ago
+              {t('shop.online')} 3 {t('shop.minutesAgo', { count: 3 })}
             </div>
           </div>
         </div>
 
         <div className="d-flex align-items-center gap-2">
           <button
-            className="btn"
-            style={{ color: '#ee4d2d', borderColor: '#ee4d2d' }}
-            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#ee4d2d'; e.currentTarget.style.color = 'white'; }}
-            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#ee4d2d'; }}
+            className="btn btn-shop-outline"
             onClick={handleFollow}
           >
-            {isFollowing ? <><i className="fas fa-check me-1" /> Following</> : <><i className="fas fa-plus me-1" /> Follow</>}
+            {isFollowing ? <><i className="fas fa-check me-1" /> {t('shop.followingStatus')}</> : <><i className="fas fa-plus me-1" /> {t('shop.follow')}</>}
           </button>
-          <button className="btn text-white" onClick={onChat} style={{ backgroundColor: '#ee4d2d', borderColor: '#ee4d2d' }}>
-            <i className="fa fa-comments me-1" /> Chat Now
+          <button className="btn btn-shop-primary" onClick={onChat}>
+            <i className="fa fa-comments me-1" /> {t('shop.chat')}
           </button>
-          <button className="btn" onClick={onViewShop}
-            style={{ color: '#ee4d2d', borderColor: '#ee4d2d' }}
-            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#ee4d2d'; e.currentTarget.style.color = 'white'; }}
-            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#ee4d2d'; }}
-          >
-            <i className="fa fa-store me-1" /> View Shop
+          <button className="btn btn-shop-outline" onClick={onViewShop}>
+            <i className="fa fa-store me-1" /> {t('shop.viewShop')}
           </button>
         </div>
       </div>
@@ -169,27 +165,32 @@ export default function ShopInfoBar({
 
       <div className="row text-center g-2">
         <div className="col-6 col-md-2">
-          <div className="text-muted">Ratings</div>
-          <div className="fw-bold" style={{ color: '#ee4d2d' }}>{stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "0.0"}</div>
+          <div className="text-muted">{t('shop.rating')}</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>
+            {stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "0.0"}
+            <span className="text-muted small ms-1">({stats.totalReviews || 0})</span>
+          </div>
         </div>
         <div className="col-6 col-md-2">
-          <div className="text-muted">Response Rate</div>
-          <div className="fw-bold" style={{ color: '#ee4d2d' }}>N/A</div>
+          <div className="text-muted">{t('shop.chatResponse')}</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>
+            {stats.responseRate !== undefined ? `${stats.responseRate}%` : t('shop.na')}
+          </div>
         </div>
         <div className="col-6 col-md-2">
-          <div className="text-muted">Products</div>
+          <div className="text-muted">{t('shop.products')}</div>
           <div className="fw-bold" style={{ color: '#ee4d2d' }}>{formatCount(stats.productCount)}</div>
         </div>
         <div className="col-6 col-md-2">
-          <div className="text-muted">Response Time</div>
-          <div className="fw-bold" style={{ color: '#ee4d2d' }}>N/A</div>
+          <div className="text-muted">{t('shop.responseTime')}</div>
+          <div className="fw-bold" style={{ color: '#ee4d2d' }}>{stats.responseTime || t('shop.na')}</div>
         </div>
         <div className="col-6 col-md-2">
-          <div className="text-muted">Joined</div>
+          <div className="text-muted">{t('shop.joined')}</div>
           <div className="fw-bold" style={{ color: '#ee4d2d' }}>{joinedText}</div>
         </div>
         <div className="col-6 col-md-2">
-          <div className="text-muted">Followers</div>
+          <div className="text-muted">{t('shop.followers')}</div>
           <div className="fw-bold" style={{ color: '#ee4d2d' }}>{formatCount(followerCount)}</div>
         </div>
       </div>

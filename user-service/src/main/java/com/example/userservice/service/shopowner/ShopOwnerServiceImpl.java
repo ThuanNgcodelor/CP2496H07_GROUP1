@@ -6,7 +6,6 @@ import com.example.userservice.model.ShopOwner;
 import com.example.userservice.repository.ShopOwnerRepository;
 import com.example.userservice.request.UpdateShopOwnerRequest;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,7 +19,7 @@ public class ShopOwnerServiceImpl implements ShopOwnerService {
     private final com.example.userservice.client.OrderServiceClient orderServiceClient;
 
     @Override
-    public ShopOwner updateShopOwner(UpdateShopOwnerRequest request, MultipartFile file) {
+    public ShopOwner updateShopOwner(UpdateShopOwnerRequest request, MultipartFile file, MultipartFile headerImage) {
         ShopOwner toUpdate = shopOwnerRepository.getReferenceById(request.getUserId());
 
         // Update fields from request
@@ -69,11 +68,24 @@ public class ShopOwnerServiceImpl implements ShopOwnerService {
             toUpdate.setLongitude(request.getLongitude());
         }
 
+        // Update header style
+        if (request.getHeaderStyle() != null) {
+            toUpdate.setHeaderStyle(request.getHeaderStyle());
+        }
+
         // Upload image if provided
         if (file != null && !file.isEmpty()) {
             String imageId = fileStorageClient.uploadImageToFIleSystem(file).getBody();
             if (imageId != null) {
                 toUpdate.setImageUrl(imageId);
+            }
+        }
+
+        // Upload header image if provided
+        if (headerImage != null && !headerImage.isEmpty()) {
+            String headerImageId = fileStorageClient.uploadImageToFIleSystem(headerImage).getBody();
+            if (headerImageId != null) {
+                toUpdate.setHeaderImageUrl(headerImageId);
             }
         }
 

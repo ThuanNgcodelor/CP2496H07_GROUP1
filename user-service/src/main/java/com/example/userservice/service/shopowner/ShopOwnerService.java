@@ -5,7 +5,7 @@ import com.example.userservice.request.UpdateShopOwnerRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface ShopOwnerService {
-    ShopOwner updateShopOwner(UpdateShopOwnerRequest request, MultipartFile file);
+    ShopOwner updateShopOwner(UpdateShopOwnerRequest request, MultipartFile file, MultipartFile headerImage);
 
     ShopOwner getShopOwnerByUserId(String userId);
 

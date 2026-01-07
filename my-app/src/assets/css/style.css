@@ -10338,3 +10338,38 @@ only screen and (max-width: 767px) {
     font-size: 1.1rem;
   }
 }
+
+/* Shop Button Optimizations */
+.btn-shop-primary {
+  background-color: #ee4d2d !important;
+  border-color: #ee4d2d !important;
+  color: #fff !important;
+  transition: all 0.3s ease;
+}
+
+.btn-shop-primary:hover {
+  background-color: #d73211 !important;
+  border-color: #d73211 !important;
+  opacity: 0.9;
+}
+
+.btn-shop-outline {
+  color: #ee4d2d !important;
+  border-color: #ee4d2d !important;
+  background-color: transparent;
+  transition: all 0.3s ease;
+}
+
+.btn-shop-outline:hover {
+  background-color: #ee4d2d !important;
+  color: #fff !important;
+}
+.btn-shop-following-header {
+  background-color: transparent !important;
+  border-color: #fff !important;
+  color: #fff !important;
+}
+.btn-shop-following-header:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}

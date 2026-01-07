@@ -51,14 +51,29 @@
       "title": "Status",
       "pending": "Pending",
       "confirmed": "Confirmed",
-      "readyToShip": "Ready to Ship",
       "shipped": "Shipped",
       "delivered": "Delivered",
       "cancelled": "Cancelled",
       "completed": "Completed",
       "returned": "Return/Refund"
-    },
-    "selectAll": "Select All"
+    }
+  },
+  "wallet": {
+    "title": "My Wallet",
+    "deposit": "Deposit",
+    "withdraw": "Withdraw",
+    "availableBalance": "Available Balance",
+    "pendingBalance": "Pending Balance",
+    "history": "Transaction History",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Amount",
+    "noTransactions": "No transactions found",
+    "refund": "Refund",
+    "withdrawal": "Withdrawal",
+    "payment": "Payment",
+    "fillTestData": "Fill Test Data"
   },
   "header": {
     "sellerCenter": "Seller Center",
@@ -897,6 +912,11 @@
       "widgets": {
         "banner": "Banner Carousel",
         "bannerTitle": "Banner Settings",
+        "bannerHeight": "Banner Height",
+        "imageFit": "Image Fit Mode",
+        "fitCover": "Cover",
+        "fitContain": "Contain",
+        "fitFill": "Fill",
         "bannerSizeHint": "Recommended size: 1200x400px",
         "video": "Video",
         "videoTitle": "Video Settings",
@@ -1648,5 +1668,72 @@
       "productPrice": "... product price",
       "today": "What day is today?"
     }
+  },
+  "tracking": {
+    "backButton": "← BACK",
+    "orderId": "ORDER ID",
+    "orderStatus": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "shipped": "Shipping",
+      "delivered": "Delivered",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "returned": "Returned"
+    },
+    "steps": {
+      "orderPlaced": "Order Placed",
+      "paymentConfirmedVNPAY": "Payment Confirmed",
+      "paymentConfirmedCOD": "Order Confirmed",
+      "handedToShipper": "Handed to Carrier",
+      "delivered": "Delivered",
+      "completed": "Completed"
+    },
+    "timeline": {
+      "statusUpdate": "Status Update",
+      "orderPlaced": "Order Placed Successfully",
+      "orderPlacedDesc": "Your order has been placed successfully",
+      "confirmed": "Order Confirmed",
+      "confirmedDesc": "Your order has been confirmed by the shop",
+      "handedToCarrier": "Handed to Carrier",
+      "handedToCarrierDesc": "Your order has been handed to GHN",
+      "delivered": "Delivered",
+      "deliveredDesc": "Delivery successful",
+      "completed": "Completed",
+      "completedDesc": "Order completed"
+    },
+    "thankYouMessage": "Thank you for shopping!",
+    "buttons": {
+      "buyAgain": "Buy Again",
+      "contactSeller": "Contact Seller"
+    },
+    "address": {
+      "title": "Delivery Address",
+      "updating": "Updating..."
+    },
+    "priceBreakdown": {
+      "subtotal": "Subtotal",
+      "shippingFee": "Shipping Fee",
+      "shippingDiscount": "Shipping Discount",
+      "voucherDiscount": "Voucher Discount",
+      "total": "Total Payment",
+      "paymentMethod": "Payment Method"
+    }
+  },
+  "wallet": {
+    "title": "My Wallet",
+    "menuTitle": "My Wallet",
+    "availableBalance": "Available Balance",
+    "pendingBalance": "Pending Balance",
+    "history": "Transaction History",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Amount",
+    "noTransactions": "No transactions",
+    "refund": "Refund",
+    "deposit": "Deposit",
+    "withdrawal": "Withdrawal",
+    "payment": "Payment"
   }
 }

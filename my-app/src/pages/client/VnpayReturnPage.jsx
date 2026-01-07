@@ -49,7 +49,7 @@ const VnpayReturnPage = () => {
         }
       } catch (error) {
         console.error("VNPay return error:", error);
-        
+
         // Show error message
         await Swal.fire({
           icon: "error",
@@ -68,10 +68,10 @@ const VnpayReturnPage = () => {
   }, [navigate, t]);
 
   return (
-    <div style={{ 
-      display: "flex", 
-      justifyContent: "center", 
-      alignItems: "center", 
+    <div style={{
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
       minHeight: "100vh",
       flexDirection: "column",
       gap: "1rem"

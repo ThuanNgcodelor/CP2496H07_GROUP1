@@ -11,7 +11,7 @@ import NotificationPage from "./NotificationPage.jsx";
 import CoinPage from "./CoinPage.jsx";
 import Loading from "../Loading.jsx";
 import { fetchImageById } from "../../../api/image.js";
-import AdDisplay from "../ads/AdDisplay";
+import UserWalletPage from "./UserWalletPage.jsx";
 
 export default function User() {
     const { t } = useTranslation();
@@ -331,6 +331,27 @@ export default function User() {
                                     <i className="fa fa-coins" style={{ width: '20px', textAlign: 'center', color: '#ffc107' }}></i>
                                     {t('user.shopeeCoins')}
                                 </button>
+
+                                <button
+                                    onClick={() => handleTabClick("wallet")}
+                                    style={{
+                                        width: '100%',
+                                        padding: '14px 16px',
+                                        border: 'none',
+                                        background: activeTab === "wallet" ? '#fff5f0' : 'transparent',
+                                        color: activeTab === "wallet" ? '#ee4d2d' : '#222',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <i className="fa fa-wallet" style={{ width: '20px', textAlign: 'center', color: '#FF5722' }}></i>
+                                    {t('wallet.menuTitle')}
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -395,6 +416,11 @@ export default function User() {
                                 {/* Coins Tab */}
                                 {activeTab === "coins" && (
                                     <CoinPage />
+                                )}
+
+                                {/* Wallet Tab */}
+                                {activeTab === "wallet" && (
+                                    <UserWalletPage />
                                 )}
                             </div>
                         )}

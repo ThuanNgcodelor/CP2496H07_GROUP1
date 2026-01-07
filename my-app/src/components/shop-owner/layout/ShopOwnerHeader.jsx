@@ -125,6 +125,19 @@ const ShopOwnerHeader = ({ onMenuClick }) => {
                 </div>
               </div>
               <div className="dropdown-divider"></div>
+              {shopOwnerInfo?.userId && (
+                <>
+                  <Link
+                    to={`/shop/${shopOwnerInfo.userId}`}
+                    className="dropdown-item"
+                    onClick={() => setDropdownOpen(false)}
+                  >
+                    <i className="fas fa-store"></i>
+                    <span>{t('shopOwner.header.viewShop')}</span>
+                  </Link>
+                  <div className="dropdown-divider"></div>
+                </>
+              )}
               <Link
                 to="/shop-owner/settings"
                 className="dropdown-item"

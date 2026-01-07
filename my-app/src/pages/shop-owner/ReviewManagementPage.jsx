@@ -104,23 +104,13 @@ export default function ReviewManagementPage() {
         }
     };
 
-    // Calculate Statistics
-    const stats = useMemo(() => {
-        const total = reviews.length;
-        if (total === 0) return { total: 0, avgRating: 0, responseRate: 0 };
-
-        const sumRating = reviews.reduce((acc, r) => acc + r.rating, 0);
-        const avgRating = (sumRating / total).toFixed(1);
-
-        const repliedCount = reviews.filter(r => r.reply).length;
-        const responseRate = Math.round((repliedCount / total) * 100);
-
-        return { total, avgRating, responseRate };
-    }, [reviews]);
-
     // Filter Logic
     const filteredReviews = useMemo(() => {
         return reviews.filter(review => {
+            // Base Filter: Hide empty reviews from LIST only
+            const hasContent = (review.comment && review.comment.trim() !== '') || (review.imageIds && review.imageIds.length > 0);
+            if (!hasContent) return false;
+
             // Tab Filter
             if (activeTab === 'UNREPLIED' && review.reply) return false;
             if (activeTab === 'REPLIED' && !review.reply) return false;
@@ -131,6 +121,23 @@ export default function ReviewManagementPage() {
             return true;
         });
     }, [reviews, activeTab, ratingFilter]);
+
+    // Calculate Statistics based on ALL reviews (for count/avg) but Visible for Response Rate
+    const stats = useMemo(() => {
+        const total = reviews.length;
+        if (total === 0) return { total: 0, avgRating: 0, responseRate: 0 };
+
+        const sumRating = reviews.reduce((acc, r) => acc + r.rating, 0);
+        const avgRating = (sumRating / total).toFixed(1);
+
+        const visibleReviews = reviews.filter(r => (r.comment && r.comment.trim() !== '') || (r.imageIds && r.imageIds.length > 0));
+        const visibleTotal = visibleReviews.length;
+        const repliedCount = visibleReviews.filter(r => r.reply).length;
+
+        const responseRate = visibleTotal > 0 ? Math.round((repliedCount / visibleTotal) * 100) : 0;
+
+        return { total, avgRating, responseRate };
+    }, [reviews]);
 
     if (loading && reviews.length === 0) {
         return (

@@ -178,9 +178,10 @@ export const getShopOwnerByUserId = async (userId) => {
  * Cập nhật thông tin shop owner
  * @param {Object} data - Dữ liệu shop owner cần cập nhật
  * @param {File} file - File ảnh logo shop (optional)
+ * @param {File} headerImage - File ảnh bìa shop (optional)
  * @returns {Promise} - Promise trả về thông tin shop owner đã cập nhật
  */
-export const updateShopOwner = async (data, file) => {
+export const updateShopOwner = async (data, file, headerImage) => {
     try {
         const requestData = {
             shopName: data.shopName,
@@ -194,7 +195,8 @@ export const updateShopOwner = async (data, file) => {
             districtName: data.districtName,
             wardCode: data.wardCode,
             wardName: data.wardName,
-            streetAddress: data.streetAddress
+            streetAddress: data.streetAddress, // Ensure comma here
+            headerStyle: data.headerStyle
         };
 
         const fd = new FormData();
@@ -205,6 +207,7 @@ export const updateShopOwner = async (data, file) => {
         );
 
         if (file) fd.append("file", file);
+        if (headerImage) fd.append("headerImage", headerImage);
 
         const response = await api.put("/shop-owners/update", fd, {
             transformRequest: [(payload, headers) => {

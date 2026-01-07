@@ -44,10 +44,41 @@ public class ProductController {
     public ResponseEntity<java.util.Map<String, Object>> getShopStats(@PathVariable String shopId) {
         long productCount = productService.countProductsByUserId(shopId);
         Double avgRating = reviewRepository.getAverageRatingByShopId(shopId);
+        long totalReviews = reviewRepository.countReviewsByShopId(shopId);
+        long visibleReviews = reviewRepository.countVisibleReviewsByShopId(shopId);
+        long repliedReviews = reviewRepository.countRepliedReviewsByShopId(shopId);
+
+        int responseRate = 0;
+        if (visibleReviews > 0) {
+            responseRate = (int) Math.round(((double) repliedReviews / visibleReviews) * 100);
+        }
+
+        java.util.List<com.example.stockservice.model.Review> repliedReviewsList = reviewRepository
+                .findRepliedReviewsByShopId(shopId);
+        double avgSeconds = repliedReviewsList.stream()
+                .filter(r -> r.getRepliedAt() != null && r.getCreatedAt() != null)
+                .mapToLong(r -> java.time.Duration.between(r.getCreatedAt(), r.getRepliedAt()).getSeconds())
+                .average()
+                .orElse(0);
+
+        String responseTime = "N/A";
+        if (repliedReviews > 0 && avgSeconds > 0) {
+            long minutes = Math.round(avgSeconds / 60);
+            if (minutes < 60) {
+                responseTime = Math.max(1, minutes) + " minutes";
+            } else if (minutes < 1440) {
+                responseTime = Math.round(minutes / 60.0) + " hours";
+            } else {
+                responseTime = Math.round(minutes / 1440.0) + " days";
+            }
+        }
 
         java.util.Map<String, Object> response = new java.util.HashMap<>();
         response.put("productCount", productCount);
         response.put("avgRating", avgRating != null ? avgRating : 0.0);
+        response.put("responseRate", responseRate);
+        response.put("totalReviews", totalReviews);
+        response.put("responseTime", responseTime);
 
         return ResponseEntity.ok(response);
     }

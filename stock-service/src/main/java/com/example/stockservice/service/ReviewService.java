@@ -55,8 +55,6 @@ public class ReviewService {
         List<Review> reviews = reviewRepository.findByShopId(shopId);
         System.out.println("DEBUG: Found " + reviews.size() + " reviews for shopId: " + shopId);
         return reviews.stream()
-                .filter(r -> (r.getComment() != null && !r.getComment().trim().isEmpty()) ||
-                        (r.getImageIds() != null && !r.getImageIds().isEmpty()))
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }

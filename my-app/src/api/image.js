@@ -98,4 +98,43 @@ export const getImageUrl = (imageId) => {
     return imageId ? `${API_URL}/file-storage/get/${imageId}` : null;
 };
 
+/**
+ * Upload video (Sử dụng chung endpoint với image do backend dùng chung logic FileSystem)
+ * @param {File} file - File video cần upload
+ * @returns {Promise<string>} - Promise trả về ID của file
+ */
+export const uploadVideo = async (file) => {
+    try {
+        if (!file) {
+            throw new Error("No file provided");
+        }
+
+        const formData = new FormData();
+        // Backend yêu cầu key là "image" ngay cả với video
+        formData.append("image", file);
+
+        const response = await api.post("/file-storage/upload", formData, {
+            transformRequest: [(payload, headers) => {
+                delete headers.common?.["Content-Type"];
+                delete headers.post?.["Content-Type"];
+                delete headers["Content-Type"];
+                return payload;
+            }],
+        });
+
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || "Failed to upload video");
+    }
+};
+
+/**
+ * Lấy URL của video từ ID
+ * @param {string} videoId 
+ * @returns {string}
+ */
+export const getVideoUrl = (videoId) => {
+    return videoId ? `${API_URL}/file-storage/download/${videoId}` : null;
+};
+
 

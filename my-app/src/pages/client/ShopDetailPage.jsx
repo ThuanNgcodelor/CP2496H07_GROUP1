@@ -45,7 +45,10 @@ export default function ShopDetailPage() {
                 getShopStats(userId).then(data => {
                     setStats({
                         productCount: data.productCount || 0,
-                        avgRating: data.avgRating || 0
+                        avgRating: data.avgRating || 0,
+                        responseRate: data.responseRate || 0,
+                        totalReviews: data.totalReviews || 0,
+                        responseTime: data.responseTime || t('shop.na')
                     });
                 }).catch(err => console.error("Stats error", err));
 
@@ -131,7 +134,7 @@ export default function ShopDetailPage() {
                 <Header />
                 <div className="container py-5 text-center">
                     <i className="fas fa-spinner fa-spin fa-3x" style={{ color: '#ee4d2d' }}></i>
-                    <p className="mt-3">Loading shop information...</p>
+                    <p className="mt-3">{t('shop.loadingShopInfo')}</p>
                 </div>
             </div>
         );
@@ -152,7 +155,7 @@ export default function ShopDetailPage() {
     }
 
     const formatJoinedDate = (dateString) => {
-        if (!dateString) return 'Recently joined';
+        if (!dateString) return t('shop.recentlyJoined');
         const date = new Date(dateString);
         const now = new Date();
         const diffTime = Math.abs(now - date);
@@ -183,7 +186,19 @@ export default function ShopDetailPage() {
                 <div className="container py-4">
                     {/* Shop Header */}
                     <div className="card mb-3 border-0 shadow-sm">
-                        <div className="card-body" style={{ background: 'linear-gradient(45deg, #222, #444)', color: 'white' }}>
+                        <div
+                            className="card-body"
+                            style={{
+                                background: shopInfo.headerImageUrl
+                                    ? `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(/v1/file-storage/get/${shopInfo.headerImageUrl}) center/cover no-repeat`
+                                    : shopInfo.headerStyle
+                                        ? shopInfo.headerStyle
+                                        : 'linear-gradient(45deg, #222, #444)',
+                                color: 'white',
+                                minHeight: '150px',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                            }}
+                        >
                             <div className="row align-items-center">
                                 <div className="col-md-4">
                                     <div className="d-flex align-items-center gap-3">
@@ -238,12 +253,12 @@ export default function ShopDetailPage() {
                                     </div>
                                     <div className="mt-3 d-flex gap-2">
                                         <button
-                                            className={`btn btn-sm ${isFollowing ? 'btn-secondary' : 'btn-outline-light'}`}
+                                            className={`btn btn-sm ${isFollowing ? 'btn-shop-following-header' : 'btn-shop-outline bg-white'}`}
                                             onClick={handleFollow}
                                         >
                                             {isFollowing ? <><i className="fas fa-check me-1"></i> {t('shop.followingStatus')}</> : <><i className="fas fa-plus me-1"></i> {t('shop.follow')}</>}
                                         </button>
-                                        <button className="btn btn-sm btn-outline-light">
+                                        <button className="btn btn-sm btn-shop-primary">
                                             <i className="fas fa-comment me-1"></i> {t('shop.chat')}
                                         </button>
                                     </div>
@@ -257,11 +272,17 @@ export default function ShopDetailPage() {
                                         </div>
                                         <div className="col-4 mb-3">
                                             <div className="small text-white-50"><i className="fas fa-star me-1"></i> {t('shop.rating')}</div>
-                                            <div className="fw-bold fs-5">{stats.avgRating > 0 ? stats.avgRating.toFixed(1) : t('shop.noRatings')}</div>
+                                            <div className="fw-bold fs-5">
+                                                {stats.avgRating > 0 ? stats.avgRating.toFixed(1) : t('shop.noRatings')}
+                                                <span className="fs-6 ms-1 text-white-50">({stats.totalReviews || 0})</span>
+                                            </div>
                                         </div>
                                         <div className="col-4 mb-3">
                                             <div className="small text-white-50"><i className="fas fa-comment-dots me-1"></i> {t('shop.chatResponse')}</div>
-                                            <div className="fw-bold fs-5">{t('shop.na')}</div>
+                                            <div className="fw-bold fs-5">
+                                                {stats.responseRate}%
+                                                <span className="fs-6 ms-1 text-white-50">({t('shop.within')} {stats.responseTime})</span>
+                                            </div>
                                         </div>
                                         <div className="col-4">
                                             <div className="small text-white-50"><i className="fas fa-users me-1"></i> {t('shop.followers')}</div>

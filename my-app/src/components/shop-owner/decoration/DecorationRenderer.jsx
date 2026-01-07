@@ -38,6 +38,9 @@ const DecorationRenderer = ({ config }) => {
 
 const BannerRenderer = ({ data }) => {
     const images = data.images || [];
+    const height = data.height || 400;
+    const objectFit = data.objectFit || 'cover';
+
     if (images.length === 0) return null;
 
     return (
@@ -49,12 +52,15 @@ const BannerRenderer = ({ data }) => {
             pagination={{ clickable: true }}
             autoplay={{ delay: 3000 }}
             className="rounded overflow-hidden"
+            style={{ height: `${height}px` }}
         >
             {images.map((img, idx) => (
                 <SwiperSlide key={idx}>
-                    <SwiperSlide key={idx}>
-                        <Image src={getImageUrl(img.imageId) || img.url} className="w-100" style={{ objectFit: 'cover', maxHeight: '400px' }} />
-                    </SwiperSlide>
+                    <Image
+                        src={getImageUrl(img.imageId) || img.url}
+                        className="w-100 h-100"
+                        style={{ objectFit: objectFit }}
+                    />
                 </SwiperSlide>
             ))}
         </Swiper>
@@ -62,8 +68,35 @@ const BannerRenderer = ({ data }) => {
 };
 
 const VideoRenderer = ({ data }) => {
-    if (!data.url) return null;
+    // Lazy import or use global/prop passed helper if possible, but importing here is fine
+    const [videoUrl, setVideoUrl] = React.useState(null);
+
+    React.useEffect(() => {
+        if (data.videoId) {
+            import('../../../api/image').then(({ getVideoUrl }) => {
+                setVideoUrl(getVideoUrl(data.videoId));
+            });
+        }
+    }, [data.videoId]);
+
+    if (!data.url && !data.videoId) return null;
+
+    if (data.videoId && videoUrl) {
+        return (
+            <div className="ratio ratio-16x9 bg-dark">
+                <video
+                    controls
+                    src={videoUrl}
+                    style={{ width: '100%', height: '100%' }}
+                >
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        );
+    }
+
     const getEmbedUrl = (url) => {
+        if (!url) return '';
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
         const match = url.match(regExp);
         if (match && match[2].length === 11) {
