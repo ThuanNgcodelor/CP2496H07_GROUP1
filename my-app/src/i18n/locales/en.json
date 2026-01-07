@@ -57,6 +57,23 @@
       "returned": "Return/Refund"
     }
   },
+  "wallet": {
+    "title": "My Wallet",
+    "deposit": "Deposit",
+    "withdraw": "Withdraw",
+    "availableBalance": "Available Balance",
+    "pendingBalance": "Pending Balance",
+    "history": "Transaction History",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Amount",
+    "noTransactions": "No transactions found",
+    "refund": "Refund",
+    "withdrawal": "Withdrawal",
+    "payment": "Payment",
+    "fillTestData": "Fill Test Data"
+  },
   "header": {
     "sellerCenter": "Seller Center",
     "registerShopOwner": "Start Selling",
@@ -1664,5 +1681,21 @@
       "total": "Total Payment",
       "paymentMethod": "Payment Method"
     }
+  },
+  "wallet": {
+    "title": "My Wallet",
+    "menuTitle": "My Wallet",
+    "availableBalance": "Available Balance",
+    "pendingBalance": "Pending Balance",
+    "history": "Transaction History",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Amount",
+    "noTransactions": "No transactions",
+    "refund": "Refund",
+    "deposit": "Deposit",
+    "withdrawal": "Withdrawal",
+    "payment": "Payment"
   }
 }

@@ -59,6 +59,23 @@
     "action": "Thao tác",
     "date": "Ngày"
   },
+  "wallet": {
+    "title": "Ví của tôi",
+    "deposit": "Nạp tiền",
+    "withdraw": "Rút tiền",
+    "availableBalance": "Số dư khả dụng",
+    "pendingBalance": "Số dư đang chờ",
+    "history": "Lịch sử giao dịch",
+    "date": "Ngày",
+    "type": "Loại",
+    "description": "Mô tả",
+    "amount": "Số tiền",
+    "noTransactions": "Không có giao dịch nào",
+    "refund": "Hoàn tiền",
+    "withdrawal": "Rút tiền",
+    "payment": "Thanh toán",
+    "fillTestData": "Điền mẫu"
+  },
   "header": {
     "sellerCenter": "Kênh Người Bán",
     "registerShopOwner": "Đăng ký bán hàng",
