@@ -22,16 +22,6 @@ public interface UserWalletService {
 
     org.springframework.data.domain.Page<UserWalletEntry> getEntries(String userId, int page, int size);
 
-    // Deposit features
-    String deposit(String userId, BigDecimal amount);
-
-    UserWallet verifyDeposit(String userId, java.util.Map<String, String> params);
-
-    // Simulated Deposit
-    String depositSimulated(String userId, BigDecimal amount);
-
-    UserWallet verifySimulatedDeposit(String userId, String orderId, BigDecimal amount);
-
-    // Direct Deposit (Simple)
+    // Direct Deposit (Manual)
     UserWallet depositDirect(String userId, BigDecimal amount);
 }

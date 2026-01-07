@@ -3,7 +3,6 @@ package com.example.userservice.controller;
 import com.example.userservice.dto.AddRefundRequest;
 import com.example.userservice.jwt.JwtUtil;
 import com.example.userservice.model.UserWallet;
-import com.example.userservice.model.UserWallet;
 import com.example.userservice.model.UserWalletEntry;
 import com.example.userservice.dto.AddDepositRequest;
 import com.example.userservice.dto.WithdrawRequest;
@@ -37,6 +36,24 @@ public class WalletController {
         response.put("totalWithdrawals", wallet.getTotalWithdrawals());
         response.put("totalRefunds", wallet.getTotalRefunds());
 
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/withdraw")
+    public ResponseEntity<Map<String, Object>> withdraw(@RequestBody WithdrawRequest request,
+            HttpServletRequest httpRequest) {
+        String userId = getUserIdFromRequest(httpRequest);
+        UserWallet wallet = walletService.withdraw(
+                userId,
+                request.getAmount(),
+                request.getBankAccount(),
+                request.getBankName(),
+                request.getAccountHolder());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("balanceAvailable", wallet.getBalanceAvailable());
+        response.put("message", "Withdrawal successful");
         return ResponseEntity.ok(response);
     }
 
@@ -103,87 +120,6 @@ public class WalletController {
             errorResponse.put("message", "Failed to add refund: " + e.getMessage());
             return ResponseEntity.internalServerError().body(errorResponse);
         }
-    }
-
-    @PostMapping("/deposit")
-    public ResponseEntity<Map<String, Object>> deposit(@RequestBody AddDepositRequest request,
-            HttpServletRequest httpRequest) {
-        String userId = getUserIdFromRequest(httpRequest);
-        String paymentUrl = walletService.deposit(userId, request.getAmount());
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("paymentUrl", paymentUrl);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/deposit/verify")
-    public ResponseEntity<Map<String, Object>> verifyDeposit(@RequestBody Map<String, String> params,
-            HttpServletRequest httpRequest) {
-        String userId = getUserIdFromRequest(httpRequest);
-        UserWallet wallet = walletService.verifyDeposit(userId, params);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("balanceAvailable", wallet.getBalanceAvailable());
-        response.put("message", "Deposit successful");
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/withdraw")
-    public ResponseEntity<Map<String, Object>> withdraw(@RequestBody WithdrawRequest request,
-            HttpServletRequest httpRequest) {
-        String userId = getUserIdFromRequest(httpRequest);
-        UserWallet wallet = walletService.withdraw(
-                userId,
-                request.getAmount(),
-                request.getBankAccount(),
-                request.getBankName(),
-                request.getAccountHolder());
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("balanceAvailable", wallet.getBalanceAvailable());
-        response.put("message", "Withdrawal successful");
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/deposit/simulated")
-    public ResponseEntity<Map<String, Object>> depositSimulated(@RequestBody AddDepositRequest request,
-            HttpServletRequest httpRequest) {
-        String userId = getUserIdFromRequest(httpRequest);
-        String paymentUrl = walletService.depositSimulated(userId, request.getAmount());
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("paymentUrl", paymentUrl);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/deposit/simulated/verify")
-    public ResponseEntity<Map<String, Object>> verifySimulatedDeposit(@RequestBody Map<String, Object> params,
-            HttpServletRequest httpRequest) {
-        String userId = getUserIdFromRequest(httpRequest);
-        String orderId = (String) params.get("orderId");
-
-        // Handle amount which might be Integer or Double from JSON
-        java.math.BigDecimal amount;
-        Object amountObj = params.get("amount");
-        if (amountObj instanceof Integer) {
-            amount = java.math.BigDecimal.valueOf((Integer) amountObj);
-        } else if (amountObj instanceof Double) {
-            amount = java.math.BigDecimal.valueOf((Double) amountObj);
-        } else if (amountObj instanceof String) {
-            amount = new java.math.BigDecimal((String) amountObj);
-        } else {
-            amount = new java.math.BigDecimal(amountObj.toString());
-        }
-
-        UserWallet wallet = walletService.verifySimulatedDeposit(userId, orderId, amount);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("balanceAvailable", wallet.getBalanceAvailable());
-        response.put("message", "Simulated deposit successful");
-        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/deposit/direct")
