@@ -571,6 +571,13 @@ public class OrderServiceImpl implements OrderService {
                     dec.setSizeId(si.getSizeId());
                     dec.setQuantity(si.getQuantity());
                     dec.setIsFlashSale(si.getIsFlashSale());
+
+                    // Log for debugging
+                    System.out.println(
+                            "OrderService decreasing stock (toOrderItemsFromSelected): productId=" + si.getProductId() +
+                                    ", sizeId=" + si.getSizeId() +
+                                    ", isFlashSale=" + si.getIsFlashSale());
+
                     stockServiceClient.decreaseStock(dec);
 
                     return OrderItem.builder()
@@ -602,6 +609,12 @@ public class OrderServiceImpl implements OrderService {
                         dec.setSizeId(si.getSizeId());
                         dec.setQuantity(si.getQuantity());
                         dec.setIsFlashSale(si.getIsFlashSale());
+
+                        // Log for debugging
+                        System.out.println("OrderService decreasing stock: productId=" + si.getProductId() +
+                                ", sizeId=" + si.getSizeId() +
+                                ", isFlashSale=" + si.getIsFlashSale());
+
                         try {
                             stockServiceClient.decreaseStock(dec);
                         } catch (Exception e) {

@@ -87,6 +87,11 @@ public class ProductController {
 
     @PostMapping("/decreaseStock")
     public ResponseEntity<ProductDto> decreaseStock(@Valid @RequestBody DecreaseStockRequest request) {
+        // Log the request to debug Flash Sale issue
+        System.out.println("DecreaseStockRequest: sizeId=" + request.getSizeId() +
+                ", quantity=" + request.getQuantity() +
+                ", isFlashSale=" + request.getIsFlashSale());
+
         boolean isFlashSale = request.getIsFlashSale() != null ? request.getIsFlashSale() : false;
         productService.decreaseStockBySize(request.getSizeId(), request.getQuantity(), isFlashSale);
 
@@ -272,6 +277,7 @@ public class ProductController {
             if (fsProduct != null) {
                 // Check stock availability
                 int remaining = fsProduct.getFlashSaleStock() - fsProduct.getSoldCount();
+                dto.setSoldCount(fsProduct.getSoldCount());
 
                 if (remaining > 0) {
                     dto.setPrice(fsProduct.getSalePrice());

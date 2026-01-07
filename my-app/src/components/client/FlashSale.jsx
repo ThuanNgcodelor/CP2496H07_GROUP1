@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import flashSaleAPI from '../../api/flashSale/flashSaleAPI';
-import { fetchProductImageById } from '../../api/product';
+import { fetchProductImageById, fetchProductById } from '../../api/product';
 
 export default function FlashSale({ isPage = false }) {
   const { t } = useTranslation();
@@ -63,10 +63,29 @@ export default function FlashSale({ isPage = false }) {
     try {
       setLoading(true);
       const productsData = await flashSaleAPI.getPublicSessionProducts(sessionId);
-      // Filter only approved products (API should honestly do this, but safety first)
-      const approvedProducts = productsData.filter(p => p.status === 'APPROVED');
-      setProducts(approvedProducts);
-      loadProductImages(approvedProducts);
+      const approved = productsData.filter(p => p.status === 'APPROVED');
+
+      // Fetch full product details to get real stock
+      const detailedProducts = await Promise.all(approved.map(async (p) => {
+        try {
+          const detailRes = await fetchProductById(p.productId);
+          const detail = detailRes.data;
+
+          // Calculate total physical stock from sizes
+          let totalStock = 0;
+          if (detail && detail.sizes && Array.isArray(detail.sizes)) {
+            totalStock = detail.sizes.reduce((sum, s) => sum + (Number(s.stock) || 0), 0);
+          }
+
+          return { ...p, productStock: totalStock };
+        } catch (err) {
+          console.error("Failed to fetch product detail:", p.productId);
+          return { ...p, productStock: 0 };
+        }
+      }));
+
+      setProducts(detailedProducts);
+      loadProductImages(detailedProducts);
     } catch (error) {
       console.error('Failed to load products for session:', error);
       setProducts([]);
@@ -407,38 +426,55 @@ export default function FlashSale({ isPage = false }) {
 
                       {/* Stock Bar or Status Button */}
                       {!isUpcoming ? (
-                        <div style={{
-                          background: '#ffbda6',
-                          borderRadius: '8px',
-                          height: '16px',
-                          position: 'relative',
-                          overflow: 'hidden'
-                        }}>
+                        (product.flashSaleStock - (product.soldCount || 0) <= 0) ? (
                           <div style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            height: '100%',
-                            background: '#ee4d2d',
-                            width: `${percentage}%`,
-                            transition: 'width 0.3s'
-                          }}></div>
-                          <div style={{
-                            fontSize: '10px',
-                            color: 'white',
-                            fontWeight: 600,
-                            position: 'relative',
-                            zIndex: 1,
                             textAlign: 'center',
-                            lineHeight: '16px',
-                            textTransform: 'uppercase'
+                            background: '#ccc',
+                            color: 'white',
+                            padding: '4px 0',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: 600
                           }}>
-                            {product.flashSaleStock - (product.soldCount || 0) > 0
-                              ? `Đã bán ${product.soldCount || 0}`
-                              : 'Hết hàng'
-                            }
+                            Hết hàng
                           </div>
-                        </div>
+                        ) : (
+                          <div style={{ position: 'relative', marginTop: '8px' }}>
+                            <div style={{
+                              background: '#ffbda6',
+                              borderRadius: '8px',
+                              height: '16px',
+                              width: '100%',
+                              position: 'relative',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                background: '#ee4d2d',
+                                height: '100%',
+                                borderRadius: '8px',
+                                width: `${Math.max(0, Math.min(100, ((product.productStock || 0) / (product.flashSaleStock + (product.soldCount || 0))) * 100))}%`,
+                                transition: 'width 0.5s ease'
+                              }}></div>
+                            </div>
+                            <div style={{
+                              position: 'absolute',
+                              top: '0',
+                              left: '0',
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '10px',
+                              color: 'white',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              textShadow: '0 0 2px rgba(0,0,0,0.2)'
+                            }}>
+                              Còn lại: {product.productStock || 0}
+                            </div>
+                          </div>
+                        )
                       ) : (
                         <div style={{
                           textAlign: 'center',

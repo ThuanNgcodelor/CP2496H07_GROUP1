@@ -18,5 +18,6 @@ public class DecreaseStockRequest {
     @Min(value = 1, message = "Quantity must be at least 1")
     private Integer quantity;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("isFlashSale")
     private Boolean isFlashSale;
 }

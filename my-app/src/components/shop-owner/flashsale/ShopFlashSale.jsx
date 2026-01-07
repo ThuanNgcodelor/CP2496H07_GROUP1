@@ -20,7 +20,7 @@ const ShopFlashSale = () => {
     const [selectedSessionId, setSelectedSessionId] = useState('');
     const [selectedProductId, setSelectedProductId] = useState('');
     const [salePrice, setSalePrice] = useState('');
-    const [stock, setStock] = useState('');
+
     const [selectedProductData, setSelectedProductData] = useState(null);
 
     useEffect(() => {
@@ -84,13 +84,13 @@ const ShopFlashSale = () => {
                 sessionId: selectedSessionId,
                 productId: selectedProductId,
                 salePrice: parseFloat(salePrice),
-                flashSaleStock: parseInt(stock)
+                flashSaleStock: 0
             });
             alert(t('shopOwner.flashSale.successMessage'));
             fetchMyRegistrations();
             // Reset form and go back to list
             setSalePrice('');
-            setStock('');
+
             setSelectedProductId('');
             setIsRegistering(false);
         } catch (error) {
@@ -203,7 +203,7 @@ const ShopFlashSale = () => {
                                     )}
 
                                     <div className="row">
-                                        <div className="col-md-6">
+                                        <div className="col-md-12">
                                             <div className="mb-3">
                                                 <label className="form-label">{t('shopOwner.flashSale.salePrice')} <span style={{ color: 'red' }}>*</span></label>
                                                 <input
@@ -221,36 +221,6 @@ const ShopFlashSale = () => {
                                                             ? t('shopOwner.flashSale.priceWarning')
                                                             : `Giảm: ${Math.round((1 - parseFloat(salePrice) / selectedProductData.price) * 100)}%`}
                                                     </small>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <div className="mb-3">
-                                                <label className="form-label">{t('shopOwner.flashSale.stock')} <span style={{ color: 'red' }}>*</span></label>
-                                                <input
-                                                    type="number"
-                                                    className={`form-control ${selectedProductData && parseInt(stock) > selectedProductData.totalStock ? 'is-invalid' : ''}`}
-                                                    value={stock}
-                                                    onChange={e => {
-                                                        const val = e.target.value;
-                                                        setStock(val);
-                                                    }}
-                                                    required
-                                                    min="1"
-                                                    max={selectedProductData?.totalStock}
-                                                    placeholder={t('shopOwner.flashSale.stock')}
-                                                />
-                                                {selectedProductData && (
-                                                    <>
-                                                        <small className="text-muted d-block mt-1">
-                                                            {t('shopOwner.flashSale.stockAvailable')}: {selectedProductData.totalStock}
-                                                        </small>
-                                                        {parseInt(stock) > selectedProductData.totalStock && (
-                                                            <div className="invalid-feedback d-block">
-                                                                {t('shopOwner.flashSale.invalidStock')}
-                                                            </div>
-                                                        )}
-                                                    </>
                                                 )}
                                             </div>
                                         </div>

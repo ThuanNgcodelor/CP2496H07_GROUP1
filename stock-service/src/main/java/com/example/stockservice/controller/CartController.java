@@ -233,8 +233,10 @@ public class CartController {
         dto.setProductAvailable(cartItem.getProductAvailable());
         dto.setProductAvailable(cartItem.getProductAvailable());
         dto.setSizeAvailable(cartItem.getSizeAvailable());
-        dto.setIsFlashSale(cartItem.isFlashSale());
-
+        dto.setFlashSale(cartItem.isFlashSale());
+        System.out.println("CartController mapToDto: itemId=" + cartItem.getId() +
+                ", entity.isFlashSale=" + cartItem.isFlashSale() +
+                ", dto.flashSale=" + dto.getFlashSale());
         return dto;
     }
 }

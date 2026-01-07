@@ -27,5 +27,6 @@ public class CartItemDto {
     private Integer availableStock; // Số lượng còn trong kho
     private Boolean productAvailable; // Sản phẩm còn tồn tại không
     private Boolean sizeAvailable; // Size còn tồn tại không
-    private Boolean isFlashSale;
+    @com.fasterxml.jackson.annotation.JsonProperty("isFlashSale")
+    private Boolean flashSale;
 }

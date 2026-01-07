@@ -110,7 +110,8 @@ public class FlashSaleService {
                 .shopId(shopId)
                 .originalPrice(product.getPrice()) // Assuming base price
                 .salePrice(request.getSalePrice())
-                .flashSaleStock(request.getFlashSaleStock())
+                .flashSaleStock(
+                        product.getSizes().stream().mapToInt(com.example.stockservice.model.Size::getStock).sum())
                 .soldCount(0)
                 .status(FlashSaleStatus.PENDING)
                 .build();
@@ -337,8 +338,12 @@ public class FlashSaleService {
     public void incrementSoldCount(String productId, int quantity) {
         FlashSaleProduct fsp = findActiveFlashSaleProduct(productId);
         if (fsp != null) {
+            System.out.println("Incrementing Sold Count for FlashSaleProduct: " + fsp.getId() + ", current sold: "
+                    + fsp.getSoldCount() + ", adding: " + quantity);
             fsp.setSoldCount(fsp.getSoldCount() + quantity);
             flashSaleProductRepository.save(fsp);
+        } else {
+            System.out.println("Active Flash Sale Product NOT FOUND for productId: " + productId);
         }
     }
 }

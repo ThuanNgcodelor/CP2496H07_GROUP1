@@ -66,7 +66,10 @@ public class ProductServiceImpl implements ProductService {
 
         // Update Flash Sale Sold Count if applicable
         if (isFlashSale) {
+            System.out.println("Processing Flash Sale stock decrease for productId: " + size.getProduct().getId());
             flashSaleService.incrementSoldCount(size.getProduct().getId(), quantity);
+        } else {
+            System.out.println("Not a Flash Sale order for productId: " + size.getProduct().getId());
         }
 
         // Update product status

@@ -64,21 +64,21 @@ export default function ProductDetailPage() {
     }, [product]);
 
     // Sync Flash Sale state with product data
+    // Sync Flash Sale state with product data
     useEffect(() => {
-        // Only active if remaining > 0 AND there is actual physical stock
+        // Backend now returns flashSaleRemaining (even if 0) ONLY if session is active.
+        // So presence of this field indicates active Flash Sale session.
         if (product &&
-            typeof product.flashSaleRemaining === 'number' &&
-            product.flashSaleRemaining > 0 &&
-            totalStock > 0
+            product.flashSaleRemaining !== undefined &&
+            product.flashSaleRemaining !== null
         ) {
             setIsFlashSale(true);
         } else {
             setIsFlashSale(false);
         }
-    }, [product, totalStock]);
+    }, [product]);
 
-    // Note: ProductDetailPage is now public - guest can view products
-    // But some actions (add to cart, buy now) require authentication
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -495,16 +495,10 @@ export default function ProductDetailPage() {
                                                             <span style={{ fontSize: '0.85rem', color: '#555' }}>
                                                                 Số lượng khuyến mãi:
                                                             </span>
-                                                            <span className="badge rounded-pill px-3" style={{ backgroundColor: '#ee4d2d' }}>
-                                                                Còn {Math.min(product.flashSaleRemaining, totalStock)}
-                                                            </span>
+                                                            {/* Badge "Đã bán" removed as requested */}
                                                         </div>
-                                                        <div className="progress mt-2" style={{ height: '6px' }}>
-                                                            <div
-                                                                className="progress-bar progress-bar-striped progress-bar-animated"
-                                                                role="progressbar"
-                                                                style={{ width: '100%', backgroundColor: '#ee4d2d' }}
-                                                            ></div>
+                                                        <div className="d-flex justify-content-between align-items-center mt-1">
+                                                            <span style={{ fontSize: '0.8rem', color: '#ee4d2d' }}>Còn {Math.min(product.flashSaleRemaining, totalStock)}</span>
                                                         </div>
                                                         <small className="text-muted d-block mt-1 fst-italic" style={{ fontSize: '0.75rem' }}>
                                                             (Giá sẽ trở về mức gốc khi hết số lượng khuyến mãi)
@@ -601,7 +595,11 @@ export default function ProductDetailPage() {
                                                             >
                                                                 <div>{size.name}</div>
                                                                 <small style={{ fontSize: '0.7rem', display: 'block', marginTop: '2px', color: isSelected ? '#fff' : '#666' }}>
-                                                                    {isOutOfStock ? 'Out of stock' : `Stock: ${size.stock}`}
+                                                                    {isOutOfStock ? 'Out of stock' :
+                                                                        (isFlashSale && product.flashSaleRemaining !== undefined)
+                                                                            ? `Stock: ${Math.min(size.stock, product.flashSaleRemaining)}`
+                                                                            : `Stock: ${size.stock}`
+                                                                    }
                                                                 </small>
                                                             </button>
                                                         );

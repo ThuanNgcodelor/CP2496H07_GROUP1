@@ -51,9 +51,7 @@ public class CartItemServiceImpl implements CartItemService {
         } else if (product.getSizes() != null && !product.getSizes().isEmpty()) {
             // Logic cũ: lấy tổng stock của các size? Chỗ này check stock hơi lạ nhưng giữ
             // nguyên logic cũ
-            int availableStock = product.getSizes().stream()
-                    .mapToInt(Size::getStock)
-                    .sum();
+
             // Code cũ không set unitPrice ở đây, dùng giá base của product
         }
 
@@ -79,118 +77,92 @@ public class CartItemServiceImpl implements CartItemService {
                 if (size != null) {
                     unitPrice += size.getPriceModifier(); // Optional: maintain size modifier?
                 }
+
+                // Validate Flash Sale Stock
+                int currentFlashSaleSoldCount = fsp.getSoldCount();
+                int limit = fsp.getFlashSaleStock();
+                int remaining = limit - currentFlashSaleSoldCount;
+                if (request.getQuantity() > remaining) {
+                    throw new RuntimeException("FLASH_SALE_LIMIT_EXCEEDED: Only " + remaining + " items remaining.");
+                }
             }
         }
 
-        // Validate Flash Sale Stock (ADDED)
-        int currentFlashSaleSoldCount = fsp.getSoldCount();
-        int limit = fsp.getFlashSaleStock();
-        // Calculate remaining
-        int remaining = limit - currentFlashSaleSoldCount;
-        if (request.getQuantity() > remaining) {
-            throw new RuntimeException("FLASH_SALE_LIMIT_EXCEEDED: Only " + remaining + " items remaining.");
+        // Initialize availableStock
+        int availableStock = 0;
+        if (size != null) {
+            availableStock = size.getStock();
+        } else if (product.getSizes() != null && !product.getSizes().isEmpty()) {
+            availableStock = product.getSizes().stream()
+                    .mapToInt(Size::getStock)
+                    .sum();
         }
-    }
 
-    int availableStock = 0;if(size!=null)
-    {
-        availableStock = size.getStock();
-    }else if(product.getSizes()!=null&&!product.getSizes().isEmpty())
-    {
-        availableStock = product.getSizes().stream()
-                .mapToInt(Size::getStock)
-                .sum();
-    }else
-    {
-        // No sizes, assume product stock handled elsewhere or infinite?
-        // The original code didn't check stock explicitly if no sizes,
-        // except the block: if (product.getSizes()...) availableStock = sum...
-        // It seems "simple products" without sizes might not have stock check in
-        // original code?
-        // Actually original code initialized availableStock = 0.
-        // Let's keep original stock check logic structure but use our new price
-        // variables.
-    }
+        // Find existing cart item
+        Optional<CartItem> existingItem = findCartItem(cart.getId(), request.getProductId(), request.getSizeId());
 
-    // Re-evaluating stock logic from original code to ensure no regression:
-    // Original:
-    // int availableStock = 0;
-    // if (request.getSizeId() ... ) { ... availableStock = size.getStock(); }
-    // else if (product.getSizes() ... ) { availableStock = sum... }
+        CartItem cartItem;
+        int newQuantity;
 
-    if(size!=null)
-    {
-        availableStock = size.getStock();
-    }else if(product.getSizes()!=null&&!product.getSizes().isEmpty())
-    {
-        availableStock = product.getSizes().stream()
-                .mapToInt(Size::getStock)
-                .sum();
-    }
+        if (existingItem.isPresent()) {
+            cartItem = existingItem.get();
+            newQuantity = cartItem.getQuantity() + request.getQuantity();
 
-    // Find existing cart item
-    Optional<CartItem> existingItem = findCartItem(cart.getId(), request.getProductId(), request.getSizeId());
-
-    CartItem cartItem;
-    int newQuantity;
-
-    if(existingItem.isPresent())
-    {
-        cartItem = existingItem.get();
-        newQuantity = cartItem.getQuantity() + request.getQuantity();
-
-        // Validate: cannot mix flash sale and normal? Or update existing to flash sale?
-        // User request implies "taking the price". If updating, should we update price?
-        // Usually yes, if adding more, update price to current.
-        if (isFlashSale) {
-            cartItem.setUnitPrice(unitPrice);
-            cartItem.setOriginalPrice(originalPrice);
-            cartItem.setFlashSale(true);
+            // Validate: cannot mix flash sale and normal? Or update existing to flash sale?
+            // User request implies "taking the price". If updating, should we update price?
+            // Usually yes, if adding more, update price to current.
+            if (isFlashSale) {
+                cartItem.setUnitPrice(unitPrice);
+                cartItem.setOriginalPrice(originalPrice);
+                cartItem.setFlashSale(true);
+            }
+        } else {
+            cartItem = CartItem.builder()
+                    .cart(cart)
+                    .product(product)
+                    .size(size)
+                    .quantity(0)
+                    .unitPrice(unitPrice)
+                    .originalPrice(originalPrice)
+                    .isFlashSale(isFlashSale)
+                    .build();
+            newQuantity = request.getQuantity();
         }
-    }else
-    {
-        cartItem = CartItem.builder()
-                .cart(cart)
-                .product(product)
-                .size(size)
-                .quantity(0)
-                .unitPrice(unitPrice)
-                .originalPrice(originalPrice)
-                .isFlashSale(isFlashSale)
-                .build();
-        newQuantity = request.getQuantity();
-    }
 
-    // Validate stock
-    // For Flash Sale, we might want to check Flash Sale stock too?
-    // user didn't explicitly ask, but it's good practice.
-    // logic: incrementSoldCount checks stock. Here we just check availability?
-    // Let's stick to modifying PRICE for now as requested.
+        // Validate stock
+        // For Flash Sale, we might want to check Flash Sale stock too?
+        // user didn't explicitly ask, but it's good practice.
+        // logic: incrementSoldCount checks stock. Here we just check availability?
+        // Let's stick to modifying PRICE for now as requested.
 
-    // Original code stock check:
-    if(newQuantity>availableStock&&availableStock>0)
-    { // added availableStock > 0 check to assume unlimited
-      // if 0/not set?
-      // Actually original code: if (newQuantity > availableStock) throw...
-      // If availableStock is 0 (default), it prevents adding anything unless product
-      // has NO sizes and logic allows.
-      // Let's stick strictly to original stock logic.
-    }
+        // Original code stock check:
+        if (newQuantity > availableStock && availableStock > 0) { // added availableStock > 0 check to assume unlimited
+                                                                  // if 0/not set?
+                                                                  // Actually original code: if (newQuantity >
+                                                                  // availableStock) throw...
+                                                                  // If availableStock is 0 (default), it prevents
+                                                                  // adding anything unless product
+                                                                  // has NO sizes and logic allows.
+                                                                  // Let's stick strictly to original stock logic.
+        }
 
-    // Check standard stock
-    if(availableStock>0&&newQuantity>availableStock)
-    {
-        throw new RuntimeException("INSUFFICIENT_STOCK:" + availableStock);
-    }
+        // Check standard stock
+        if (availableStock > 0 && newQuantity > availableStock) {
+            throw new RuntimeException("INSUFFICIENT_STOCK:" + availableStock);
+        }
 
-    cartItem.setQuantity(newQuantity);cartItem.setTotalPrice(unitPrice*newQuantity);
+        cartItem.setQuantity(newQuantity);
+        cartItem.setTotalPrice(unitPrice * newQuantity);
 
-    cartItem=cartItemRepository.save(cartItem);
+        cartItem = cartItemRepository.save(cartItem);
 
-    // Update cart total
-    cart.updateTotalAmount();cartRepository.save(cart);
+        // Update cart total
+        cart.updateTotalAmount();
+        cartRepository.save(cart);
 
-    log.info("Added item to cart: userId={}, productId={}, quantity={}, isFlashSale={}",userId,request.getProductId(),newQuantity,isFlashSale);return cartItem;
+        log.info("Added item to cart: userId={}, productId={}, quantity={}, isFlashSale={}", userId,
+                request.getProductId(), newQuantity, isFlashSale);
+        return cartItem;
     }
 
     @Override
