@@ -146,4 +146,14 @@ public class ShopCoinController {
         shopCoinService.deleteMission(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/game-reward")
+    public ResponseEntity<ShopCoinDto> addGameReward(
+            @RequestBody com.example.userservice.request.shopCoin.GameRewardRequest request,
+            HttpServletRequest httpRequest) {
+        String userId = jwtUtil.ExtractUserId(httpRequest);
+        log.info("Adding game reward for user {}: score {}", userId, request.getScore());
+        ShopCoinDto result = shopCoinService.addGamePoints(userId, request.getScore());
+        return ResponseEntity.ok(result);
+    }
 }

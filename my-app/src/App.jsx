@@ -61,6 +61,7 @@ import AdminFlashSale from "./components/admin/flashsale/AdminFlashSale.jsx";
 import FlashSale from "./components/client/FlashSale.jsx";
 import ShopFlashSale from "./components/shop-owner/flashsale/ShopFlashSale.jsx";
 import ShopDecorationPage from "./pages/shop-owner/ShopDecorationPage.jsx";
+import GamePage from "./pages/client/GamePage.jsx";
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -142,6 +143,8 @@ export default function App() {
           <Route path="/live/manage" element={<LiveManagePage />} />
           <Route path="/live/:roomId" element={<LiveWatchPage />} />
           <Route path="/flash-sale" element={<FlashSale />} />
+          <Route path="/game" element={<GamePage />} />
+
 
           {/* Admin routes */}
           {/* Admin routes */}

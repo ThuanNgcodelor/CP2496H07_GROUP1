@@ -372,4 +372,27 @@ public class ShopCoinServiceImpl implements ShopCoinService {
 
         missionRepository.delete(mission);
     }
+
+    @Override
+    @Transactional
+    public ShopCoinDto addGamePoints(String userId, int score) {
+        // Conversion rate: 1 score = 1 point
+        long pointsToAdd = score;
+
+        if (pointsToAdd <= 0) {
+            log.warn("Score {} is not enough to convert to points for user {}", score, userId);
+            return getOrCreateShopCoin(userId);
+        }
+
+        ShopCoin shopCoin = shopCoinRepository.findByUserId(userId)
+                .orElseGet(() -> createNewShopCoin(userId));
+
+        shopCoin.addPoints(pointsToAdd);
+        shopCoin = shopCoinRepository.save(shopCoin);
+
+        log.info("Added {} game points to user {} from score {}. Total points: {}",
+                pointsToAdd, userId, score, shopCoin.getPoints());
+
+        return modelMapper.map(shopCoin, ShopCoinDto.class);
+    }
 }
