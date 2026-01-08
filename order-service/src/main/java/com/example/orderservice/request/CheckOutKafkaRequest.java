@@ -15,6 +15,7 @@ import java.util.List;
 @Builder
 public class CheckOutKafkaRequest {
     private String userId;
+    private String tempOrderId;  // Temporary order ID for Pre-Reserve Pattern
     private String addressId;
     @NotEmpty(message = "Selected items cannot be empty")
     private List<SelectedItemDto> selectedItems;

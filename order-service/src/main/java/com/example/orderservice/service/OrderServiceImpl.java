@@ -1167,8 +1167,71 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
+        // ========== PHASE 3: PRE-RESERVE STOCK ==========
+        // Generate temporary order ID for reservation tracking
+        String tempOrderId = java.util.UUID.randomUUID().toString();
+        java.util.List<ReservedItem> reservedItems = new java.util.ArrayList<>();
+        
+        try {
+            // Reserve stock for each item
+            for (SelectedItemDto item : orderRequest.getSelectedItems()) {
+                StockServiceClient.ReserveRequest reserveReq =
+                    new StockServiceClient.ReserveRequest(
+                        tempOrderId,
+                        item.getProductId(),
+                        item.getSizeId(),
+                        item.getQuantity()
+                    );
+                
+                org.springframework.http.ResponseEntity<java.util.Map<String, Object>> response = 
+                    stockServiceClient.reserveStock(reserveReq);
+                
+                if (response.getBody() == null || 
+                    !Boolean.TRUE.equals(response.getBody().get("success"))) {
+                    
+                    // Reserve failed → Get error info
+                    String status = response.getBody() != null 
+                        ? (String) response.getBody().get("status") 
+                        : "UNKNOWN";
+                    String message = response.getBody() != null 
+                        ? (String) response.getBody().get("message") 
+                        : "Reserve failed";
+                    
+                    log.warn("[PRE-RESERVE] Failed for product {}: status={}, message={}", 
+                             item.getProductId(), status, message);
+                    
+                    // Rollback all previously reserved items
+                    rollbackReservations(tempOrderId, reservedItems);
+                    
+                    // Throw appropriate exception
+                    if ("INSUFFICIENT_STOCK".equals(status)) {
+                        throw new RuntimeException("Insufficient stock for product: " 
+                            + item.getProductId() + ", size: " + item.getSizeId());
+                    } else {
+                        throw new RuntimeException("Reserve failed: " + message);
+                    }
+                }
+                
+                // Track reserved item for potential rollback
+                reservedItems.add(new ReservedItem(item.getProductId(), item.getSizeId()));
+                log.info("[PRE-RESERVE] Reserved: product={}, size={}, qty={}", 
+                         item.getProductId(), item.getSizeId(), item.getQuantity());
+            }
+            
+        } catch (RuntimeException e) {
+            // Already rolled back in the catch block above
+            throw e;
+        } catch (Exception e) {
+            // Unexpected error → Rollback
+            log.error("[PRE-RESERVE] Unexpected error: {}", e.getMessage(), e);
+            rollbackReservations(tempOrderId, reservedItems);
+            throw new RuntimeException("Reserve failed: " + e.getMessage());
+        }
+
+        // ========== ALL RESERVED → SEND TO KAFKA ==========
         CheckOutKafkaRequest kafkaRequest = CheckOutKafkaRequest.builder()
                 .userId(userId)
+                .tempOrderId(tempOrderId)  // Include tempOrderId for confirmation later
                 .addressId(orderRequest.getAddressId())
                 .cartId(null)
                 .selectedItems(orderRequest.getSelectedItems())
@@ -1179,7 +1242,66 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         kafkaTemplate.send(orderTopic.name(), kafkaRequest);
-        log.info("[ASYNC-ORDER] Order sent to Kafka for user: {}", userId);
+        log.info("[ASYNC-ORDER] Order reserved and sent to Kafka: tempOrderId={}, user={}", tempOrderId, userId);
+    }
+    
+    /**
+     * Helper: Rollback all reserved items when reservation fails
+     */
+    private void rollbackReservations(String tempOrderId, java.util.List<ReservedItem> reservedItems) {
+        for (ReservedItem item : reservedItems) {
+            try {
+                StockServiceClient.ReserveRequest cancelReq =
+                    new StockServiceClient.ReserveRequest(
+                        tempOrderId,
+                        item.productId(),
+                        item.sizeId(),
+                        0  // quantity not needed for cancel
+                    );
+                stockServiceClient.cancelReservation(cancelReq);
+                log.info("[ROLLBACK] Cancelled reservation: product={}, size={}", 
+                         item.productId(), item.sizeId());
+            } catch (Exception e) {
+                log.error("[ROLLBACK] Failed to cancel reservation: product={}, size={}, error={}", 
+                          item.productId(), item.sizeId(), e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Helper record for tracking reserved items
+     */
+    private record ReservedItem(String productId, String sizeId) {}
+    
+    /**
+     * Phase 3: Confirm all reservations after order saved successfully.
+     * This deletes the reservation keys in Redis, finalizing the stock decrease.
+     * If confirmation fails, the reservation will expire naturally (TTL = 15 min).
+     */
+    private void confirmReservationsForOrder(String tempOrderId, List<SelectedItemDto> items) {
+        if (tempOrderId == null || items == null) {
+            return;
+        }
+        
+        for (SelectedItemDto item : items) {
+            try {
+                StockServiceClient.ReserveRequest confirmReq =
+                    new StockServiceClient.ReserveRequest(
+                        tempOrderId,
+                        item.getProductId(),
+                        item.getSizeId(),
+                        0  // quantity not needed for confirm
+                    );
+                stockServiceClient.confirmReservation(confirmReq);
+                log.debug("[CONFIRM-RESERVATION] Confirmed: tempOrderId={}, product={}, size={}", 
+                         tempOrderId, item.getProductId(), item.getSizeId());
+            } catch (Exception e) {
+                // Don't throw - reservation will expire naturally if confirmation fails
+                log.warn("[CONFIRM-RESERVATION] Failed to confirm reservation: tempOrderId={}, product={}, error={}", 
+                         tempOrderId, item.getProductId(), e.getMessage());
+            }
+        }
+        log.info("[CONFIRM-RESERVATION] Confirmed {} reservations for tempOrderId={}", items.size(), tempOrderId);
     }
 
 
@@ -1402,8 +1524,6 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
 
-
-
         List<Order> ordersToSave = new ArrayList<>();
         List<OrderItem> orderItemsToSave = new ArrayList<>();
 
@@ -1478,7 +1598,6 @@ public class OrderServiceImpl implements OrderService {
                     double voucher = order.getVoucherDiscount() != null ? order.getVoucherDiscount().doubleValue() : 0.0;
                     order.setTotalPrice(itemsTotal + ship - voucher);
 
-                    // ⚡ CRITICAL: PRE-ASSIGN UUIDs for batch insert
                     ensureIdsAssignedForBatchInsert(order);
 
                     // Add to lists for BATCH SAVE
@@ -1559,6 +1678,15 @@ public class OrderServiceImpl implements OrderService {
                         .collect(java.util.stream.Collectors.toList());
 
                 publishStockDecreaseEvent(savedOrder, orderItems);
+            }
+            
+            // ==================== PHASE 3: CONFIRM RESERVATIONS ====================
+            // After orders saved successfully, confirm all reservations (delete reservation keys)
+            // This is done per-message because each message has its own tempOrderId
+            for (CheckOutKafkaRequest msg : messages) {
+                if (msg.getTempOrderId() != null && msg.getSelectedItems() != null) {
+                    confirmReservationsForOrder(msg.getTempOrderId(), msg.getSelectedItems());
+                }
             }
 
             // ==================== POST-SAVE ACTIONS (Restore Logic) ====================

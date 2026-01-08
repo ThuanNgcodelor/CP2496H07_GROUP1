@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @FeignClient(name = "stock-service", path = "/v1/stock", configuration = FeignConfig.class)
 public interface StockServiceClient {
@@ -71,4 +72,40 @@ public interface StockServiceClient {
     @PostMapping(value = "/product/batch-decrease", headers = "X-Internal-Call=true")
     ResponseEntity<java.util.Map<String, Boolean>> batchDecreaseStock(
         @RequestBody BatchDecreaseStockRequest request);
+
+
+
+    /**
+     * Reserve stock for an order
+     * @param request { orderId, productId, sizeId, quantity }
+     * @return { success, status, reservedQuantity } or { success, status, message }
+     */
+    @PostMapping(value = "/reservation/reserve", headers = "X-Internal-Call=true")
+    ResponseEntity<Map<String, Object>> reserveStock(@RequestBody ReserveRequest request);
+
+    /**
+     * Confirm reservation after order/payment success
+     * @param request { orderId, productId, sizeId }
+     * @return { success, message }
+     */
+    @PostMapping(value = "/reservation/confirm", headers = "X-Internal-Call=true")
+    ResponseEntity<Map<String, Object>> confirmReservation(@RequestBody ReserveRequest request);
+
+    /**
+     * Cancel reservation and rollback stock
+     * @param request { orderId, productId, sizeId }
+     * @return { success, rolledBackQuantity }
+     */
+    @PostMapping(value = "/reservation/cancel", headers = "X-Internal-Call=true")
+    ResponseEntity<Map<String, Object>> cancelReservation(@RequestBody ReserveRequest request);
+
+    /**
+     * Request DTO for reservation operations
+     */
+    record ReserveRequest(
+            String orderId,
+            String productId,
+            String sizeId,
+            int quantity
+    ) {}
 }
