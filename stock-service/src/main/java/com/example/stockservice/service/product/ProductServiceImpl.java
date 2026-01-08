@@ -495,7 +495,7 @@ public class ProductServiceImpl implements ProductService {
                     dto.setPrice(product.getPrice());
                     dto.setOriginalPrice(product.getOriginalPrice());
                     dto.setDiscountPercent(product.getDiscountPercent());
-                    dto.setStatus(String.valueOf(product.getStatus()));
+                    dto.setStatus(product.getStatus());
                     dto.setImageId(product.getImageId());
                     dto.setUserId(product.getUserId());
                     dto.setImageIds(product.getImageIds());

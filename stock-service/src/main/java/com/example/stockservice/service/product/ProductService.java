@@ -26,7 +26,7 @@ public interface ProductService {
 
     List<Product> getAllProducts();
 
-    void decreaseStockBySize(String sizeId, int quantity, boolean isFlashSale);
+    void decreaseStockBySize(String sizeId, int quantity);
 
     void increaseStockBySize(String sizeId, int quantity);
 

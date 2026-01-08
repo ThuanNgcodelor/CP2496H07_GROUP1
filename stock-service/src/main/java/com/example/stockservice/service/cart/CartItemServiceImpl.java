@@ -216,7 +216,7 @@ public class CartItemServiceImpl implements CartItemService {
     @Override
     @Transactional
     public CartItem updateCartItem(UpdateCartItemRequest request) {
-        Cart cart = cartRepository.findByUserId(request.getUserId())
+        Cart cart = cartRepository.findByUserIdWithLock(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + request.getUserId()));
 
         Optional<CartItem> existingItem = findCartItem(cart.getId(), request.getProductId(), request.getSizeId());
@@ -265,7 +265,7 @@ public class CartItemServiceImpl implements CartItemService {
     public void removeCartItem(String userId, String productId, String sizeId) {
         log.info("Removing cart item - userId: {}, productId: {}, sizeId: {}", userId, productId, sizeId);
 
-        Cart cart = cartRepository.findByUserId(userId)
+        Cart cart = cartRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
 
         Optional<CartItem> existingItem = findCartItem(cart.getId(), productId, sizeId);
@@ -287,7 +287,7 @@ public class CartItemServiceImpl implements CartItemService {
     public void removeCartItemByCartItemId(String userId, String cartItemId) {
         log.info("Removing cart item by ID - userId: {}, cartItemId: {}", userId, cartItemId);
 
-        Cart cart = cartRepository.findByUserId(userId)
+        Cart cart = cartRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
 
         CartItem cartItem = cartItemRepository.findById(cartItemId)
@@ -306,14 +306,25 @@ public class CartItemServiceImpl implements CartItemService {
     }
 
     private Cart getOrCreateCart(String userId) {
-        return cartRepository.findByUserId(userId)
-                .orElseGet(() -> {
-                    Cart newCart = Cart.builder()
-                            .userId(userId)
-                            .totalAmount(0.0)
-                            .build();
-                    return cartRepository.save(newCart);
-                });
+        // 1. Try to find with LOCK (Serialize access for this user)
+        Optional<Cart> lockedCart = cartRepository.findByUserIdWithLock(userId);
+        if (lockedCart.isPresent()) {
+            return lockedCart.get();
+        }
+
+        // 2. If not found, create new (Handle unique constraint race condition)
+        try {
+            Cart newCart = Cart.builder()
+                    .userId(userId)
+                    .totalAmount(0.0)
+                    .build();
+            return cartRepository.save(newCart);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Race condition: Someone else created it. Lock and return.
+            log.warn("Race condition creating cart for user {}, retrying with lock...", userId);
+            return cartRepository.findByUserIdWithLock(userId)
+                    .orElseThrow(() -> new RuntimeException("Cart creation failed after retry for user: " + userId));
+        }
     }
 
     private Optional<CartItem> findCartItem(String cartId, String productId, String sizeId) {

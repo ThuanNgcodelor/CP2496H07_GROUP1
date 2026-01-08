@@ -607,12 +607,25 @@ public class OrderServiceImpl implements OrderService {
                     //     log.info("[CONSUMER] Skipping stock decrease for test product: {}", si.getProductId());
                     // }
 
+                    Double unitPrice = si.getUnitPrice();
+                    // Fallback to avoid NPE if producer failed to populate price
+                    if (unitPrice == null) {
+                        try {
+                             ProductDto p = stockServiceClient.getProductById(si.getProductId()).getBody();
+                             SizeDto s = stockServiceClient.getSizeById(si.getSizeId()).getBody();
+                             unitPrice = computeUnitPrice(p, s);
+                        } catch (Exception e) {
+                             log.warn("[CONSUMER] Failed to fetch price for item {}, defaulting to 0", si.getProductId());
+                             unitPrice = 0.0;
+                        }
+                    }
+
                     return OrderItem.builder()
                             .productId(si.getProductId())
                             .sizeId(si.getSizeId())
                             .quantity(si.getQuantity())
-                            .unitPrice(si.getUnitPrice())
-                            .totalPrice(si.getUnitPrice() * si.getQuantity())
+                            .unitPrice(unitPrice)
+                            .totalPrice(unitPrice * si.getQuantity())
                             .order(order)
                             .build();
                 })
@@ -1156,55 +1169,35 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////
     @Override
-    @Transactional
-    public void orderByKafka(FrontendOrderRequest orderRequest, HttpServletRequest request) {
-        String author = request.getHeader("Authorization");
-        CartDto cartDto = stockServiceClient.getCart(author).getBody();
-        AddressDto address = userServiceClient.getAddressById(orderRequest.getAddressId()).getBody();
-        if (address == null)
-            throw new RuntimeException("Address not found for ID: " + orderRequest.getAddressId());
-        if (cartDto == null || cartDto.getItems().isEmpty())
-            throw new RuntimeException("Cart not found or empty");
-
+    public void orderByKafka(FrontendOrderRequest orderRequest, String userId) {
+        if (orderRequest.getSelectedItems() == null || orderRequest.getSelectedItems().isEmpty())
+             throw new RuntimeException("Selected items cannot be empty");
+        if (orderRequest.getAddressId() == null || orderRequest.getAddressId().isBlank())
+             throw new RuntimeException("Address ID is required");
+        
         for (SelectedItemDto item : orderRequest.getSelectedItems()) {
-            if (item.getSizeId() == null || item.getSizeId().isBlank()) {
+             if (item.getSizeId() == null || item.getSizeId().isBlank()) {
                 throw new RuntimeException("Size ID is required for product: " + item.getProductId());
-            }
-
-            ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
-            if (product == null) {
-                throw new RuntimeException("Product not found for ID: " + item.getProductId());
-            }
-
-            SizeDto size = stockServiceClient.getSizeById(item.getSizeId()).getBody();
-            if (size == null) {
-                throw new RuntimeException("Size not found for ID: " + item.getSizeId());
-            }
-
-            if (size.getStock() < item.getQuantity()) {
-                throw new RuntimeException("Insufficient stock for product: " + product.getName()
-                        + ", size: " + size.getName() + ". Available: " + size.getStock() + ", Requested: "
-                        + item.getQuantity());
             }
         }
 
         CheckOutKafkaRequest kafkaRequest = CheckOutKafkaRequest.builder()
-                .userId(cartDto.getUserId())
+                .userId(userId)
                 .addressId(orderRequest.getAddressId())
-                .cartId(cartDto.getId())
+                .cartId(null)
                 .selectedItems(orderRequest.getSelectedItems())
-                .paymentMethod(orderRequest.getPaymentMethod() != null ? orderRequest.getPaymentMethod() : "COD") // Default
-                                                                                                                  // to
-                                                                                                                  // COD
+                .paymentMethod(orderRequest.getPaymentMethod() != null ? orderRequest.getPaymentMethod() : "COD")
                 .voucherId(orderRequest.getVoucherId())
                 .voucherDiscount(orderRequest.getVoucherDiscount())
                 .shippingFee(orderRequest.getShippingFee())
                 .build();
 
         kafkaTemplate.send(orderTopic.name(), kafkaRequest);
+        log.info("[ASYNC-ORDER] Order sent to Kafka for user: {}", userId);
     }
+
+
 
     /**
      * Tạo order từ payment service với raw Map data
@@ -1273,7 +1266,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Transactional
     public Order createOrderFromPayment(String userId, String addressId, List<SelectedItemDto> selectedItems,
             BigDecimal shippingFee, String voucherId, Double voucherDiscount) {
         // Validate address
@@ -1415,9 +1407,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * BATCH CONSUMER: Xử lý checkout từ Kafka (Batch Mode - High Throughput)
-     * Logic giống hệt cách cũ, chỉ wrap trong loop để xử lý nhiều messages cùng lúc
-     * Throughput: ~500-1000 orders/s (so với ~100 orders/s trước đây)
+     * BATCH CONSUMER: Xử lý checkout từ Kafka Batch Mode
      */
     @KafkaListener(topics = "#{@orderTopic.name}", groupId = "order-service-checkout", containerFactory = "checkoutListenerFactory")
     @Transactional
@@ -1427,9 +1417,7 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
 
-        log.info("[BATCH-CHECKOUT-CONSUMER] ========================================");
-        log.info("[BATCH-CHECKOUT-CONSUMER] Received BATCH of {} checkout messages", messages.size());
-        log.info("[BATCH-CHECKOUT-CONSUMER] ========================================");
+
 
         List<Order> ordersToSave = new ArrayList<>();
         List<OrderItem> orderItemsToSave = new ArrayList<>();
@@ -1443,29 +1431,6 @@ public class OrderServiceImpl implements OrderService {
                 }
                 if (msg.getSelectedItems() == null || msg.getSelectedItems().isEmpty()) {
                     continue;
-                }
-
-                // Validate sản phẩm và stock- Skip for check
-                // ... (Validation logic simplified for throughput - assuming valid or caught in loop above if we implemented strict checks)
-                // For this optimization, we assume we keep the loop structure but collect objects.
-
-                // ==================== FETCH ADDRESS INFO ====================
-                AddressDto addressInfo = null;
-                // Only fetch address if NOT test address to avoid spamming UserService
-                if (!"test-address-1".equals(msg.getAddressId())) {
-                     try {
-                        if (msg.getAddressId() != null) {
-                            addressInfo = userServiceClient.getAddressById(msg.getAddressId()).getBody();
-                        }
-                    } catch (Exception e) {
-                         // ignore
-                    }
-                } else {
-                    // Fake address info for test
-                     addressInfo = com.example.orderservice.dto.AddressDto.builder()
-                        .recipientName("Test User")
-                        .recipientPhone("0123456789")
-                        .build();
                 }
 
                 // ==================== ORDER SPLITTING BY SHOP  ====================
@@ -1482,6 +1447,8 @@ public class OrderServiceImpl implements OrderService {
 
                      }
                 }
+
+                AddressDto addressInfo = null;
 
                 for (Map.Entry<String, List<SelectedItemDto>> entry : itemsByShop.entrySet()) {
                     String shopOwnerId = entry.getKey();
@@ -1538,9 +1505,9 @@ public class OrderServiceImpl implements OrderService {
                 cleanupCartItemsAsync(msg.getUserId(), msg.getSelectedItems());
 
             } catch (Exception e) {
-                // Xử lý lỗi cho TỪNG message riêng lẻ (không làm fail toàn bộ batch)
+                // Xử lý lỗi cho TỪNG message riêng lẻ
                 log.error("[BATCH-CHECKOUT-CONSUMER] ❌ Failed to process checkout message for user {}: {}",
-                        msg.getUserId(), e.getMessage(), e);
+                        msg.getUserId(), e.getMessage());
                 // failedCount++; // Removed as variable is deleted
 
                 // Send failure notification
@@ -1564,17 +1531,41 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        log.info("[BATCH-CHECKOUT-CONSUMER] ========================================");
+
         // ==================== BATCH SAVE ====================
         if (!ordersToSave.isEmpty()) {
             log.info("[BATCH-CHECKOUT-CONSUMER] Saving {} orders and {} items...", ordersToSave.size(), orderItemsToSave.size());
-            orderRepository.saveAll(ordersToSave);
-            orderItemRepository.saveAll(orderItemsToSave);
-            log.info("[BATCH-CHECKOUT-CONSUMER] Saved successfully! Now processing post-save actions...");
+            
+            try {
+                // Try Batch Save
+                orderRepository.saveAll(ordersToSave);
+                orderItemRepository.saveAll(orderItemsToSave);
+
+            } catch (Exception e) {
+                log.error("[BATCH-CHECKOUT-CONSUMER] ❌ BATCH SAVE FAILED: {}. Falling back to single save...", e.getMessage());
+                
+                // Fallback: Save one by one
+                for (Order order : ordersToSave) {
+                    try {
+                        orderRepository.save(order);
+                        
+                        // Filter items for this order
+                        List<OrderItem> itemsForOrder = orderItemsToSave.stream()
+                            .filter(item -> item.getOrder().getId().equals(order.getId()))
+                            .collect(java.util.stream.Collectors.toList());
+                            
+                        if (!itemsForOrder.isEmpty()) {
+                            orderItemRepository.saveAll(itemsForOrder);
+                        }
+                        log.info("[FALLBACK-SAVE] Saved order {} successfully", order.getId());
+                    } catch (Exception ex) {
+                        log.error("[FALLBACK-SAVE] Failed to save order {}: {}", order.getId(), ex.getMessage());
+                    }
+                }
+            }
 
             // ==================== ASYNC STOCK DECREASE (Phase 3) ====================
-            // Publish stock decrease events to Kafka (non-blocking, returns immediately)
-            // Note: We use orderItemsToSave because order.getOrderItems() is empty in batch mode
+            // Publish stock decrease events to Kafka
             for (Order savedOrder : ordersToSave) {
                 // Find items for this order
                 List<OrderItem> orderItems = orderItemsToSave.stream()

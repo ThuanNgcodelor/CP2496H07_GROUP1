@@ -208,15 +208,10 @@ public class OrderController {
                         "message", "For VNPay/Card, please initiate via payment-service."));
             }
 
-            // COD - use async Kafka
-            System.out.println("Received order request: " + request);
-            if (request.getSelectedItems() != null) {
-                request.getSelectedItems().forEach(item -> System.out.println("Item: productId=" + item.getProductId() +
-                        ", sizeId=" + item.getSizeId() +
-                        ", quantity=" + item.getQuantity() +
-                        ", isFlashSale=" + item.getIsFlashSale()));
-            }
-            orderService.orderByKafka(request, httpRequest);
+            // Extract UserID here to avoid Service having to call StockService
+            String userId = jwtUtil.ExtractUserId(httpRequest);
+            orderService.orderByKafka(request, userId);
+            
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Order has been sent to Kafka.",
                     "status", "PENDING"));
