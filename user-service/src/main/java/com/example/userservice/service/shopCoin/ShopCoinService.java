@@ -8,36 +8,38 @@ import java.util.List;
 
 public interface ShopCoinService {
 
-    ShopCoinDto getUserShopCoin(String userId);
+        ShopCoinDto getUserShopCoin(String userId);
 
-    ShopCoinDto dailyCheckIn(String userId, ShopCoinCheckInRequest request);
+        ShopCoinDto dailyCheckIn(String userId, ShopCoinCheckInRequest request);
 
-    ShopCoinDto addPoints(String userId, ShopCoinAddPointsRequest request);
+        ShopCoinDto addPoints(String userId, ShopCoinAddPointsRequest request);
 
-    ShopCoinDto getOrCreateShopCoin(String userId);
+        ShopCoinDto addGamePoints(String userId, int score);
 
-    boolean hasCheckedInToday(String userId);
+        ShopCoinDto getOrCreateShopCoin(String userId);
 
-    List<ShopCoinAdminDto> getAllShopCoins();
+        boolean hasCheckedInToday(String userId);
 
-    ShopCoinDto performViewProductMission(String userId);
+        List<ShopCoinAdminDto> getAllShopCoins();
 
-    void performReviewMission(String userId);
+        ShopCoinDto performViewProductMission(String userId);
 
-    // Dynamic Mission System
-    com.example.userservice.model.Mission createMission(
-            com.example.userservice.request.shopCoin.MissionRequest request);
+        void performReviewMission(String userId);
 
-    List<com.example.userservice.dto.MissionDto> getAllMissions();
+        // Dynamic Mission System
+        com.example.userservice.model.Mission createMission(
+                        com.example.userservice.request.shopCoin.MissionRequest request);
 
-    List<com.example.userservice.dto.UserMissionDto> getMissionsForUser(String userId);
+        List<com.example.userservice.dto.MissionDto> getAllMissions();
 
-    com.example.userservice.dto.UserMissionDto performMissionAction(String userId, String actionCode);
+        List<com.example.userservice.dto.UserMissionDto> getMissionsForUser(String userId);
 
-    ShopCoinDto claimMissionReward(String userId, String missionId);
+        com.example.userservice.dto.UserMissionDto performMissionAction(String userId, String actionCode);
 
-    com.example.userservice.model.Mission updateMission(String id,
-            com.example.userservice.request.shopCoin.MissionRequest request);
+        ShopCoinDto claimMissionReward(String userId, String missionId);
 
-    void deleteMission(String id);
+        com.example.userservice.model.Mission updateMission(String id,
+                        com.example.userservice.request.shopCoin.MissionRequest request);
+
+        void deleteMission(String id);
 }

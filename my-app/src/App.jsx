@@ -61,6 +61,7 @@ import AdminFlashSale from "./components/admin/flashsale/AdminFlashSale.jsx";
 import FlashSalePage from "./pages/client/FlashSalePage.jsx";
 import ShopFlashSale from "./components/shop-owner/flashsale/ShopFlashSale.jsx";
 import ShopDecorationPage from "./pages/shop-owner/ShopDecorationPage.jsx";
+import GamePage from "./pages/client/GamePage.jsx";
 import AdminWalletPage from "./pages/admin/AdminWalletPage.jsx";
 
 // Component to scroll to top on route change
@@ -106,13 +107,8 @@ function GlobalChatWidget() {
 
 import { Toaster } from 'react-hot-toast';
 
-// ... (other imports)
-
-// Global Chat Widget - only show on client pages 
-// ...
 
 export default function App() {
-  // ...
   return (
     <HelmetProvider>
       <BrowserRouter>
@@ -144,6 +140,8 @@ export default function App() {
           <Route path="/live/manage" element={<LiveManagePage />} />
           <Route path="/live/:roomId" element={<LiveWatchPage />} />
           <Route path="/flash-sale" element={<FlashSalePage />} />
+          <Route path="/game" element={<GamePage />} />
+
 
           {/* Admin routes */}
           {/* Admin routes */}

@@ -308,19 +308,35 @@ export default function Header() {
                   🏪 {t('header.registerShopOwner')}
                 </Link>
               )}
-              {/* Watch Live - visible to all users */}
-              <Link to="/live" style={{
-                color: 'white',
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: 'rgba(255,255,255,0.15)',
-                padding: '4px 10px',
-                borderRadius: '4px'
-              }}>
-                🔴 {t('header.watchLive')}
-              </Link>
+              {/* Watch Live & Game - visible to authenticated users only */}
+              {isAuthenticated() && (
+                <>
+                  <Link to="/live" style={{
+                    color: 'white',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'rgba(255,255,255,0.15)',
+                    padding: '4px 10px',
+                    borderRadius: '4px'
+                  }}>
+                    🔴 {t('header.watchLive')}
+                  </Link>
+                  <Link to="/game" style={{
+                    color: 'white',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'rgba(255,255,255,0.15)',
+                    padding: '4px 10px',
+                    borderRadius: '4px'
+                  }}>
+                    🎮 Game
+                  </Link>
+                </>
+              )}
               <Link to="#" style={{ color: 'white', textDecoration: 'none', opacity: 0.9 }}>
                 {t('header.downloadApp')}
               </Link>
