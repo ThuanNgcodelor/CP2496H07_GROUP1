@@ -7,7 +7,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
@@ -15,7 +17,7 @@ import java.util.List;
 @Builder
 public class CheckOutKafkaRequest {
     private String userId;
-    private String tempOrderId;  // Temporary order ID for Pre-Reserve Pattern
+    private String tempOrderId; // Temporary order ID for Pre-Reserve Pattern
     private String addressId;
     @NotEmpty(message = "Selected items cannot be empty")
     private List<SelectedItemDto> selectedItems;
@@ -23,5 +25,6 @@ public class CheckOutKafkaRequest {
     private String paymentMethod; // COD, VNPAY, CARD
     private String voucherId;
     private Double voucherDiscount;
+    private Map<String, java.math.BigDecimal> shopShippingFees; // Per-shop shipping fees
     private Double shippingFee;
 }

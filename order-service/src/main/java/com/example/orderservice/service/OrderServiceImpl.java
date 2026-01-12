@@ -1284,6 +1284,7 @@ public class OrderServiceImpl implements OrderService {
                 .voucherId(orderRequest.getVoucherId())
                 .voucherDiscount(orderRequest.getVoucherDiscount())
                 .shippingFee(orderRequest.getShippingFee())
+                .shopShippingFees(orderRequest.getShopShippingFees())
                 .build();
 
         kafkaTemplate.send(orderTopic.name(), kafkaRequest);
@@ -1428,6 +1429,12 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public Order createOrderFromWallet(FrontendOrderRequest request, String userId) {
         // ========== PHASE 1: PREPARE SELECTED ITEMS ==========
+        // Extract per-shop shipping fees map from request
+        Map<String, BigDecimal> shopShippingFeesMap = request.getShopShippingFees() != null
+                ? request.getShopShippingFees()
+                : new HashMap<>();
+        log.info("[WALLET-CHECKOUT] shopShippingFees from request: {}", shopShippingFeesMap);
+
         List<SelectedItemDto> selectedItems = request.getSelectedItems().stream()
                 .map(item -> {
                     SelectedItemDto dto = new SelectedItemDto();
@@ -1438,6 +1445,12 @@ public class OrderServiceImpl implements OrderService {
                     dto.setUnitPrice(item.getUnitPrice());
                     dto.setShopOwnerId(item.getShopOwnerId());
                     dto.setShopOwnerName(item.getShopOwnerName());
+
+                    // Populate shopShippingFee from map (NEW)
+                    if (item.getShopOwnerId() != null && shopShippingFeesMap.containsKey(item.getShopOwnerId())) {
+                        dto.setShopShippingFee(shopShippingFeesMap.get(item.getShopOwnerId()));
+                    }
+
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -1635,9 +1648,22 @@ public class OrderServiceImpl implements OrderService {
         int totalShops = itemsByShop.size();
         log.info("[PAYMENT-ORDER] Splitting order into {} separate orders by shop", totalShops);
 
-        // Calculate shipping fee per shop (divide equally if multiple shops)
+        // Extract per-shop shipping fees from selectedItems (NEW approach)
+        Map<String, BigDecimal> shopShippingFeesMap = new java.util.HashMap<>();
+        for (SelectedItemDto item : selectedItems) {
+            if (item.getShopOwnerId() != null && item.getShopShippingFee() != null) {
+                shopShippingFeesMap.putIfAbsent(item.getShopOwnerId(), item.getShopShippingFee());
+            }
+        }
+
+        // Fallback: if no per-shop fees provided, divide equally (backward
+        // compatibility)
+        boolean hasPerShopFees = !shopShippingFeesMap.isEmpty();
         double shippingFeeValue = shippingFee != null ? shippingFee.doubleValue() : 0.0;
-        double shippingFeePerShop = shippingFeeValue / totalShops;
+        double fallbackShippingFeePerShop = totalShops > 0 ? shippingFeeValue / totalShops : 0.0;
+
+        log.info("[PAYMENT-ORDER] Shipping fee strategy: {} (total: {}, shops: {})",
+                hasPerShopFees ? "PER_SHOP" : "EQUAL_DIVISION", shippingFeeValue, totalShops);
 
         // Determine which shop the voucher belongs to (if any)
         String voucherShopOwnerId = null;
@@ -1656,13 +1682,20 @@ public class OrderServiceImpl implements OrderService {
 
             log.info("[PAYMENT-ORDER] Creating order for shop {} with {} items", shopOwnerId, shopItems.size());
 
+            // Use per-shop shipping fee if available, otherwise fallback to equal division
+            BigDecimal shopShippingFee = shopShippingFeesMap.getOrDefault(
+                    shopOwnerId,
+                    BigDecimal.valueOf(fallbackShippingFeePerShop));
+
+            log.info("[PAYMENT-ORDER] Shop {} shipping fee: {}", shopOwnerId, shopShippingFee);
+
             // Create order with PENDING status
             Order order = Order.builder()
                     .userId(userId)
                     .addressId(addressId)
                     .orderStatus(OrderStatus.PENDING)
                     .totalPrice(0.0)
-                    .shippingFee(BigDecimal.valueOf(shippingFeePerShop))
+                    .shippingFee(shopShippingFee) // Use shop-specific fee
                     .paymentMethod("VNPAY")
                     .build();
 
@@ -1787,7 +1820,19 @@ public class OrderServiceImpl implements OrderService {
                 // ==================== ORDER SPLITTING BY SHOP ====================
                 Map<String, List<SelectedItemDto>> itemsByShop = groupItemsByShopOwner(msg.getSelectedItems());
                 int totalShops = itemsByShop.size();
-                double shippingFeePerShop = (msg.getShippingFee() != null ? msg.getShippingFee() : 0.0) / totalShops;
+
+                // Extract per-shop shipping fees (NEW)
+                Map<String, BigDecimal> shopShippingFeesMap = new HashMap<>();
+                if (msg.getShopShippingFees() != null) {
+                    shopShippingFeesMap = msg.getShopShippingFees();
+                }
+
+                // Fallback: divide equally if no per-shop fees
+                double totalShippingFee = (msg.getShippingFee() != null ? msg.getShippingFee() : 0.0);
+                double fallbackShippingFeePerShop = totalShops > 0 ? totalShippingFee / totalShops : 0.0;
+
+                log.info("[BATCH-CHECKOUT-CONSUMER] Shipping: {} (total: {}, shops: {})",
+                        !shopShippingFeesMap.isEmpty() ? "PER_SHOP" : "EQUAL_DIV", totalShippingFee, totalShops);
 
                 String voucherShopOwnerId = null;
 
@@ -1805,6 +1850,11 @@ public class OrderServiceImpl implements OrderService {
                     String shopOwnerId = entry.getKey();
                     List<SelectedItemDto> shopItems = entry.getValue();
 
+                    // Use per-shop fee if available, otherwise fallback
+                    BigDecimal shopShippingFee = shopShippingFeesMap.getOrDefault(
+                            shopOwnerId,
+                            BigDecimal.valueOf(fallbackShippingFeePerShop));
+
                     // 1) Create order skeleton
                     // Manual builder instead of save()
                     Order order = Order.builder()
@@ -1813,7 +1863,7 @@ public class OrderServiceImpl implements OrderService {
                             .orderStatus(OrderStatus.PENDING)
                             .totalPrice(0.0)
                             .paymentMethod(msg.getPaymentMethod() != null ? msg.getPaymentMethod() : "COD")
-                            .shippingFee(BigDecimal.valueOf(shippingFeePerShop))
+                            .shippingFee(shopShippingFee)
                             .build();
 
                     // Populate Recipient Info
@@ -2078,6 +2128,27 @@ public class OrderServiceImpl implements OrderService {
                                         tempOrderId);
                             }
 
+                            // Extract shopShippingFees map (NEW for per-shop fees)
+                            Map<String, BigDecimal> shopShippingFeesFromEvent = new HashMap<>();
+                            if (orderDataMap.containsKey("shopShippingFees")) {
+                                try {
+                                    Map<String, Object> feesMap = (Map<String, Object>) orderDataMap
+                                            .get("shopShippingFees");
+                                    for (Map.Entry<String, Object> entry : feesMap.entrySet()) {
+                                        if (entry.getValue() instanceof Number) {
+                                            shopShippingFeesFromEvent.put(
+                                                    entry.getKey(),
+                                                    BigDecimal.valueOf(((Number) entry.getValue()).doubleValue()));
+                                        }
+                                    }
+                                    log.info("[BATCH-PAYMENT-CONSUMER] Extracted shopShippingFees: {}",
+                                            shopShippingFeesFromEvent);
+                                } catch (Exception e) {
+                                    log.warn("[BATCH-PAYMENT-CONSUMER] Failed to extract shopShippingFees: {}",
+                                            e.getMessage());
+                                }
+                            }
+
                             // Convert to SelectedItemDto list
                             List<SelectedItemDto> selectedItems = selectedItemsList.stream()
                                     .map(item -> {
@@ -2085,10 +2156,23 @@ public class OrderServiceImpl implements OrderService {
                                         dto.setProductId((String) item.get("productId"));
                                         dto.setSizeId((String) item.get("sizeId"));
                                         dto.setQuantity(((Number) item.get("quantity")).intValue());
+
                                         // Extract isFlashSale flag for confirmation
                                         if (item.containsKey("isFlashSale")) {
                                             dto.setIsFlashSale((Boolean) item.get("isFlashSale"));
                                         }
+
+                                        // Extract shopOwnerId (NEW)
+                                        if (item.containsKey("shopOwnerId")) {
+                                            String shopOwnerId = (String) item.get("shopOwnerId");
+                                            dto.setShopOwnerId(shopOwnerId);
+
+                                            // Populate shopShippingFee from map
+                                            if (shopShippingFeesFromEvent.containsKey(shopOwnerId)) {
+                                                dto.setShopShippingFee(shopShippingFeesFromEvent.get(shopOwnerId));
+                                            }
+                                        }
+
                                         return dto;
                                     })
                                     .collect(java.util.stream.Collectors.toList());

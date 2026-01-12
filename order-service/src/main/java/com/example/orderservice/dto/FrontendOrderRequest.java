@@ -4,7 +4,9 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class FrontendOrderRequest {
@@ -22,6 +24,9 @@ public class FrontendOrderRequest {
 
     // Shipping fee
     private Double shippingFee;
+
+    // Per-shop shipping fees (NEW for accurate multi-shop shipping)
+    private Map<String, BigDecimal> shopShippingFees;
 
     // Temporary order ID for confirming Flash Sale reservations
     private String tempOrderId;

@@ -4,6 +4,7 @@ import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 
 @Data
 public class SelectedItemDto {
@@ -24,4 +25,5 @@ public class SelectedItemDto {
 
     private String shopOwnerId;
     private String shopOwnerName;
+    private java.math.BigDecimal shopShippingFee; // Per-shop shipping fee
 }

@@ -151,20 +151,56 @@ export function CheckoutPage({
     const calculateFee = async () => {
       if (!selectedAddressId || selectedItems.length === 0) {
         setShippingFee(0);
+        setShopShippingFees({});
         return;
       }
 
       setCalculatingShippingFee(true);
       try {
-        const result = await calculateShippingFee(selectedAddressId, selectedItems);
-        if (result && result.shippingFee) {
-          setShippingFee(result.shippingFee);
-        } else {
-          setShippingFee(0);
+        // Group items by shopOwnerId
+        const itemsByShop = {};
+        selectedItems.forEach(item => {
+          const shopId = item.shopOwnerId || 'unknown';
+          if (!itemsByShop[shopId]) {
+            itemsByShop[shopId] = [];
+          }
+          itemsByShop[shopId].push(item);
+        });
+
+        // Calculate shipping fee for EACH shop
+        const shopFees = {};
+        let totalFee = 0;
+
+        for (const [shopOwnerId, shopItems] of Object.entries(itemsByShop)) {
+          if (shopOwnerId === 'unknown') {
+            console.warn('[Shipping] Skipping items without shopOwnerId');
+            continue;
+          }
+
+          try {
+            // Call API with items from THIS shop only
+            const result = await calculateShippingFee(selectedAddressId, shopItems, shopOwnerId);
+
+            if (result && result.shippingFee) {
+              shopFees[shopOwnerId] = result.shippingFee;
+              totalFee += result.shippingFee;
+            } else {
+              shopFees[shopOwnerId] = 0;
+            }
+          } catch (error) {
+            console.error(`[Shipping] Failed to calculate for shop ${shopOwnerId}:`, error);
+            shopFees[shopOwnerId] = 0;
+          }
         }
+
+        setShopShippingFees(shopFees);
+        setShippingFee(totalFee);
+
+        console.log('[Shipping] Calculated per-shop fees:', shopFees, 'Total:', totalFee);
       } catch (error) {
         console.error("Failed to calculate shipping fee:", error);
         setShippingFee(0);
+        setShopShippingFees({});
       } finally {
         setCalculatingShippingFee(false);
       }
@@ -334,6 +370,13 @@ export function CheckoutPage({
 
     setOrderLoading(true);
     try {
+      // Compute totals from per-shop values
+      const totalShippingFee = Object.values(shopShippingFees).reduce((sum, fee) => sum + Number(fee || 0), 0);
+      const totalVoucherDiscount = Object.values(shopAppliedVouchers).reduce((sum, v) => sum + Number(v?.discount || 0), 0);
+
+      console.log('[Checkout] Total shipping fee:', totalShippingFee, 'from', shopShippingFees);
+      console.log('[Checkout] Total voucher discount:', totalVoucherDiscount);
+
       // Build orderData - Backend will handle stock reservation
       const orderData = {
         selectedItems: selectedItems.map((it) => ({
@@ -341,13 +384,15 @@ export function CheckoutPage({
           sizeId: it.sizeId,
           quantity: it.quantity,
           unitPrice: it.unitPrice || it.price,
-          isFlashSale: it.isFlashSale // Backend uses this flag for reservation routing
+          isFlashSale: it.isFlashSale, // Backend uses this flag for reservation routing
+          shopOwnerId: it.shopOwnerId // NEW: Include shopOwnerId for proper order splitting
         })),
         addressId: selectedAddressId,
         paymentMethod: paymentMethod || "COD",
         voucherId: appliedVoucher?.voucherId || null,
         voucherDiscount: voucherDiscount || 0,
         shippingFee: totalShippingFee || 0,
+        shopShippingFees: shopShippingFees // NEW: Per-shop shipping fees
       };
 
       Swal.fire({
@@ -418,16 +463,17 @@ export function CheckoutPage({
             throw new Error("Cannot get user ID");
           }
 
-          // STEP 3: Create payment with order data + tempOrderId
+          // STEP 3: Create payment with order data + tempOrderId + per-shop shipping
           const payPayload = {
             amount: Math.max(1, Math.round(totalWithShipping)),
-            orderInfo: "Thanh toan don hang",
+            orderInfo: "Thanh toán đơn hàng",
             userId: userId,
             addressId: selectedAddressId,
             orderDataJson: JSON.stringify({
               userId: userId,
               addressId: selectedAddressId,
               shippingFee: totalShippingFee || 0,
+              shopShippingFees: shopShippingFees, // NEW: Per-shop shipping fees
               voucherId: appliedVoucher?.voucherId || null,
               voucherDiscount: voucherDiscount || 0,
               tempOrderId: tempOrderId, // IMPORTANT: For Flash Sale confirmation
@@ -436,7 +482,8 @@ export function CheckoutPage({
                 sizeId: it.sizeId,
                 quantity: it.quantity,
                 unitPrice: it.unitPrice || it.price,
-                isFlashSale: it.isFlashSale
+                isFlashSale: it.isFlashSale,
+                shopOwnerId: it.shopOwnerId // NEW: Include shopOwnerId
               })),
             }),
           };

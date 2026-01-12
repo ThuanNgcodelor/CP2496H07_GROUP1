@@ -252,9 +252,10 @@ export const confirmReceipt = async (orderId) => {
  * Tính phí vận chuyển trước khi checkout
  * @param {string} addressId - ID của địa chỉ giao hàng
  * @param {Array} selectedItems - Danh sách sản phẩm đã chọn
+ * @param {string} [shopOwnerId] - ID của chủ cửa hàng (tùy chọn)
  * @returns {Promise<number|null>} - Promise trả về phí vận chuyển hoặc null nếu lỗi
  */
-export const calculateShippingFee = async (addressId, selectedItems) => {
+export const calculateShippingFee = async (addressId, selectedItems, shopOwnerId = null) => {
     try {
         const firstProductId = selectedItems.length > 0 ? (selectedItems[0].productId || selectedItems[0].id) : null;
 
@@ -269,7 +270,8 @@ export const calculateShippingFee = async (addressId, selectedItems) => {
         const requestData = {
             addressId: addressId,
             selectedItems: selectedItemsData, // Send selectedItems to calculate weight from actual product sizes
-            productId: firstProductId // For backward compatibility
+            productId: firstProductId, // For backward compatibility
+            shopOwnerId: shopOwnerId // NEW: Specify which shop to calculate from
         };
 
         const response = await api.post("/calculate-shipping-fee", requestData);
