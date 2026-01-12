@@ -134,4 +134,14 @@ public class FlashSaleController {
         flashSaleService.confirmFlashSaleReservation(orderId, productId, sizeId);
         return ResponseEntity.ok("Confirmed");
     }
+
+    @PostMapping("/cancel")
+    public ResponseEntity<String> cancelReservation(
+            @RequestParam("orderId") String orderId,
+            @RequestParam("productId") String productId,
+            @RequestParam("sizeId") String sizeId,
+            @RequestParam("userId") String userId) {
+        flashSaleService.cancelFlashSaleReservation(orderId, productId, sizeId, userId);
+        return ResponseEntity.ok("Cancelled");
+    }
 }

@@ -1427,7 +1427,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Order createOrderFromWallet(FrontendOrderRequest request, String userId) {
-
+        // ========== PHASE 1: PREPARE SELECTED ITEMS ==========
         List<SelectedItemDto> selectedItems = request.getSelectedItems().stream()
                 .map(item -> {
                     SelectedItemDto dto = new SelectedItemDto();
@@ -1442,61 +1442,154 @@ public class OrderServiceImpl implements OrderService {
                 })
                 .collect(Collectors.toList());
 
-        BigDecimal shippingFee = BigDecimal.valueOf(request.getShippingFee());
-        String voucherId = request.getVoucherId();
-        Double voucherDiscount = request.getVoucherDiscount();
-        double totalToPay = 0.0;
-        for (SelectedItemDto item : selectedItems) {
-            ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
-            if (product == null)
-                throw new RuntimeException("Product not found");
+        // ========== PHASE 2: RESERVE STOCK (Flash Sale + Regular) ==========
+        // Generate temporary order ID for reservation tracking
+        String tempOrderId = java.util.UUID.randomUUID().toString();
+        java.util.List<ReservedItem> reservedItems = new java.util.ArrayList<>();
 
-            // Ensure unit price
-            if (item.getUnitPrice() == null) {
-                SizeDto size = stockServiceClient.getSizeById(item.getSizeId()).getBody();
-                if (size != null) {
-                    item.setUnitPrice(computeUnitPrice(product, size));
+        try {
+            // Reserve stock for each item BEFORE wallet payment
+            for (SelectedItemDto item : selectedItems) {
+                log.info("[WALLET-RESERVE] Reserving stock: product={}, size={}, qty={}, isFlashSale={}",
+                        item.getProductId(), item.getSizeId(), item.getQuantity(), item.getIsFlashSale());
+
+                if (Boolean.TRUE.equals(item.getIsFlashSale())) {
+                    // --- FLASH SALE RESERVATION ---
+                    try {
+                        String result = flashSaleClient.reserveStock(
+                                tempOrderId, item.getProductId(), item.getSizeId(), item.getQuantity(), userId);
+
+                        reservedItems.add(new ReservedItem(item.getProductId(), item.getSizeId(), true));
+                        log.info("[WALLET-RESERVE] Flash Sale Reserved: product={}, qty={}",
+                                item.getProductId(), item.getQuantity());
+
+                    } catch (Exception e) {
+                        String message = e.getMessage();
+                        log.warn("[WALLET-RESERVE] Flash Sale Failed for product {}: {}", item.getProductId(), message);
+                        rollbackReservations(tempOrderId, reservedItems, userId);
+
+                        if (message.contains("limit")) {
+                            throw new RuntimeException(message);
+                        } else {
+                            throw new RuntimeException("Flash Sale Reserve failed: " + message);
+                        }
+                    }
+
+                } else {
+                    // --- REGULAR STOCK RESERVATION ---
+                    StockServiceClient.ReserveRequest reserveReq = new StockServiceClient.ReserveRequest(
+                            tempOrderId,
+                            item.getProductId(),
+                            item.getSizeId(),
+                            item.getQuantity());
+
+                    ResponseEntity<java.util.Map<String, Object>> response = stockServiceClient
+                            .reserveStock(reserveReq);
+
+                    if (response.getBody() == null ||
+                            !Boolean.TRUE.equals(response.getBody().get("success"))) {
+
+                        String status = response.getBody() != null
+                                ? (String) response.getBody().get("status")
+                                : "UNKNOWN";
+                        String message = response.getBody() != null
+                                ? (String) response.getBody().get("message")
+                                : "Reserve failed";
+
+                        log.warn("[WALLET-RESERVE] Failed for product {}: status={}, message={}",
+                                item.getProductId(), status, message);
+
+                        rollbackReservations(tempOrderId, reservedItems, userId);
+
+                        if ("INSUFFICIENT_STOCK".equals(status)) {
+                            throw new RuntimeException("Insufficient stock for product: "
+                                    + item.getProductId() + ", size: " + item.getSizeId());
+                        } else {
+                            throw new RuntimeException("Reserve failed: " + message);
+                        }
+                    }
+
+                    reservedItems.add(new ReservedItem(item.getProductId(), item.getSizeId(), false));
+                    log.info("[WALLET-RESERVE] Reserved: product={}, size={}, qty={}",
+                            item.getProductId(), item.getSizeId(), item.getQuantity());
                 }
             }
 
-            totalToPay += item.getUnitPrice() * item.getQuantity();
-        }
-        totalToPay += shippingFee.doubleValue();
-        if (voucherDiscount != null) {
-            totalToPay -= voucherDiscount;
-        }
+            // ========== PHASE 3: CALCULATE TOTAL PRICE ==========
+            BigDecimal shippingFee = BigDecimal.valueOf(request.getShippingFee());
+            String voucherId = request.getVoucherId();
+            Double voucherDiscount = request.getVoucherDiscount();
+            double totalToPay = 0.0;
 
-        // 4. CALL USER SERVICE TO DEDUCT WALLET
-        AddRefundRequestDto payReq = new AddRefundRequestDto();
-        payReq.setUserId(userId);
-        payReq.setAmount(BigDecimal.valueOf(totalToPay));
-        payReq.setReason("Pay for your order using e-wallet.");
-        payReq.setOrderId("TEMP_WALLET_PAY_" + System.currentTimeMillis());
+            for (SelectedItemDto item : selectedItems) {
+                ProductDto product = stockServiceClient.getProductById(item.getProductId()).getBody();
+                if (product == null) {
+                    rollbackReservations(tempOrderId, reservedItems, userId);
+                    throw new RuntimeException("Product not found");
+                }
 
-        try {
-            ResponseEntity<Map<String, Object>> response = userServiceClient.processWalletPayment(payReq);
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new RuntimeException("Wallet payment failed: " + response.getBody());
+                // Ensure unit price
+                if (item.getUnitPrice() == null) {
+                    SizeDto size = stockServiceClient.getSizeById(item.getSizeId()).getBody();
+                    if (size != null) {
+                        item.setUnitPrice(computeUnitPrice(product, size));
+                    }
+                }
+
+                totalToPay += item.getUnitPrice() * item.getQuantity();
             }
-        } catch (Exception e) {
-            throw new RuntimeException("Wallet deduction failed: " + e.getMessage());
-        }
+            totalToPay += shippingFee.doubleValue();
+            if (voucherDiscount != null) {
+                totalToPay -= voucherDiscount;
+            }
 
-        String tempOrderId = request.getTempOrderId();
+            // ========== PHASE 4: DEDUCT WALLET ==========
+            log.info("[WALLET-PAYMENT] Attempting to deduct wallet: userId={}, amount={}", userId, totalToPay);
+            AddRefundRequestDto payReq = new AddRefundRequestDto();
+            payReq.setUserId(userId);
+            payReq.setAmount(BigDecimal.valueOf(totalToPay));
+            payReq.setReason("Pay for your order using e-wallet.");
+            payReq.setOrderId("TEMP_WALLET_PAY_" + System.currentTimeMillis());
 
-        Order mainOrder = createOrderFromPayment(userId, request.getAddressId(), selectedItems, shippingFee, voucherId,
-                voucherDiscount);
+            try {
+                ResponseEntity<Map<String, Object>> response = userServiceClient.processWalletPayment(payReq);
+                if (!response.getStatusCode().is2xxSuccessful()) {
+                    rollbackReservations(tempOrderId, reservedItems, userId);
+                    throw new RuntimeException("Wallet payment failed: " + response.getBody());
+                }
+                log.info("[WALLET-PAYMENT] Wallet deducted successfully: userId={}, amount={}", userId, totalToPay);
+            } catch (Exception e) {
+                log.error("[WALLET-PAYMENT] Wallet deduction failed, rolling back reservations: {}", e.getMessage());
+                rollbackReservations(tempOrderId, reservedItems, userId);
+                throw new RuntimeException("Wallet deduction failed: " + e.getMessage());
+            }
 
-        mainOrder.setOrderStatus(OrderStatus.PENDING);
-        mainOrder.setPaymentMethod("WALLET");
-        orderRepository.save(mainOrder);
+            // ========== PHASE 5: CREATE ORDER ==========
+            Order mainOrder = createOrderFromPayment(userId, request.getAddressId(), selectedItems, shippingFee,
+                    voucherId, voucherDiscount);
 
-        // Confirm Flash Sale reservations (delete reservation keys)
-        if (tempOrderId != null && !tempOrderId.isEmpty()) {
+            mainOrder.setOrderStatus(OrderStatus.PENDING);
+            mainOrder.setPaymentMethod("WALLET");
+            orderRepository.save(mainOrder);
+
+            // ========== PHASE 6: CONFIRM RESERVATIONS ==========
+            // Delete reservation keys in Redis (stock already decreased)
             confirmReservationsForOrder(tempOrderId, selectedItems);
-        }
+            log.info("[WALLET-CHECKOUT] Order created successfully: orderId={}, tempOrderId={}",
+                    mainOrder.getId(), tempOrderId);
 
-        return mainOrder;
+            return mainOrder;
+
+        } catch (RuntimeException e) {
+            // Already rolled back in catch blocks above
+            log.error("[WALLET-CHECKOUT] Checkout failed: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            // Unexpected error → Rollback
+            log.error("[WALLET-CHECKOUT] Unexpected error: {}", e.getMessage(), e);
+            rollbackReservations(tempOrderId, reservedItems, userId);
+            throw new RuntimeException("Checkout failed: " + e.getMessage());
+        }
     }
 
     @Override
@@ -1597,9 +1690,10 @@ public class OrderServiceImpl implements OrderService {
             for (OrderItem item : items) {
                 try {
                     if (Boolean.TRUE.equals(item.getIsFlashSale())) {
-                        // Flash Sale: stock already deducted during reservation
+                        // Flash Sale: Stock already reserved (Wallet) or will be confirmed via payment
+                        // callback (VNPAY/MOMO)
                         log.info(
-                                "[PAYMENT-ORDER] Flash Sale item - stock already reserved: product={}, size={}, qty={}",
+                                "[PAYMENT-ORDER] Flash Sale item - stock handled via reservation flow: product={}, size={}, qty={}",
                                 item.getProductId(), item.getSizeId(), item.getQuantity());
                     } else {
                         // Regular item: decrease stock in DB
@@ -1976,6 +2070,14 @@ public class OrderServiceImpl implements OrderService {
                                     voucherId,
                                     voucherDiscount);
 
+                            // Extract tempOrderId for Flash Sale confirmation (NEW)
+                            String tempOrderId = null;
+                            if (orderDataMap.containsKey("tempOrderId")) {
+                                tempOrderId = (String) orderDataMap.get("tempOrderId");
+                                log.info("[BATCH-PAYMENT-CONSUMER] Found tempOrderId for Flash Sale confirmation: {}",
+                                        tempOrderId);
+                            }
+
                             // Convert to SelectedItemDto list
                             List<SelectedItemDto> selectedItems = selectedItemsList.stream()
                                     .map(item -> {
@@ -1983,6 +2085,10 @@ public class OrderServiceImpl implements OrderService {
                                         dto.setProductId((String) item.get("productId"));
                                         dto.setSizeId((String) item.get("sizeId"));
                                         dto.setQuantity(((Number) item.get("quantity")).intValue());
+                                        // Extract isFlashSale flag for confirmation
+                                        if (item.containsKey("isFlashSale")) {
+                                            dto.setIsFlashSale((Boolean) item.get("isFlashSale"));
+                                        }
                                         return dto;
                                     })
                                     .collect(java.util.stream.Collectors.toList());
@@ -1996,6 +2102,14 @@ public class OrderServiceImpl implements OrderService {
                             if (event.getMethod() != null && !event.getMethod().trim().isEmpty()) {
                                 order.setPaymentMethod(event.getMethod().toUpperCase());
                                 orderRepository.save(order);
+                            }
+
+                            // IMPORTANT: Confirm Flash Sale reservations if tempOrderId exists
+                            if (tempOrderId != null && !tempOrderId.isEmpty()) {
+                                confirmReservationsForOrder(tempOrderId, selectedItems);
+                                log.info(
+                                        "[BATCH-PAYMENT-CONSUMER] Confirmed Flash Sale reservations for tempOrderId: {}",
+                                        tempOrderId);
                             }
 
                             // Update payment with orderId so we can find it later when canceling

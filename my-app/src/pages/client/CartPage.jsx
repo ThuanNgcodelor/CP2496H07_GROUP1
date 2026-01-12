@@ -391,6 +391,7 @@ export default function CartPage() {
           imageUrls={imageUrls}
           productNames={productNames}
           shopOwners={shopOwners}
+          shopOwnerIds={shopOwnerIds}
           selected={selected}
           onToggle={handleToggle}
           onToggleAll={handleToggleAll}
@@ -406,4 +407,3 @@ export default function CartPage() {
     </div>
   );
 }
-

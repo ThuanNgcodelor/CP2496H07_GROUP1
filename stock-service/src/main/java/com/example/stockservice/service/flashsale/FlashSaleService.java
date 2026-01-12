@@ -544,16 +544,32 @@ public class FlashSaleService {
         String boughtKey = FLASHSALE_BOUGHT_KEY_PREFIX + userId + ":" + productId;
         String reserveKey = FLASHSALE_RESERVE_KEY_PREFIX + orderId + ":" + productId + ":" + sizeId;
 
-        stringRedisTemplate.execute(
+        // DEBUG: Check if reservation key exists
+        String reservedQty = stringRedisTemplate.opsForValue().get(reserveKey);
+        log.info("[CANCEL-DEBUG] orderId={}, reserveKey={}, reservedQty={}", orderId, reserveKey, reservedQty);
+
+        Long result = stringRedisTemplate.execute(
                 flashSaleCancelScript,
                 Arrays.asList(stockKey, boughtKey, reserveKey),
                 String.valueOf(limit));
-        log.info("Product {} size {} reservation canceled for order {}", productId, sizeId, orderId);
 
-        // Note: For cancel, we might want to async increment DB too if we want strict
-        // sync
-        // But confirm/cancel usually handles the final state.
-        // If we strictly follow cache-source-of-truth, we rely on cache.
+        log.info("[CANCEL-DEBUG] Lua script result={} for orderId={}", result, orderId);
+
+        if (result != null && result == 1) {
+            log.info("✅ Product {} size {} reservation canceled for order {} - Stock restored in Redis",
+                    productId, sizeId, orderId);
+
+            // IMPORTANT: Also restore stock in DB (async) to keep DB in sync
+            if (reservedQty != null) {
+                int quantity = Integer.parseInt(reservedQty);
+                stockPersistenceService.asyncIncrementFlashSaleStock(productId, sizeId, quantity);
+                log.info("📤 Async DB rollback queued for productId={}, sizeId={}, qty={}", productId, sizeId,
+                        quantity);
+            }
+        } else {
+            log.warn("⚠️ Failed to cancel reservation for order {} - Reservation key not found or already expired",
+                    orderId);
+        }
     }
 
     public void confirmFlashSaleReservation(String orderId, String productId, String sizeId) {

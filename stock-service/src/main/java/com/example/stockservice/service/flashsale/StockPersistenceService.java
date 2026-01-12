@@ -43,4 +43,37 @@ public class StockPersistenceService {
             log.error("[ASYNC-DB] Failed to sync stock: {}", e.getMessage());
         }
     }
+
+    /**
+     * Async increment Flash Sale stock in DB (for rollback/cancel scenarios)
+     */
+    @Async
+    @Transactional
+    public void asyncIncrementFlashSaleStock(String productId, String sizeId, int quantity) {
+        try {
+            java.util.List<FlashSaleProduct> products = flashSaleProductRepository.findByProductIdAndStatus(productId,
+                    com.example.stockservice.enums.FlashSaleStatus.APPROVED);
+
+            for (FlashSaleProduct fsp : products) {
+                if (fsp.getProductSizes() != null) {
+                    FlashSaleProductSize size = fsp.getProductSizes().stream()
+                            .filter(s -> s.getSizeId().equals(sizeId))
+                            .findFirst().orElse(null);
+
+                    if (size != null) {
+                        // Restore stock and revert soldCount
+                        size.setFlashSaleStock(size.getFlashSaleStock() + quantity);
+                        size.setSoldCount(Math.max(0, size.getSoldCount() - quantity));
+                        fsp.setSoldCount(Math.max(0, fsp.getSoldCount() - quantity));
+                        flashSaleProductRepository.save(fsp);
+                        log.info("[ASYNC-DB-ROLLBACK] Restored Flash Sale stock: productId={}, sizeId={}, qty={}",
+                                productId, sizeId, quantity);
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("[ASYNC-DB-ROLLBACK] Failed to restore stock: {}", e.getMessage());
+        }
+    }
 }

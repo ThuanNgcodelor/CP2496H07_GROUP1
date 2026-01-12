@@ -23,23 +23,19 @@ export function Cart({
 }) {
   const { t } = useTranslation();
 
-  // Group items by shop owner - now also track shopOwnerId
+  // Group items by shop owner ID (not name!) to prevent merging shops with same name
   const itemsByShop = {};
-  const shopIdMap = {}; // Map shopName -> shopOwnerId
+  const shopNameMap = {}; // Map shopOwnerId -> shopOwnerName
   items.forEach((item) => {
     const pid = item.productId ?? item.id;
+    const shopOwnerId = shopOwnerIds[pid] || item.shopOwnerId || 'unknown';
     const shopOwnerName = shopOwners[pid] || item.shopOwnerName || item.shopName || 'Unknown Shop';
-    const shopOwnerId = shopOwnerIds[pid] || item.shopOwnerId || null;
 
-    if (!itemsByShop[shopOwnerName]) {
-      itemsByShop[shopOwnerName] = [];
-      shopIdMap[shopOwnerName] = shopOwnerId;
+    if (!itemsByShop[shopOwnerId]) {
+      itemsByShop[shopOwnerId] = [];
+      shopNameMap[shopOwnerId] = shopOwnerName;
     }
-    itemsByShop[shopOwnerName].push(item);
-    // Use the first available shopOwnerId for this shop
-    if (shopOwnerId && !shopIdMap[shopOwnerName]) {
-      shopIdMap[shopOwnerName] = shopOwnerId;
-    }
+    itemsByShop[shopOwnerId].push(item);
   });
 
   return (
@@ -359,181 +355,187 @@ export function Cart({
               </div>
 
               {Object.entries(itemsByShop)
-                .sort(([shopNameA], [shopNameB]) => shopNameA.localeCompare(shopNameB))
-                .map(([shopName, shopItems]) => (
-                  <div key={shopName} className="cart2-table">
-                    {/* Shop Header */}
-                    <div className="cart2-favorite-section">
-                      <input
-                        type="checkbox"
-                        className="cart2-checkbox"
-                        checked={shopItems.every((item) => {
-                          const pid = item.productId ?? item.id;
-                          const key = `${pid}:${item.sizeId || 'no-size'}`;
-                          return selected.has(key);
-                        })}
-                        onChange={(e) => {
-                          shopItems.forEach((item) => {
+                .sort(([shopIdA], [shopIdB]) => {
+                  const nameA = shopNameMap[shopIdA] || '';
+                  const nameB = shopNameMap[shopIdB] || '';
+                  return nameA.localeCompare(nameB);
+                })
+                .map(([shopOwnerId, shopItems]) => {
+                  const shopName = shopNameMap[shopOwnerId] || 'Unknown Shop';
+                  return (
+                    <div key={shopOwnerId} className="cart2-table">
+                      {/* Shop Header */}
+                      <div className="cart2-favorite-section">
+                        <input
+                          type="checkbox"
+                          className="cart2-checkbox"
+                          checked={shopItems.every((item) => {
                             const pid = item.productId ?? item.id;
                             const key = `${pid}:${item.sizeId || 'no-size'}`;
-                            onToggle(key, e.target.checked);
-                          });
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          marginLeft: '8px',
-                          cursor: 'pointer',
-                          color: '#333'
-                        }}
-                        onClick={() => {
-                          const shopId = shopIdMap[shopName];
-                          if (shopId) {
-                            window.location.href = `/shop/${shopId}`;
-                          }
-                        }}
-                        onMouseEnter={(e) => e.target.style.color = '#ee4d2d'}
-                        onMouseLeave={(e) => e.target.style.color = '#333'}
-                      >
-                        {shopName}
-                      </span>
-                    </div>
+                            return selected.has(key);
+                          })}
+                          onChange={(e) => {
+                            shopItems.forEach((item) => {
+                              const pid = item.productId ?? item.id;
+                              const key = `${pid}:${item.sizeId || 'no-size'}`;
+                              onToggle(key, e.target.checked);
+                            });
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            marginLeft: '8px',
+                            cursor: 'pointer',
+                            color: '#333'
+                          }}
+                          onClick={() => {
+                            if (shopOwnerId && shopOwnerId !== 'unknown') {
+                              window.location.href = `/shop/${shopOwnerId}`;
+                            }
+                          }}
+                          onMouseEnter={(e) => e.target.style.color = '#ee4d2d'}
+                          onMouseLeave={(e) => e.target.style.color = '#333'}
+                        >
+                          {shopName}
+                        </span>
+                      </div>
 
-                    {/* Deal Shock Section */}
-                    <div style={{ padding: '12px 20px', background: '#fff5f0', borderBottom: '1px solid #f0f0f0' }}>
-                      <span className="cart2-deal-shock">{t('cart2.dealShock')}</span>
-                      <span style={{ fontSize: '13px', color: '#666' }}>{t('cart2.buyWithDeal')}</span>
-                    </div>
+                      {/* Deal Shock Section */}
+                      <div style={{ padding: '12px 20px', background: '#fff5f0', borderBottom: '1px solid #f0f0f0' }}>
+                        <span className="cart2-deal-shock">{t('cart2.dealShock')}</span>
+                        <span style={{ fontSize: '13px', color: '#666' }}>{t('cart2.buyWithDeal')}</span>
+                      </div>
 
-                    {/* Products in this shop */}
-                    {shopItems.map((item) => {
-                      const pid = item.productId ?? item.id;
-                      const uniqueKey = `${pid}:${item.sizeId || 'no-size'}`;
-                      const img = imageUrls[pid] ?? imgFallback;
-                      const isSelected = selected.has(uniqueKey);
+                      {/* Products in this shop */}
+                      {shopItems.map((item) => {
+                        const pid = item.productId ?? item.id;
+                        const uniqueKey = `${pid}:${item.sizeId || 'no-size'}`;
+                        const img = imageUrls[pid] ?? imgFallback;
+                        const isSelected = selected.has(uniqueKey);
 
-                      return (
-                        <div key={uniqueKey} className="cart2-item">
-                          <div>
-                            <input
-                              type="checkbox"
-                              className="cart2-checkbox"
-                              checked={isSelected}
-                              onChange={(e) => onToggle(uniqueKey, e.target.checked)}
-                              disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
-                            />
-                          </div>
-                          <div className="cart2-product">
-                            <div className="cart2-product-image-wrapper">
-                              <img
-                                src={img || imgFallback}
-                                alt={productNames[pid] || item.productName || "Product"}
-                                className="cart2-product-image"
-                                onError={(e) => (e.currentTarget.src = imgFallback)}
-                              />
-                            </div>
-                            <div className="cart2-product-info">
-                              <div className="cart2-product-name">
-                                {productNames[pid] || item.productName || pid}
-                              </div>
-                              <div className="cart2-product-classification">
-                                {t('cart2.classification')}: {item.sizeName || 'N/A'}
-                              </div>
-                              {(() => {
-                                const isFlashSale = item.isFlashSale === true;
-                                console.log(`[Cart Badge] Product ${item.productId}: isFlashSale=${item.isFlashSale}, showing badge=${isFlashSale}`);
-                                return isFlashSale ? (
-                                  <div style={{
-                                    display: 'inline-block',
-                                    padding: '2px 6px',
-                                    background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
-                                    color: 'white',
-                                    fontSize: '10px',
-                                    fontWeight: 600,
-                                    borderRadius: '3px',
-                                    marginTop: '4px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.5px',
-                                    boxShadow: '0 2px 4px rgba(238, 77, 45, 0.3)'
-                                  }}>
-                                    ⚡ Flash Sale
-                                  </div>
-                                ) : null;
-                              })()}
-                            </div>
-                          </div>
-                          <div className="cart2-price">
-
-                            {item.originalPrice && item.originalPrice > item.unitPrice && (
-                              <span className="cart2-price-original">
-                                {formatVND(item.originalPrice)}
-                              </span>
-                            )}
-                            {item.priceChanged && item.unitPrice && (
-                              <span className="cart2-price-original" style={{ textDecoration: 'line-through', color: '#888' }}>
-                                {formatVND(item.unitPrice)}
-                              </span>
-                            )}
-                            <span className="cart2-price-current">
-                              {formatVND(item.unitPrice || item.price || 0)}
-                            </span>
-                          </div>
-                          <div>
-                            <div className="cart2-quantity">
-                              <button
-                                className="cart2-quantity-btn"
-                                onClick={() => onQuantityChange(item, Math.max(1, item.quantity - 1))}
-                                disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
-                              >
-                                -
-                              </button>
+                        return (
+                          <div key={uniqueKey} className="cart2-item">
+                            <div>
                               <input
-                                type="number"
-                                className="cart2-quantity-input"
-                                value={item.quantity}
-                                min="1"
-                                onChange={(e) => {
-                                  const newQty = parseInt(e.target.value) || 1;
-                                  onQuantityChange(item, newQty);
-                                }}
+                                type="checkbox"
+                                className="cart2-checkbox"
+                                checked={isSelected}
+                                onChange={(e) => onToggle(uniqueKey, e.target.checked)}
                                 disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
                               />
-                              <button
-                                className="cart2-quantity-btn"
-                                onClick={() => onQuantityChange(item, item.quantity + 1)}
-                                disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
-                              >
-                                +
-                              </button>
                             </div>
-                            {(item.productAvailable === false || item.sizeAvailable === false) && (
-                              <div style={{ color: '#ff424f', fontSize: '11px', marginTop: '4px' }}>
-                                Sản phẩm ngừng kinh doanh
+                            <div className="cart2-product">
+                              <div className="cart2-product-image-wrapper">
+                                <img
+                                  src={img || imgFallback}
+                                  alt={productNames[pid] || item.productName || "Product"}
+                                  className="cart2-product-image"
+                                  onError={(e) => (e.currentTarget.src = imgFallback)}
+                                />
                               </div>
-                            )}
-                            {item.productAvailable !== false && item.sizeAvailable !== false && item.availableStock < item.quantity && (
-                              <div style={{ color: '#ffad0d', fontSize: '11px', marginTop: '4px' }}>
-                                Chỉ còn {item.availableStock} sp
+                              <div className="cart2-product-info">
+                                <div className="cart2-product-name">
+                                  {productNames[pid] || item.productName || pid}
+                                </div>
+                                <div className="cart2-product-classification">
+                                  {t('cart2.classification')}: {item.sizeName || 'N/A'}
+                                </div>
+                                {(() => {
+                                  const isFlashSale = item.isFlashSale === true;
+                                  console.log(`[Cart Badge] Product ${item.productId}: isFlashSale=${item.isFlashSale}, showing badge=${isFlashSale}`);
+                                  return isFlashSale ? (
+                                    <div style={{
+                                      display: 'inline-block',
+                                      padding: '2px 6px',
+                                      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
+                                      color: 'white',
+                                      fontSize: '10px',
+                                      fontWeight: 600,
+                                      borderRadius: '3px',
+                                      marginTop: '4px',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.5px',
+                                      boxShadow: '0 2px 4px rgba(238, 77, 45, 0.3)'
+                                    }}>
+                                      ⚡ Flash Sale
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
-                            )}
+                            </div>
+                            <div className="cart2-price">
+
+                              {item.originalPrice && item.originalPrice > item.unitPrice && (
+                                <span className="cart2-price-original">
+                                  {formatVND(item.originalPrice)}
+                                </span>
+                              )}
+                              {item.priceChanged && item.unitPrice && (
+                                <span className="cart2-price-original" style={{ textDecoration: 'line-through', color: '#888' }}>
+                                  {formatVND(item.unitPrice)}
+                                </span>
+                              )}
+                              <span className="cart2-price-current">
+                                {formatVND(item.unitPrice || item.price || 0)}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="cart2-quantity">
+                                <button
+                                  className="cart2-quantity-btn"
+                                  onClick={() => onQuantityChange(item, Math.max(1, item.quantity - 1))}
+                                  disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  className="cart2-quantity-input"
+                                  value={item.quantity}
+                                  min="1"
+                                  onChange={(e) => {
+                                    const newQty = parseInt(e.target.value) || 1;
+                                    onQuantityChange(item, newQty);
+                                  }}
+                                  disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
+                                />
+                                <button
+                                  className="cart2-quantity-btn"
+                                  onClick={() => onQuantityChange(item, item.quantity + 1)}
+                                  disabled={item.productAvailable === false || item.sizeAvailable === false || item.availableStock === 0}
+                                >
+                                  +
+                                </button>
+                              </div>
+                              {(item.productAvailable === false || item.sizeAvailable === false) && (
+                                <div style={{ color: '#ff424f', fontSize: '11px', marginTop: '4px' }}>
+                                  Sản phẩm ngừng kinh doanh
+                                </div>
+                              )}
+                              {item.productAvailable !== false && item.sizeAvailable !== false && item.availableStock < item.quantity && (
+                                <div style={{ color: '#ffad0d', fontSize: '11px', marginTop: '4px' }}>
+                                  Chỉ còn {item.availableStock} sp
+                                </div>
+                              )}
+                            </div>
+                            <div className="cart2-amount">
+                              {formatVND((item.unitPrice || item.price || 0) * item.quantity)}
+                            </div>
+                            <div className="cart2-actions">
+                              <a
+                                className="cart2-action-link"
+                                onClick={() => onRemove(item.id, pid)}
+                              >
+                                {t('cart2.delete')}
+                              </a>
+                            </div>
                           </div>
-                          <div className="cart2-amount">
-                            {formatVND((item.unitPrice || item.price || 0) * item.quantity)}
-                          </div>
-                          <div className="cart2-actions">
-                            <a
-                              className="cart2-action-link"
-                              onClick={() => onRemove(item.id, pid)}
-                            >
-                              {t('cart2.delete')}
-                            </a>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                        );
+                      })}
+                    </div>
+                  );
+                })}
 
               <div className="cart2-voucher-section">
                 <span style={{ fontWeight: 600 }}>{t('cart2.shopeeVoucher')}</span>

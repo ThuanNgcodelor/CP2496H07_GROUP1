@@ -334,51 +334,20 @@ export function CheckoutPage({
 
     setOrderLoading(true);
     try {
-      // STEP 1: Reserve Flash Sale items FIRST (Option C implementation)
-      const flashSaleItems = selectedItems.filter(item => item.isFlashSale);
-      const tempOrderId = `temp_${userId}_${Date.now()}`;
-
-      if (flashSaleItems.length > 0) {
-        for (const item of flashSaleItems) {
-          try {
-            const result = await reserveStock(
-              tempOrderId,
-              item.productId || item.id,
-              item.sizeId,
-              item.quantity
-            );
-
-            if (!result.success) {
-              throw new Error(result.message || 'Flash Sale sold out!');
-            }
-          } catch (error) {
-            setOrderLoading(false);
-            Swal.fire({
-              icon: 'error',
-              title: t('checkout.flashSaleError') || 'Flash Sale Error',
-              text: error.message || 'Flash Sale item is no longer available',
-              confirmButtonText: t('common.ok'),
-            });
-            return;
-          }
-        }
-      }
-
-      // STEP 2: Build orderData with tempOrderId
+      // Build orderData - Backend will handle stock reservation
       const orderData = {
         selectedItems: selectedItems.map((it) => ({
           productId: it.productId || it.id,
           sizeId: it.sizeId,
           quantity: it.quantity,
           unitPrice: it.unitPrice || it.price,
-          isFlashSale: it.isFlashSale
+          isFlashSale: it.isFlashSale // Backend uses this flag for reservation routing
         })),
         addressId: selectedAddressId,
         paymentMethod: paymentMethod || "COD",
         voucherId: appliedVoucher?.voucherId || null,
         voucherDiscount: voucherDiscount || 0,
         shippingFee: totalShippingFee || 0,
-        tempOrderId: tempOrderId, // NEW: For confirming reservations
       };
 
       Swal.fire({
@@ -389,17 +358,67 @@ export function CheckoutPage({
         didOpen: () => Swal.showLoading(),
       });
 
+
       // If VNPay or MoMo, create payment first (order will be created after payment success)
       if (paymentMethod === "VNPAY" || paymentMethod === "CARD" || paymentMethod === "MOMO") {
         try {
-          // Calculate final total with shipping and voucher discount
+          // STEP 1: Reserve Flash Sale stock BEFORE redirect (similar to Wallet flow)
+          const flashSaleItems = selectedItems.filter(item => item.isFlashSale);
+          const tempOrderId = `temp_${userId}_${Date.now()}`;
+          const reservedItems = [];
+
+          if (flashSaleItems.length > 0) {
+            for (const item of flashSaleItems) {
+              try {
+                const result = await reserveStock(
+                  tempOrderId,
+                  item.productId || item.id,
+                  item.sizeId,
+                  item.quantity
+                );
+
+                if (!result.success) {
+                  throw new Error(result.message || 'Flash Sale sold out!');
+                }
+
+                reservedItems.push({
+                  productId: item.productId || item.id,
+                  sizeId: item.sizeId
+                });
+
+              } catch (error) {
+                // Rollback previous reservations
+                for (const reserved of reservedItems) {
+                  try {
+                    await api.post('/stock/reservation/cancel', {
+                      productId: reserved.productId,
+                      sizeId: reserved.sizeId
+                    });
+                  } catch (rollbackErr) {
+                    console.error('Rollback failed:', rollbackErr);
+                  }
+                }
+
+                setOrderLoading(false);
+                Swal.fire({
+                  icon: 'error',
+                  title: t('checkout.flashSaleError') || 'Flash Sale Error',
+                  text: error.message || 'Flash Sale item is no longer available',
+                  confirmButtonText: t('common.ok'),
+                });
+                return;
+              }
+            }
+          }
+
+          // STEP 2: Calculate final total with shipping and voucher discount
           const totalWithShipping = subtotal + totalShippingFee - voucherDiscount;
 
           if (!userId) {
             throw new Error("Cannot get user ID");
           }
 
-          // Create payment with order data (order will be created after payment success)
+          // STEP 3: Create payment with order data + tempOrderId
           const payPayload = {
             amount: Math.max(1, Math.round(totalWithShipping)),
             orderInfo: "Thanh toan don hang",
@@ -411,6 +430,7 @@ export function CheckoutPage({
               shippingFee: totalShippingFee || 0,
               voucherId: appliedVoucher?.voucherId || null,
               voucherDiscount: voucherDiscount || 0,
+              tempOrderId: tempOrderId, // IMPORTANT: For Flash Sale confirmation
               selectedItems: selectedItems.map(it => ({
                 productId: it.productId || it.id,
                 sizeId: it.sizeId,

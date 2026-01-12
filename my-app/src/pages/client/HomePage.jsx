@@ -36,7 +36,7 @@ export default function HomePage() {
         <PersonalizedRecommendations />
 
         {/* Top Search Section */}
-        {/* <TopSearch /> */}
+        <TopSearch />
 
         {/* Trending Products */}
         <TrendingProducts />
