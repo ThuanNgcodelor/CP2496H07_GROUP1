@@ -144,4 +144,26 @@ public class FlashSaleController {
         flashSaleService.cancelFlashSaleReservation(orderId, productId, sizeId, userId);
         return ResponseEntity.ok("Cancelled");
     }
+
+    @PostMapping("/restoreStock")
+    public ResponseEntity<?> restoreFlashSaleStock(
+            @RequestParam String productId,
+            @RequestParam String sizeId,
+            @RequestParam int quantity) {
+        try {
+            boolean restored = flashSaleService.restoreFlashSaleStock(
+                    productId,
+                    sizeId,
+                    quantity);
+
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", restored,
+                    "message", restored ? "Flash sale stock restored to Redis + DB"
+                            : "Flash sale ended, restore to regular stock instead"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "success", false,
+                    "message", e.getMessage()));
+        }
+    }
 }

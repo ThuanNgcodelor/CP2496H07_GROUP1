@@ -539,9 +539,10 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found for ID: " + orderId));
 
-        // Only rollback if order is still PENDING (not paid yet)
-        if (order.getOrderStatus() != OrderStatus.PENDING) {
-            log.warn("[ROLLBACK] Order {} is not PENDING (status: {}), skipping rollback",
+        // Only rollback if order is PENDING or CANCELLED
+        if (order.getOrderStatus() != OrderStatus.PENDING &&
+                order.getOrderStatus() != OrderStatus.CANCELLED) {
+            log.warn("[ROLLBACK] Order {} status is {}, skipping stock rollback",
                     orderId, order.getOrderStatus());
             return;
         }
@@ -550,24 +551,57 @@ public class OrderServiceImpl implements OrderService {
         if (order.getOrderItems() != null && !order.getOrderItems().isEmpty()) {
             for (OrderItem item : order.getOrderItems()) {
                 try {
-                    IncreaseStockRequest rollbackRequest = new IncreaseStockRequest(
-                            item.getSizeId(),
-                            item.getQuantity());
-                    stockServiceClient.increaseStock(rollbackRequest);
-                    log.info("[ROLLBACK] Rolled back stock for sizeId: {}, quantity: {}",
-                            item.getSizeId(), item.getQuantity());
+                    if (Boolean.TRUE.equals(item.getIsFlashSale())) {
+                        // === FLASH SALE ITEM ===
+                        log.info("[ROLLBACK-FS] Processing flash sale item: product={}, size={}, qty={}",
+                                item.getProductId(), item.getSizeId(), item.getQuantity());
+
+                        // Try to restore to flash sale stock first
+                        boolean restoredToFlashSale = flashSaleClient.restoreFlashSaleStock(
+                                item.getProductId(),
+                                item.getSizeId(),
+                                item.getQuantity());
+
+                        if (!restoredToFlashSale) {
+                            // Flash sale ended → Restore to regular stock instead
+                            log.info("[ROLLBACK-FS] Flash sale ended, restoring to regular stock");
+                            StockServiceClient.RestoreStockRequest restoreRequest = new StockServiceClient.RestoreStockRequest(
+                                    item.getProductId(),
+                                    item.getSizeId(),
+                                    item.getQuantity());
+                            stockServiceClient.restoreStock(restoreRequest);
+                        }
+
+                    } else {
+                        // === REGULAR ITEM ===
+                        log.info("[ROLLBACK] Processing regular item: product={}, size={}, qty={}",
+                                item.getProductId(), item.getSizeId(), item.getQuantity());
+
+                        StockServiceClient.RestoreStockRequest restoreRequest = new StockServiceClient.RestoreStockRequest(
+                                item.getProductId(),
+                                item.getSizeId(),
+                                item.getQuantity());
+                        stockServiceClient.restoreStock(restoreRequest);
+                    }
+
+                    log.info("[ROLLBACK] ✅ Stock restored: product={}, size={}, qty={}",
+                            item.getProductId(), item.getSizeId(), item.getQuantity());
+
                 } catch (Exception e) {
-                    log.error("[ROLLBACK] Failed to rollback stock for sizeId: {}, quantity: {}",
-                            item.getSizeId(), item.getQuantity(), e);
+                    log.error("[ROLLBACK] ❌ Failed to restore stock for item: product={}, size={}, error={}",
+                            item.getProductId(), item.getSizeId(), e.getMessage(), e);
                     // Continue with other items even if one fails
                 }
             }
         }
 
-        // Update order status to CANCELLED
-        order.setOrderStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
-        log.info("[ROLLBACK] Order {} rolled back and cancelled", orderId);
+        // Update order status to CANCELLED if not already
+        if (order.getOrderStatus() != OrderStatus.CANCELLED) {
+            order.setOrderStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+        }
+
+        log.info("[ROLLBACK] ✅ Order {} rolled back successfully", orderId);
     }
 
     // Address-related methods

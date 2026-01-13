@@ -30,6 +30,15 @@ public interface ProductService {
 
     void increaseStockBySize(String sizeId, int quantity);
 
+    /**
+     * Restore stock for cancelled order (Redis + DB synchronization)
+     * 
+     * @param productId Product ID for Redis key
+     * @param sizeId    Size ID
+     * @param quantity  Quantity to restore
+     */
+    void restoreStockForCancellation(String productId, String sizeId, int quantity);
+
     Product findProductBySizeId(String sizeId);
 
     Page<Product> getProductsByUserId(String userId, Integer pageNo);
@@ -48,6 +57,6 @@ public interface ProductService {
 
     // Batch API methods for performance optimization
     java.util.Map<String, com.example.stockservice.dto.ProductDto> batchGetProducts(List<String> productIds);
-    
+
     java.util.Map<String, Boolean> batchDecreaseStock(List<BatchDecreaseStockRequest.DecreaseStockItem> items);
 }

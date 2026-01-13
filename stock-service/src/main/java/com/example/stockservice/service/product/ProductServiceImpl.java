@@ -52,6 +52,7 @@ public class ProductServiceImpl implements ProductService {
     private final org.springframework.kafka.core.KafkaTemplate<String, Object> genericKafkaTemplate;
 
     private final InventoryService inventoryService;
+    private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     @org.springframework.beans.factory.annotation.Value("${kafka.topic.product-updates}")
     private String productUpdatesTopic;
@@ -115,6 +116,45 @@ public class ProductServiceImpl implements ProductService {
         } catch (Exception e) {
             System.err.println("Failed to log inventory change: " + e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional
+    public void restoreStockForCancellation(String productId, String sizeId, int quantity) {
+        // 1. Update DB
+        Size size = sizeRepository.findById(sizeId)
+                .orElseThrow(() -> new RuntimeException("Size not found: " + sizeId));
+
+        size.setStock(size.getStock() + quantity);
+        sizeRepository.save(size);
+
+        // 2. Update Redis cache
+        String stockKey = "stock:" + productId + ":" + sizeId;
+        try {
+            stringRedisTemplate.opsForValue().increment(stockKey, quantity);
+            System.out.println("[RESTORE] ✅ Redis stock restored: " + stockKey + " +" + quantity);
+        } catch (Exception e) {
+            System.err.println("[RESTORE] ⚠️ Failed to update Redis (will sync on next read): " + e.getMessage());
+        }
+
+        // 3. Update product status
+        checkAndUpdateProductStatus(size.getProduct());
+
+        // 4. Log inventory change
+        try {
+            inventoryService.logStockChange(
+                    productId,
+                    sizeId,
+                    quantity,
+                    size.getProduct().getUserId(),
+                    InventoryLogType.CANCEL,
+                    "Order cancelled - stock restored to Redis + DB");
+        } catch (Exception e) {
+            System.err.println("Failed to log inventory change: " + e.getMessage());
+        }
+
+        System.out.println("[RESTORE] ✅ Stock restored successfully: product=" + productId + ", size=" + sizeId
+                + ", qty=" + quantity);
     }
 
     private void checkAndUpdateProductStatus(Product product) {
@@ -485,45 +525,44 @@ public class ProductServiceImpl implements ProductService {
 
         // Convert to DTO and create Map for O(1) lookup
         return products.stream()
-            .collect(java.util.stream.Collectors.toMap(
-                Product::getId,
-                product -> {
-                    ProductDto dto = new ProductDto();
-                    dto.setId(product.getId());
-                    dto.setName(product.getName());
-                    dto.setDescription(product.getDescription());
-                    dto.setPrice(product.getPrice());
-                    dto.setOriginalPrice(product.getOriginalPrice());
-                    dto.setDiscountPercent(product.getDiscountPercent());
-                    dto.setStatus(product.getStatus());
-                    dto.setImageId(product.getImageId());
-                    dto.setUserId(product.getUserId());
-                    dto.setImageIds(product.getImageIds());
+                .collect(java.util.stream.Collectors.toMap(
+                        Product::getId,
+                        product -> {
+                            ProductDto dto = new ProductDto();
+                            dto.setId(product.getId());
+                            dto.setName(product.getName());
+                            dto.setDescription(product.getDescription());
+                            dto.setPrice(product.getPrice());
+                            dto.setOriginalPrice(product.getOriginalPrice());
+                            dto.setDiscountPercent(product.getDiscountPercent());
+                            dto.setStatus(product.getStatus());
+                            dto.setImageId(product.getImageId());
+                            dto.setUserId(product.getUserId());
+                            dto.setImageIds(product.getImageIds());
 
-                    if (product.getCategory() != null) {
-                        dto.setCategoryId(product.getCategory().getId());
-                        dto.setCategoryName(product.getCategory().getName());
-                    }
+                            if (product.getCategory() != null) {
+                                dto.setCategoryId(product.getCategory().getId());
+                                dto.setCategoryName(product.getCategory().getName());
+                            }
 
-                    if (product.getSizes() != null) {
-                        List<SizeDto> sizeDtos = product.getSizes().stream()
-                            .map(size -> {
-                                SizeDto sizeDto = new SizeDto();
-                                sizeDto.setId(size.getId());
-                                sizeDto.setName(size.getName());
-                                sizeDto.setDescription(size.getDescription());
-                                sizeDto.setStock(size.getStock());
-                                sizeDto.setPriceModifier(size.getPriceModifier());
-                                sizeDto.setWeight(size.getWeight());
-                                return sizeDto;
-                            })
-                            .collect(java.util.stream.Collectors.toList());
-                        dto.setSizes(sizeDtos);
-                    }
+                            if (product.getSizes() != null) {
+                                List<SizeDto> sizeDtos = product.getSizes().stream()
+                                        .map(size -> {
+                                            SizeDto sizeDto = new SizeDto();
+                                            sizeDto.setId(size.getId());
+                                            sizeDto.setName(size.getName());
+                                            sizeDto.setDescription(size.getDescription());
+                                            sizeDto.setStock(size.getStock());
+                                            sizeDto.setPriceModifier(size.getPriceModifier());
+                                            sizeDto.setWeight(size.getWeight());
+                                            return sizeDto;
+                                        })
+                                        .collect(java.util.stream.Collectors.toList());
+                                dto.setSizes(sizeDtos);
+                            }
 
-                    return dto;
-                }
-            ));
+                            return dto;
+                        }));
     }
 
     /**
@@ -548,7 +587,7 @@ public class ProductServiceImpl implements ProductService {
             try {
                 // Find size
                 Size size = sizeRepository.findById(item.getSizeId())
-                    .orElseThrow(() -> new RuntimeException("Size not found: " + item.getSizeId()));
+                        .orElseThrow(() -> new RuntimeException("Size not found: " + item.getSizeId()));
 
                 // Check stock
                 if (size.getStock() < item.getQuantity()) {
@@ -566,13 +605,12 @@ public class ProductServiceImpl implements ProductService {
                 // Inventory log
                 try {
                     inventoryService.logStockChange(
-                        item.getProductId(),
-                        item.getSizeId(),
-                        -item.getQuantity(),
-                        size.getProduct().getUserId(),
-                        InventoryLogType.ORDER,
-                        "Batch order placement"
-                    );
+                            item.getProductId(),
+                            item.getSizeId(),
+                            -item.getQuantity(),
+                            size.getProduct().getUserId(),
+                            InventoryLogType.ORDER,
+                            "Batch order placement");
                 } catch (Exception e) {
                     // Log error but don't fail transaction
                     System.err.println("Failed to log inventory change: " + e.getMessage());
@@ -582,7 +620,7 @@ public class ProductServiceImpl implements ProductService {
 
             } catch (Exception e) {
                 System.err.println("Failed to decrease stock for product " +
-                    item.getProductId() + ": " + e.getMessage());
+                        item.getProductId() + ": " + e.getMessage());
                 results.put(item.getProductId(), false);
             }
         }

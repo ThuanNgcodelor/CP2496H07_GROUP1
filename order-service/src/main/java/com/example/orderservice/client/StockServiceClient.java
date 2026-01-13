@@ -67,16 +67,15 @@ public interface StockServiceClient {
     // Batch API methods for performance optimization
     @PostMapping(value = "/product/batch-get", headers = "X-Internal-Call=true")
     ResponseEntity<java.util.Map<String, ProductDto>> batchGetProducts(
-        @RequestBody BatchGetProductsRequest request);
+            @RequestBody BatchGetProductsRequest request);
 
     @PostMapping(value = "/product/batch-decrease", headers = "X-Internal-Call=true")
     ResponseEntity<java.util.Map<String, Boolean>> batchDecreaseStock(
-        @RequestBody BatchDecreaseStockRequest request);
-
-
+            @RequestBody BatchDecreaseStockRequest request);
 
     /**
      * Reserve stock for an order
+     * 
      * @param request { orderId, productId, sizeId, quantity }
      * @return { success, status, reservedQuantity } or { success, status, message }
      */
@@ -85,6 +84,7 @@ public interface StockServiceClient {
 
     /**
      * Confirm reservation after order/payment success
+     * 
      * @param request { orderId, productId, sizeId }
      * @return { success, message }
      */
@@ -93,11 +93,21 @@ public interface StockServiceClient {
 
     /**
      * Cancel reservation and rollback stock
+     * 
      * @param request { orderId, productId, sizeId }
      * @return { success, rolledBackQuantity }
      */
     @PostMapping(value = "/reservation/cancel", headers = "X-Internal-Call=true")
     ResponseEntity<Map<String, Object>> cancelReservation(@RequestBody ReserveRequest request);
+
+    /**
+     * Restore stock for cancelled order (Redis + DB)
+     * 
+     * @param request { productId, sizeId, quantity }
+     * @return { success, message }
+     */
+    @PostMapping(value = "/product/restoreStock", headers = "X-Internal-Call=true")
+    ResponseEntity<Map<String, Object>> restoreStock(@RequestBody RestoreStockRequest request);
 
     /**
      * Request DTO for reservation operations
@@ -106,6 +116,15 @@ public interface StockServiceClient {
             String orderId,
             String productId,
             String sizeId,
-            int quantity
-    ) {}
+            int quantity) {
+    }
+
+    /**
+     * Request DTO for stock restoration
+     */
+    record RestoreStockRequest(
+            String productId,
+            String sizeId,
+            int quantity) {
+    }
 }

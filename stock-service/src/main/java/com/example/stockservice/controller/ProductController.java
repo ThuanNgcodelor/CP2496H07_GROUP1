@@ -150,6 +150,24 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.OK).body(productDto);
     }
 
+    @PostMapping("/restoreStock")
+    public ResponseEntity<?> restoreStock(
+            @Valid @RequestBody com.example.stockservice.dto.RestoreStockRequest request) {
+        try {
+            productService.restoreStockForCancellation(
+                    request.getProductId(),
+                    request.getSizeId(),
+                    request.getQuantity());
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", true,
+                    "message", "Stock restored successfully to Redis + DB"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "success", false,
+                    "message", e.getMessage()));
+        }
+    }
+
     // {
     // "name": "Điện thoại iPhone 15 Pro",
     // "description": "Điện thoại cao cấp với chip A17 Bionic, màn hình 6.1 inch

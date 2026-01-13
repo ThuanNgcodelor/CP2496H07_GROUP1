@@ -342,8 +342,6 @@ public class FlashSaleService {
         }
     }
 
-
-
     public FlashSaleProduct findActiveFlashSaleProduct(String productId) {
         List<FlashSaleProduct> products = flashSaleProductRepository.findByProductIdAndStatus(productId,
                 FlashSaleStatus.APPROVED);
@@ -364,7 +362,6 @@ public class FlashSaleService {
     }
 
     // --- Redis: SMART Cache Strategy ---
-
 
     /**
      * Helper to warm up a list of products in a session.
@@ -568,5 +565,83 @@ public class FlashSaleService {
     public int getAvailableFlashSaleStock(String productId) {
         FlashSaleProduct fsp = findActiveFlashSaleProduct(productId);
         return fsp != null ? fsp.getFlashSaleStock() : 0;
+    }
+
+    /**
+     * Restore flash sale stock for cancelled order
+     * Only restores if flashsale session is still ACTIVE or COMING (not
+     * ENDED/INACTIVE)
+     * 
+     * @param productId Product ID
+     * @param sizeId    Size ID
+     * @param quantity  Quantity to restore
+     * @return true if restored to flash sale stock, false if session ended (should
+     *         restore to regular stock instead)
+     */
+    public boolean restoreFlashSaleStock(String productId, String sizeId, int quantity) {
+        log.info("[RESTORE-FS] Attempting to restore flash sale stock: product={}, size={}, qty={}",
+                productId, sizeId, quantity);
+
+        // 1. Find active flash sale for this product
+        FlashSaleProduct fsp = findActiveFlashSaleProduct(productId);
+
+        if (fsp == null) {
+            log.warn("[RESTORE-FS] No active flash sale found for product: {}", productId);
+            return false; // Session ended or product not in flash sale, restore to regular stock
+        }
+
+        // 2. Check session status
+        FlashSaleSession session = sessionRepository.findById(fsp.getSessionId())
+                .orElse(null);
+
+        if (session == null) {
+            log.warn("[RESTORE-FS] Session not found for flash sale product: {}", fsp.getId());
+            return false;
+        }
+
+        // Only restore if session is still ACTIVE (includes COMING sessions that are
+        // approved)
+        if (session.getStatus() != FlashSaleStatus.ACTIVE) {
+            log.warn("[RESTORE-FS] Session {} status is {} (not ACTIVE), cannot restore to flash sale",
+                    fsp.getSessionId(), session.getStatus());
+            return false; // Session ended, restore to regular stock instead
+        }
+
+        // Check if session time has passed
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isAfter(session.getEndTime())) {
+            log.warn("[RESTORE-FS] Session {} has ended (endTime={}), cannot restore to flash sale",
+                    fsp.getSessionId(), session.getEndTime());
+            return false;
+        }
+
+        // 3. Find the specific size
+        FlashSaleProductSize fsSize = fsp.getProductSizes() != null
+                ? fsp.getProductSizes().stream()
+                        .filter(s -> s.getSizeId().equals(sizeId))
+                        .findFirst()
+                        .orElse(null)
+                : null;
+
+        if (fsSize == null) {
+            log.warn("[RESTORE-FS] Size {} not found in flash sale product {}", sizeId, productId);
+            return false;
+        }
+
+        // 4. Restore Redis cache
+        String stockKey = FLASHSALE_STOCK_KEY_PREFIX + productId + ":" + sizeId;
+        try {
+            stringRedisTemplate.opsForValue().increment(stockKey, quantity);
+            log.info("[RESTORE-FS] ✅ Redis restored: {} +{}", stockKey, quantity);
+        } catch (Exception e) {
+            log.error("[RESTORE-FS] ❌ Failed to restore Redis: {}", e.getMessage());
+        }
+
+        // 5. Restore DB (async)
+        stockPersistenceService.asyncIncrementFlashSaleStock(productId, sizeId, quantity);
+        log.info("[RESTORE-FS] ✅ DB restore queued: product={}, size={}, qty={}",
+                productId, sizeId, quantity);
+
+        return true; // Successfully restored to flash sale stock
     }
 }
