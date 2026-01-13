@@ -237,17 +237,6 @@ const DataTablesPage = () => {
             <span className="stat-sublabel">Verified sellers</span>
           </div>
         </div>
-
-        <div className="stat-card">
-          <div className="stat-icon stat-icon-admin">
-            <i className="fas fa-user-shield"></i>
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Administrators</span>
-            <h2 className="stat-value">{stats.adminUsers}</h2>
-            <span className="stat-sublabel">System admins</span>
-          </div>
-        </div>
       </div>
 
       {/* User Table Card */}
