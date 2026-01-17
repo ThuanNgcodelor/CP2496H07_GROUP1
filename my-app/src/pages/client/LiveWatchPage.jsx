@@ -58,6 +58,7 @@ export default function LiveWatchPage() {
     }, [roomId, isLoggedIn]);
 
     // WebSocket connection
+
     useEffect(() => {
         if (!roomId) return;
 
@@ -113,7 +114,11 @@ export default function LiveWatchPage() {
                 // Join room to increment viewer count
                 client.publish({
                     destination: `/app/live/${roomId}/join`,
-                    body: JSON.stringify({})
+                    body: JSON.stringify({
+                        userId: userInfo?.id,
+                        username: userInfo?.userDetails?.fullName || userInfo?.username || 'Một người mới',
+                        avatarUrl: userInfo?.userDetails?.avatarUrl || null,
+                    })
                 });
             },
             onDisconnect: () => {
@@ -139,7 +144,7 @@ export default function LiveWatchPage() {
                 stompClientRef.current.deactivate();
             }
         };
-    }, [roomId]);
+    }, [roomId, userInfo]);
 
     useEffect(() => {
         // Use streamUrl directly from API response (streamKey is not exposed to public)
@@ -198,6 +203,13 @@ export default function LiveWatchPage() {
             console.error('Error fetching chats:', err);
         }
     };
+
+    // Auto scroll to bottom when new messages arrive
+    useEffect(() => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    }, [messages]);
 
     // Fetch live products on mount
     const fetchProducts = async () => {
@@ -808,21 +820,19 @@ export default function LiveWatchPage() {
                         {/* Chat Messages */}
                         <div
                             ref={chatContainerRef}
+                            className="custom-scrollbar"
                             style={{
-                                flex: 1,
+                                height: '400px',
                                 overflowY: 'auto',
                                 padding: '15px',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: '10px'
+                                gap: '6px'
                             }}
                         >
                             {messages.length === 0 ? (
-                                <div style={{
-                                    color: '#888',
-                                    textAlign: 'center',
-                                    marginTop: '50px'
-                                }}>
+                                <div style={{ textAlign: 'center', color: '#999', padding: '40px 10px', fontSize: '13px' }}>
+                                    <div style={{ fontSize: '36px', marginBottom: '8px' }}>💬</div>
                                     {t('liveStream.watch.noMessages')}
                                 </div>
                             ) : (
@@ -924,7 +934,22 @@ export default function LiveWatchPage() {
             </main >
 
             {/* CSS */}
-            < style > {`
+            <style>{`
+                /* Custom Scrollbar */
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #555;
+                    border-radius: 3px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #777;
+                }
+
                 @keyframes pulse {
                     0%, 100% { opacity: 1; }
                     50% { opacity: 0.5; }
@@ -932,15 +957,8 @@ export default function LiveWatchPage() {
                 @keyframes floatUp {
                     0% { transform: translateY(0) scale(1); opacity: 1; }
                     100% { transform: translateY(-200px) scale(1.5); opacity: 0; }
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.5; }
                 }
-                @keyframes floatUp {
-                    0% { transform: translateY(0) scale(1); opacity: 1; }
-                    100% { transform: translateY(-200px) scale(1.5); opacity: 0; }
-                }
-            `}</style >
+            `}</style>
             {/* Size Selection Modal */}
             {
                 showSizeModal && selectedLiveProduct && (
@@ -1031,11 +1049,13 @@ export default function LiveWatchPage() {
 }
 
 function ChatMessage({ message }) {
+    const { t } = useTranslation();
     const isSystem = message.type === 'SYSTEM' || message.type === 'ORDER';
 
     return (
         <div style={{
             display: 'flex',
+            alignItems: 'flex-start',
             gap: '10px',
             padding: isSystem ? '8px 12px' : '0',
             background: isSystem ? (message.type === 'ORDER' ? 'rgba(238, 77, 45, 0.2)' : 'rgba(255,255,255,0.05)') : 'transparent',
@@ -1064,42 +1084,36 @@ function ChatMessage({ message }) {
                     ) : (message.username?.[0] || '?').toUpperCase()}
                 </div>
             )}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: '13px', lineHeight: '1.4', paddingTop: !isSystem ? '4px' : '0' }}>
                 {!isSystem && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        marginBottom: '2px'
+                    <span style={{
+                        color: message.isOwner ? '#ffc107' : '#ee4d2d',
+                        fontWeight: '600',
+                        marginRight: '6px'
                     }}>
-                        <span style={{
-                            color: message.isOwner ? '#ffc107' : '#ee4d2d',
-                            fontSize: '12px',
-                            fontWeight: message.isOwner ? '600' : 'normal'
-                        }}>
-                            {message.username || 'User'}
-                        </span>
                         {message.isOwner && (
                             <span style={{
                                 background: '#ffc107',
                                 color: '#333',
                                 fontSize: '10px',
-                                padding: '1px 6px',
+                                padding: '1px 4px',
                                 borderRadius: '3px',
-                                fontWeight: '600'
+                                marginRight: '4px',
+                                verticalAlign: 'middle'
                             }}>
                                 {t('liveStream.watch.shopOwner')}
                             </span>
                         )}
-                    </div>
+                        {message.username || 'User'}:
+                    </span>
                 )}
-                <div style={{
+                <span style={{
                     color: isSystem ? '#ffc107' : 'white',
-                    fontSize: '14px',
-                    wordBreak: 'break-word'
+                    wordBreak: 'break-word',
+                    display: 'inline'
                 }}>
                     {message.message}
-                </div>
+                </span>
             </div>
         </div>
     );
