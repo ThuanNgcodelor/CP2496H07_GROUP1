@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import Hls from 'hls.js';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
+import toast from 'react-hot-toast';
+import Swal from 'sweetalert2';
 import {
     createLiveRoom,
     getMyLiveRooms,
@@ -32,6 +34,7 @@ export default function LiveManagePage() {
     };
     const videoRef = useRef(null);
     const containerRef = useRef(null);
+    const chatContainerRef = useRef(null);
 
     const [step, setStep] = useState('list'); // list, create, streaming
     const [rooms, setRooms] = useState([]);
@@ -71,6 +74,14 @@ export default function LiveManagePage() {
     const [shopInfo, setShopInfo] = useState(null);
     const [reactions, setReactions] = useState([]); // Floating reactions
 
+
+
+    // Auto scroll chat
+    useEffect(() => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    }, [chatMessages]);
 
     useEffect(() => {
         fetchRooms();
@@ -169,16 +180,27 @@ export default function LiveManagePage() {
 
     // Handle Remove Product from Live
     const handleRemoveProduct = async (product) => {
-        if (!window.confirm(`Bạn có chắc muốn gỡ sản phẩm "${product.productName}" khỏi livestream?`)) return;
+        const result = await Swal.fire({
+            title: 'Xác nhận gỡ sản phẩm?',
+            text: `Bạn có chắc muốn gỡ sản phẩm "${product.productName}" khỏi livestream?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Gỡ bỏ',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (!result.isConfirmed) return;
 
         try {
             // Note: API expects productId (original ID), not liveProductId
             await removeProductFromLive(currentRoom.id, product.productId);
             setLiveProducts(prev => prev.filter(p => p.productId !== product.productId));
-            alert("Đã gỡ sản phẩm thành công!");
+            toast.success("Đã gỡ sản phẩm thành công!");
         } catch (error) {
             console.error('Error removing product:', error);
-            alert('Không thể gỡ sản phẩm');
+            toast.error('Không thể gỡ sản phẩm');
         }
     };
 
@@ -323,10 +345,10 @@ export default function LiveManagePage() {
             setProductQuantities({});
             setShowProductModal(false);
 
-            alert(`Đã thêm ${selectedProducts.length} sản phẩm vào live stream!`);
+            toast.success(`Đã thêm ${selectedProducts.length} sản phẩm vào live stream!`);
         } catch (error) {
             console.error('Error adding products:', error);
-            alert('Lỗi khi thêm sản phẩm: ' + (error.message || 'Unknown error'));
+            toast.error('Lỗi khi thêm sản phẩm: ' + (error.message || 'Unknown error'));
         } finally {
             setAddingProducts(false);
         }
@@ -354,7 +376,7 @@ export default function LiveManagePage() {
                 roomData.thumbnailUrl = `/v1/file-storage/get/${imageId}`;
             } catch (error) {
                 console.error('Upload thumbnail error:', error);
-                alert('Lỗi khi tải ảnh bìa: ' + (error.message || 'Unknown error'));
+                toast.error('Lỗi khi tải ảnh bìa: ' + (error.message || 'Unknown error'));
                 return;
             }
         }
@@ -364,7 +386,7 @@ export default function LiveManagePage() {
             setCurrentRoom(room);
             setStep('streaming');
         } catch {
-            alert('Không thể tạo phòng live');
+            toast.error('Không thể tạo phòng live');
         }
     };
 
@@ -374,7 +396,7 @@ export default function LiveManagePage() {
             setCurrentRoom(details);
             setStep('streaming');
         } catch {
-            alert('Không thể lấy thông tin phòng');
+            toast.error('Không thể lấy thông tin phòng');
         }
     };
 
@@ -383,25 +405,38 @@ export default function LiveManagePage() {
             const updated = await startLive(currentRoom.id);
             setCurrentRoom(updated);
         } catch {
-            alert('Không thể bắt đầu live');
+            toast.error('Không thể bắt đầu live');
         }
     };
 
     const handleEndLive = async () => {
-        if (!window.confirm('Bạn có chắc muốn kết thúc livestream?')) return;
+        const result = await Swal.fire({
+            title: 'Kết thúc Livestream?',
+            text: 'Bạn có chắc chắn muốn kết thúc phiên live này không?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Kết thúc',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             await endLive(currentRoom.id);
             setCurrentRoom(null);
             setStep('list');
             fetchRooms();
+            toast.success('Đã kết thúc phiên live');
         } catch {
-            alert('Không thể kết thúc live');
+            toast.error('Không thể kết thúc live');
         }
     };
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        alert('Đã copy!');
+        toast.success('Đã copy!');
     };
 
     return (
@@ -1192,48 +1227,65 @@ export default function LiveManagePage() {
                                 <h4 style={{ fontSize: '14px', marginBottom: '15px', margin: '0 0 15px 0' }}>Bình luận</h4>
 
                                 {/* Chat Messages */}
-                                <div style={{
-                                    flex: 1,
-                                    overflowY: 'auto',
-                                    border: '1px solid #eee',
-                                    borderRadius: '8px',
-                                    padding: '10px',
-                                    marginBottom: '15px',
-                                    minHeight: '200px',
-                                    maxHeight: '300px'
-                                }}>
+                                <div
+                                    ref={chatContainerRef}
+                                    className="custom-scrollbar"
+                                    style={{
+                                        flex: 1,
+                                        overflowY: 'auto',
+                                        border: '1px solid #eee',
+                                        borderRadius: '8px',
+                                        padding: '10px',
+                                        marginBottom: '15px',
+                                        minHeight: '200px',
+                                        maxHeight: '300px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '6px'
+                                    }}>
                                     {chatMessages.length === 0 ? (
                                         <div style={{ textAlign: 'center', color: '#999', padding: '40px 10px', fontSize: '13px' }}>
                                             <div style={{ fontSize: '36px', marginBottom: '8px' }}>💬</div>
                                             Không có bình luận nào
                                         </div>
                                     ) : (
-                                        chatMessages.map((chat, idx) => (
-                                            <div key={idx} style={{ marginBottom: '10px', fontSize: '13px' }}>
-                                                <span style={{
-                                                    fontWeight: '600',
-                                                    color: chat.isOwner ? '#ee4d2d' : '#333'
-                                                }}>
-                                                    {chat.username || 'Khách'}
-                                                </span>
-                                                {chat.isOwner && (
+                                        chatMessages.map((chat, idx) => {
+                                            const isSystem = chat.type === 'SYSTEM' || chat.type === 'ORDER';
+                                            return (
+                                                <div key={idx} style={{ marginBottom: '6px', fontSize: '13px', lineHeight: '1.4' }}>
+                                                    {!isSystem && (
+                                                        <span style={{
+                                                            fontWeight: '600',
+                                                            color: chat.isOwner ? '#ee4d2d' : '#333',
+                                                            marginRight: '6px'
+                                                        }}>
+                                                            {chat.username || 'Khách'}:
+                                                        </span>
+                                                    )}
+                                                    {chat.isOwner && !isSystem && (
+                                                        <span style={{
+                                                            background: '#ee4d2d',
+                                                            color: 'white',
+                                                            fontSize: '10px',
+                                                            padding: '1px 4px',
+                                                            borderRadius: '3px',
+                                                            marginRight: '6px',
+                                                            verticalAlign: 'middle'
+                                                        }}>
+                                                            CHỦ SHOP
+                                                        </span>
+                                                    )}
                                                     <span style={{
-                                                        background: '#ee4d2d',
-                                                        color: 'white',
-                                                        fontSize: '10px',
-                                                        padding: '1px 6px',
-                                                        borderRadius: '3px',
-                                                        marginLeft: '6px',
-                                                        fontWeight: '500'
+                                                        color: isSystem ? '#999' : '#666',
+                                                        fontStyle: isSystem ? 'italic' : 'normal',
+                                                        wordBreak: 'break-word'
                                                     }}>
-                                                        CHỦ SHOP
+                                                        {chat.message}
                                                     </span>
-                                                )}
-                                                <span style={{ color: '#666', display: 'block', marginTop: '2px' }}>
-                                                    {chat.message}
-                                                </span>
-                                            </div>
-                                        ))
+                                                </div>
+                                            );
+                                        })
+
                                     )}
                                 </div>
 
@@ -1538,28 +1590,7 @@ export default function LiveManagePage() {
                                                             }}
                                                         />
                                                     </div>
-                                                    {/* Quantity Input */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '11px', color: '#666', width: '70px' }}>Số lượng:</span>
-                                                        <input
-                                                            type="number"
-                                                            value={productQuantities[product.id] || product.totalStock || ''}
-                                                            onChange={(e) => setProductQuantities(prev => ({
-                                                                ...prev,
-                                                                [product.id]: e.target.value
-                                                            }))}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            placeholder="Số lượng bán"
-                                                            max={product.totalStock || 999}
-                                                            style={{
-                                                                width: '110px',
-                                                                padding: '4px 8px',
-                                                                border: '1px solid #ddd',
-                                                                borderRadius: '4px',
-                                                                fontSize: '12px'
-                                                            }}
-                                                        />
-                                                    </div>
+
                                                 </div>
                                                 <button
                                                     onClick={(e) => {
@@ -1649,6 +1680,21 @@ export default function LiveManagePage() {
                 )
             }
             <style>{`
+                /* Custom Scrollbar */
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #ccc;
+                    border-radius: 3px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #aaa;
+                }
+
                 @keyframes floatUp {
                     0% { transform: translateY(0) scale(1); opacity: 1; }
                     100% { transform: translateY(-200px) scale(1.5); opacity: 0; }
