@@ -140,7 +140,7 @@ const TopBar = ({ toggleSidebar }) => {
             aria-expanded="false"
             style={{ color: '#1D3557' }}
           >
-            <img className="img-profile rounded-circle" src="/src/assets/admin/img/boy.png" style={{ maxWidth: '60px' }} alt="Profile" />
+            <img className="img-profile rounded-circle" src="/assets/admin/img/boy.png" style={{ maxWidth: '60px' }} alt="Profile" />
             <span className="ml-2 d-none d-lg-inline text-badge-dark small" >Maman Ketoprak</span>
           </a>
           <div className="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">

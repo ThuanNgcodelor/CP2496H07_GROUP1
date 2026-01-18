@@ -27,6 +27,7 @@ export default function Header() {
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const searchRef = useRef(null);
+  const mobileSearchRef = useRef(null);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const openMobile = useCallback(() => setMobileOpen(true), []);
@@ -140,7 +141,9 @@ export default function Header() {
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
+      const isOutsideDesktop = searchRef.current && !searchRef.current.contains(event.target);
+      const isOutsideMobile = mobileSearchRef.current && !mobileSearchRef.current.contains(event.target);
+      if (isOutsideDesktop && isOutsideMobile) {
         setShowSearchSuggestions(false);
       }
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
@@ -524,7 +527,7 @@ export default function Header() {
         <div className="row align-items-center g-3">
           {/* Logo */}
           <div className="col-auto">
-            <Link to="/" onClick={closeMobile} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link to="/" onClick={closeMobile} style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
               <div style={{
                 width: '40px',
                 height: '40px',
@@ -543,8 +546,39 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* Mobile hamburger */}
-          <div className="col-auto d-lg-none ms-auto">
+          {/* Mobile Actions: Cart + Menu */}
+          <div className="col-auto d-lg-none ms-auto d-flex align-items-center gap-3">
+            {/* Mobile Cart */}
+            <button
+              onClick={handleGoToCart}
+              className="btn p-0 position-relative border-0"
+              style={{ background: 'transparent', color: 'white' }}
+            >
+              <i className="fa fa-shopping-cart" style={{ fontSize: '20px' }}></i>
+              {itemCount > 0 && (
+                <span
+                  className="position-absolute badge rounded-pill"
+                  style={{
+                    top: '-5px',
+                    right: '-8px',
+                    background: 'white',
+                    color: '#ee4d2d',
+                    fontSize: '9px',
+                    fontWeight: 600,
+                    padding: '2px 4px',
+                    minWidth: '14px',
+                    height: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {itemCount}
+                </span>
+              )}
+            </button>
+
+            {/* Mobile Hamburger */}
             <button className="btn p-0" onClick={openMobile} style={{ color: 'white', border: 'none', background: 'transparent' }}>
               <i className="fa fa-bars fs-5" />
             </button>
@@ -716,6 +750,113 @@ export default function Header() {
               )}
             </button>
           </div>
+
+          {/* Mobile Search Bar (Full Width) */}
+          <div className="col-12 d-lg-none" ref={mobileSearchRef} style={{ position: 'relative' }}>
+            <form
+              onSubmit={handleSearchSubmit}
+              className="d-flex position-relative"
+              style={{ height: '36px' }}
+            >
+              <input
+                type="text"
+                className="form-control"
+                placeholder={t('header.searchPlaceholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => {
+                  if (searchQuery.trim() || searchSuggestions.length > 0) {
+                    setShowSearchSuggestions(true);
+                  }
+                }}
+                style={{
+                  height: '100%',
+                  border: 'none',
+                  borderRadius: '2px 0 0 2px',
+                  paddingLeft: '12px',
+                  paddingRight: '12px',
+                  fontSize: '13px',
+                  outline: 'none',
+                  background: 'white'
+                }}
+              />
+              <button
+                type="submit"
+                style={{
+                  height: '100%',
+                  border: 'none',
+                  borderRadius: '0 2px 2px 0',
+                  background: '#fb5533',
+                  color: 'white',
+                  padding: '0 15px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <i className="fa fa-search"></i>
+              </button>
+            </form>
+
+            {/* Mobile Suggestions Dropdown */}
+            {showSearchSuggestions && searchSuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: 'white',
+                borderRadius: '2px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                zIndex: 1000,
+                marginTop: '4px',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                {searchSuggestions.map((suggestion, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    style={{
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      borderBottom: idx < searchSuggestions.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      color: '#333'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      <div style={{ minWidth: '16px', display: 'flex', justifyContent: 'center' }}>
+                        {suggestion.type === 'history' && <i className="fa fa-history" style={{ color: '#999', fontSize: '12px' }}></i>}
+                        {suggestion.type === 'product' && <i className="fa fa-box" style={{ color: '#999', fontSize: '12px' }}></i>}
+                        {suggestion.type === 'keyword' && <i className="fa fa-search" style={{ color: '#999', fontSize: '12px' }}></i>}
+                      </div>
+                      <div style={{ fontSize: '13px' }}>{suggestion.name}</div>
+                    </div>
+                    {suggestion.type === 'history' && (
+                      <button
+                        onClick={(e) => handleRemoveHistoryItem(e, suggestion)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#999',
+                          cursor: 'pointer',
+                          padding: '2px 6px',
+                          fontSize: '16px',
+                          lineHeight: 1
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -732,7 +873,23 @@ export default function Header() {
             style={{ zIndex: 1050, visibility: 'visible', background: 'white' }}
           >
             <div className="offcanvas-header border-bottom">
-              <img src={logoLight} width="120" alt="Logo" />
+              <Link to="/" onClick={closeMobile} style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  background: '#ee4d2d',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold',
+                  color: 'white',
+                  fontSize: '18px'
+                }}>
+                  V
+                </div>
+                <span style={{ color: '#ee4d2d', fontSize: '20px', fontWeight: 'bold' }}>Vibe</span>
+              </Link>
               <button
                 type="button"
                 className="btn-close"
@@ -744,17 +901,51 @@ export default function Header() {
                 <NavLink to="/" close={closeMobile}>{t('header.home')}</NavLink>
                 <NavLink to="/shop" close={closeMobile}>{t('header.shop')}</NavLink>
                 <NavLink to="/contact" close={closeMobile}>{t('header.contact')}</NavLink>
-                {hasRole("ROLE_SHOP_OWNER") && (
-                  <li className="nav-item mt-2">
-                    <Link
-                      to="/shop-owner"
-                      className="nav-link fw-bold text-primary"
-                      onClick={closeMobile}
-                    >
-                      <i className="fa fa-store me-2"></i>{t('header.myShop')}
+                {/* Live & Game */}
+                {isAuthenticated() && (
+                  <>
+                    <li className="nav-item">
+                      <Link to="/live" className="nav-link" onClick={closeMobile}>
+                        <span className="me-2">🔴</span>{t('header.watchLive') || 'Shopee Live'}
+                      </Link>
+                    </li>
+                    <li className="nav-item">
+                      <Link to="/game" className="nav-link" onClick={closeMobile}>
+                        <span className="me-2">🎮</span>Game
+                      </Link>
+                    </li>
+                  </>
+                )}
+
+                {/* Seller Center or Register */}
+                {hasRole("ROLE_SHOP_OWNER") ? (
+                  <>
+                    <li className="nav-item border-top mt-2 pt-2">
+                      <Link
+                        to="/shop-owner"
+                        className="nav-link fw-bold text-primary"
+                        onClick={closeMobile}
+                      >
+                        <i className="fa fa-store me-2"></i>{t('header.sellerCenter') || 'Kênh Người Bán'}
+                      </Link>
+                    </li>
+                    <li className="nav-item">
+                      <Link
+                        to="/live/manage"
+                        className="nav-link text-danger"
+                        onClick={closeMobile}
+                      >
+                        <i className="fa fa-video me-2"></i>{t('header.shopeeLive') || 'Shopee Live (Host)'}
+                      </Link>
+                    </li>
+                  </>
+                ) : isAuthenticated() ? (
+                  <li className="nav-item border-top mt-2 pt-2">
+                    <Link to="/register-shopowner" className="nav-link" onClick={closeMobile}>
+                      <span className="me-2">🏪</span>{t('header.registerShopOwner')}
                     </Link>
                   </li>
-                )}
+                ) : null}
               </ul>
             </div>
           </div>

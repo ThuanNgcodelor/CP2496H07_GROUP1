@@ -19,10 +19,10 @@ import Cookies from 'js-cookie';
 const useWebSocketNotification = (userId, isShopOwner = false) => {
   // State để lưu danh sách notifications đã nhận
   const [notifications, setNotifications] = useState([]);
-  
+
   // State để track trạng thái kết nối WebSocket
   const [connected, setConnected] = useState(false);
-  
+
   // Ref để lưu STOMP client instance, dùng ref để không trigger re-render khi thay đổi
   const stompClientRef = useRef(null);
 
@@ -73,14 +73,14 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
 
     // Tạo SockJS socket - wrapper cho WebSocket, hỗ trợ fallback cho các browser cũ
     const socket = new SockJS(wsUrl);
-    
+
     // Tạo STOMP client - protocol layer trên WebSocket để gửi/nhận messages
     const stompClient = new Client({
       webSocketFactory: () => socket,  // Factory function trả về socket
       reconnectDelay: 5000,              // Đợi 5s trước khi reconnect
       heartbeatIncoming: 4000,           // Nhận heartbeat mỗi 4s để biết connection còn sống
       heartbeatOutgoing: 4000,           // Gửi heartbeat mỗi 4s
-      
+
       /**
        * Callback khi WebSocket kết nối thành công
        * Đây là nơi subscribe vào các topics để nhận messages
@@ -96,7 +96,7 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
          * 
          * Backend sẽ gửi notification tới topic này khi có event mới
          */
-        const destination = isShopOwner 
+        const destination = isShopOwner
           ? `/topic/shop/${userId}`
           : `/topic/user/${userId}`;
 
@@ -109,7 +109,7 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
             // Parse JSON message từ server
             const notification = JSON.parse(message.body);
             console.log('Received real-time notification:', notification);
-            
+
             /**
              * Cập nhật state: thêm notification mới vào đầu mảng
              * Kiểm tra duplicate để tránh thêm notification trùng lặp
@@ -123,14 +123,14 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
               // Thêm notification mới vào đầu mảng (mới nhất ở trên)
               return [notification, ...prev];
             });
-            
+
             /**
              * Dispatch custom event để các component khác có thể lắng nghe
              * Ví dụ: Header component có thể update notification badge
              * Component khác có thể listen: window.addEventListener('realtimeNotification', ...)
              */
-            window.dispatchEvent(new CustomEvent('realtimeNotification', { 
-              detail: notification 
+            window.dispatchEvent(new CustomEvent('realtimeNotification', {
+              detail: notification
             }));
 
             /**
@@ -157,7 +157,7 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
          * 
          * Topic: /topic/shop/{userId}/updates hoặc /topic/user/{userId}/updates
          */
-        const updatesDestination = isShopOwner 
+        const updatesDestination = isShopOwner
           ? `/topic/shop/${userId}/updates`
           : `/topic/user/${userId}/updates`;
 
@@ -165,13 +165,13 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
           try {
             const updateEvent = JSON.parse(message.body);
             console.log('Received notification update event:', updateEvent);
-            
+
             /**
              * Dispatch custom event để components có thể handle update
              * Ví dụ: Header có thể update số lượng unread notifications
              */
-            window.dispatchEvent(new CustomEvent('notificationUpdate', { 
-              detail: updateEvent 
+            window.dispatchEvent(new CustomEvent('notificationUpdate', {
+              detail: updateEvent
             }));
           } catch (error) {
             console.error('Error parsing update event:', error);
@@ -189,7 +189,7 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
         console.error('STOMP error:', frame);
         setConnected(false);
       },
-      
+
       /**
        * Callback khi WebSocket bị disconnect
        * Có thể do network issue, server restart, etc.
@@ -198,7 +198,7 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
         console.log('WebSocket disconnected');
         setConnected(false);
       },
-      
+
       /**
        * Callback khi có lỗi WebSocket connection
        * Khác với STOMP error, đây là lỗi ở tầng WebSocket
@@ -225,7 +225,7 @@ const useWebSocketNotification = (userId, isShopOwner = false) => {
 
     // Kích hoạt STOMP client - bắt đầu kết nối WebSocket
     stompClient.activate();
-    
+
     // Lưu client vào ref để có thể access từ cleanup function
     stompClientRef.current = stompClient;
 

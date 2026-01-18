@@ -47,28 +47,28 @@ export default function AdminLayout() {
             // Load admin CSS
             const adminCSS = document.createElement('link');
             adminCSS.rel = 'stylesheet';
-            adminCSS.href = '/src/assets/admin/css/ruang-admin.min.css';
+            adminCSS.href = '/assets/admin/css/ruang-admin.min.css';
             adminCSS.id = 'admin-css';
             document.head.appendChild(adminCSS);
 
             // Load FontAwesome CSS
             const fontAwesomeCSS = document.createElement('link');
             fontAwesomeCSS.rel = 'stylesheet';
-            fontAwesomeCSS.href = '/src/assets/admin/vendor/fontawesome-free/css/all.min.css';
+            fontAwesomeCSS.href = '/assets/admin/vendor/fontawesome-free/css/all.min.css';
             fontAwesomeCSS.id = 'fontawesome-css';
             document.head.appendChild(fontAwesomeCSS);
 
             // Load Bootstrap CSS
             const bootstrapCSS = document.createElement('link');
             bootstrapCSS.rel = 'stylesheet';
-            bootstrapCSS.href = '/src/assets/admin/vendor/bootstrap/css/bootstrap.min.css';
+            bootstrapCSS.href = '/assets/admin/vendor/bootstrap/css/bootstrap.min.css';
             bootstrapCSS.id = 'bootstrap-admin-css';
             document.head.appendChild(bootstrapCSS);
 
             // Load DataTables CSS
             const dataTablesCSS = document.createElement('link');
             dataTablesCSS.rel = 'stylesheet';
-            dataTablesCSS.href = '/src/assets/admin/vendor/datatables/dataTables.bootstrap4.min.css';
+            dataTablesCSS.href = '/assets/admin/vendor/datatables/dataTables.bootstrap4.min.css';
             dataTablesCSS.id = 'datatables-css';
             document.head.appendChild(dataTablesCSS);
 
@@ -118,17 +118,17 @@ export default function AdminLayout() {
                 await ensurejQuery();
 
                 // Step 2: Load jQuery Easing (depends on jQuery)
-                await loadScript('/src/assets/admin/vendor/jquery-easing/jquery.easing.min.js', 'easing-js');
+                await loadScript('/assets/admin/vendor/jquery-easing/jquery.easing.min.js', 'easing-js');
 
                 // Step 3: Load Bootstrap JS (depends on jQuery)
-                await loadScript('/src/assets/admin/vendor/bootstrap/js/bootstrap.bundle.min.js', 'bootstrap-js');
+                await loadScript('/assets/admin/vendor/bootstrap/js/bootstrap.bundle.min.js', 'bootstrap-js');
 
                 // Step 4: Load DataTables JS (depends on jQuery)
-                await loadScript('/src/assets/admin/vendor/datatables/jquery.dataTables.min.js', 'datatables-js');
-                await loadScript('/src/assets/admin/vendor/datatables/dataTables.bootstrap4.min.js', 'datatables-bootstrap-js');
+                await loadScript('/assets/admin/vendor/datatables/jquery.dataTables.min.js', 'datatables-js');
+                await loadScript('/assets/admin/vendor/datatables/dataTables.bootstrap4.min.js', 'datatables-bootstrap-js');
 
                 // Step 5: Load admin JS (depends on jQuery and other libs)
-                await loadScript('/src/assets/admin/js/ruang-admin.min.js', 'admin-js');
+                await loadScript('/assets/admin/js/ruang-admin.min.js', 'admin-js');
             } catch (error) {
                 console.error('Error loading admin assets:', error);
             }

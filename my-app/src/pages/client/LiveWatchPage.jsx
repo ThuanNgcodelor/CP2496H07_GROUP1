@@ -63,7 +63,7 @@ export default function LiveWatchPage() {
         if (!roomId) return;
 
         // WebSocket connects through Gateway (port 8080) which routes to notification-service
-        const wsUrl = (LOCAL_BASE_URL || 'http://localhost:8080') + '/ws/live';
+        const wsUrl = (LOCAL_BASE_URL || 'http://localhost') + '/ws/live';
 
         const client = new Client({
             webSocketFactory: () => new SockJS(wsUrl),

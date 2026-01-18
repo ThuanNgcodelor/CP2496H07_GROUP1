@@ -90,3 +90,20 @@ export const removeSearchHistoryItem = async (query) => {
         throw error;
     }
 };
+
+/**
+ * Get trending search keywords
+ * @param {number} limit - Max number of keywords (default: 10)
+ * @returns {Promise} string[] - Array of trending keywords
+ */
+export const getTrendingKeywords = async (limit = 10) => {
+    try {
+        const response = await api.get('/stock/search/trending', {
+            params: { limit }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting trending keywords:', error);
+        return [];
+    }
+};

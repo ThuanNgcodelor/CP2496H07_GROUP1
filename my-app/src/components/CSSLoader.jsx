@@ -10,7 +10,7 @@ const CSSLoader = () => {
     if (isAdminRoute) {
       const adminCSS = document.createElement('link');
       adminCSS.rel = 'stylesheet';
-      adminCSS.href = '/src/assets/admin/css/admin.css';
+      adminCSS.href = '/assets/admin/css/admin.css';
       adminCSS.id = 'admin-css';
       document.head.appendChild(adminCSS);
     } else {

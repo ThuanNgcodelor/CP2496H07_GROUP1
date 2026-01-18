@@ -169,6 +169,13 @@ public class SearchService {
     }
 
     /**
+     * Get trending search keywords
+     */
+    public Set<String> getTrendingKeywords(int limit) {
+        return analyticsRedisService.getTrendingKeywords(limit);
+    }
+
+    /**
      * Merge filters từ UI vào SearchCriteria
      */
     private void mergeFiltersIntoCriteria(SearchCriteria criteria, SearchFilters filters) {

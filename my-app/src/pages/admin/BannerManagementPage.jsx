@@ -37,7 +37,7 @@ const BannerManagementPage = () => {
 
     useEffect(() => {
         fetchBanners();
-        
+
         // Cleanup blob URLs on unmount
         return () => {
             createdUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
@@ -54,7 +54,7 @@ const BannerManagementPage = () => {
             setLoading(true);
             const data = await getAllBanners();
             setBanners(data);
-            
+
             // Load images for all banners
             await loadBannerImages(data);
         } catch (error) {
@@ -110,9 +110,9 @@ const BannerManagementPage = () => {
             return imageUrl;
         }
         // If relative path, build full URL using API base URL
-        const API_BASE_URL = import.meta.env.MODE === 'production' 
-            ? '/api' 
-            : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080');
+        const API_BASE_URL = import.meta.env.MODE === 'production'
+            ? '/api'
+            : (import.meta.env.VITE_API_BASE_URL || 'http://localhost');
         // Remove leading slash if present to avoid double slashes
         const path = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
         return `${API_BASE_URL}/${path}`;
@@ -279,7 +279,7 @@ const BannerManagementPage = () => {
             setShowModal(false);
             setImageFile(null);
             setImagePreview(null);
-            
+
             // Reload banners and images
             await fetchBanners();
         } catch (error) {

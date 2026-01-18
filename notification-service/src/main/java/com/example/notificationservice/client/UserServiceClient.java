@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 @FeignClient(name = "user-service", path = "/v1/user", configuration = FeignConfig.class)
 public interface UserServiceClient {
 
-    @GetMapping(value = "/{userId}", headers = "X-Internal-Call=true")
+    @GetMapping(value = "/getUserById/{userId}", headers = "X-Internal-Call=true")
     ResponseEntity<UserDto> getUserById(@PathVariable String userId);
 
     @GetMapping(value = "/shop-owners/{userId}", headers = "X-Internal-Call=true")

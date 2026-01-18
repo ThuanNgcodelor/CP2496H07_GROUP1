@@ -1,4 +1,9 @@
+version: '3.8'
+
 services:
+  # ============================================
+  # INFRASTRUCTURE
+  # ============================================
   mysql:
     image: mysql:8.0
     container_name: mysql
@@ -14,77 +19,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     networks: [ shopee-network ]
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.1 # ZK ổn định
-    container_name: zookeeper
-    restart: unless-stopped
-    environment:
-      ZOOKEEPER_CLIENT_PORT: "2181"
-      ZOOKEEPER_TICK_TIME: "2000"
-    ports:
-      - "2181:2181"
-    networks: [ shopee-network ]
-
-  kafka:
-    image: confluentinc/cp-kafka:7.6.1 # Kafka ổn định
-    container_name: kafka
-    restart: unless-stopped
-    depends_on: [ zookeeper ]
-    environment:
-      KAFKA_BROKER_ID: "1"
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-
-      # 2 listener: nội bộ (PLAINTEXT) & ngoài máy (EXTERNAL)
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
-      # EXTERNAL cho client trên host
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-
-      # Single-node defaults
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
-    ports:
-      - "9092:9092" # internal (các container + kafka-ui)
-      - "9094:9094" # external (client ngoài VPS)
-    networks: [ shopee-network ]
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    restart: unless-stopped
-    depends_on: [ kafka ]
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      # Kafka UI dùng listener PLAINTEXT trong network Docker
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-    ports:
-      - "9090:8080"
-    networks: [ shopee-network ]
-
-  # ============================================
-  # NGINX-RTMP: Media Server cho Livestream
-  # ============================================
-  # Nhận stream từ OBS (RTMP) và phát lại dưới dạng HLS
-  nginx-rtmp:
-    image: tiangolo/nginx-rtmp
-    container_name: nginx-rtmp
-    restart: unless-stopped
-    ports:
-      - "1935:1935" # RTMP ingest từ OBS
-      - "8088:8080" # HLS playback (8088 để tránh conflict với gateway 8080)
-    volumes:
-      - ./config/nginx-rtmp/nginx.conf:/etc/nginx/nginx.conf:ro
-    networks: [ shopee-network ]
-    # Hướng dẫn sử dụng:
-    # 1. OBS Stream Settings:
-    #    - Server: rtmp://localhost:1935/live
-    #    - Stream Key: <stream_key từ API>
-    # 2. Xem stream: http://localhost:8088/hls/<stream_key>.m3u8
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
@@ -96,11 +35,272 @@ services:
       - redis_data:/data
     networks: [ shopee-network ]
 
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
+    ports:
+      - "2181:2181"
+    networks: [ shopee-network ]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    restart: unless-stopped
+    depends_on: [ zookeeper ]
+    environment:
+      KAFKA_BROKER_ID: "1"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    networks: [ shopee-network ]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    depends_on: [ kafka ]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "9090:8080"
+    networks: [ shopee-network ]
+
+  nginx-rtmp:
+    image: tiangolo/nginx-rtmp
+    container_name: nginx-rtmp
+    restart: unless-stopped
+    ports:
+      - "1935:1935"
+      - "8088:8080"
+    volumes:
+      - ./config/nginx-rtmp/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [ shopee-network ]
+
+  # ============================================
+  # BACKEND SERVICES
+  # ============================================
+  config-server:
+    build: ./config-server
+    container_name: config-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./config:/config
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:///config
+    networks: [ shopee-network ]
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8888/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+    depends_on:
+      config-server:
+        condition: service_healthy
+    networks: [ shopee-network ]
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8761/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks: [ shopee-network ]
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+    depends_on:
+      gateway:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks: [ shopee-network ]
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+    depends_on:
+      gateway:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks: [ shopee-network ]
+
+  stock-service:
+    build: ./stock-service
+    container_name: stock-service
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      gateway:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks: [ shopee-network ]
+
+  order-service:
+    build: ./order-service
+    container_name: order-service
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      gateway:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks: [ shopee-network ]
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=Thuan@417
+      - KAFKA_TOPIC_NOTIFICATION=notification-topic
+      - SPRING_KAFKA_CONSUMER_GROUP_ID=notification-service-group
+      - SPRING_KAFKA_CONSUMER_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      gateway:
+        condition: service_started
+      kafka:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      config-server:
+        condition: service_healthy
+    networks: [ shopee-network ]
+
+  payment-service:
+    build: ./payment-service
+    container_name: payment-service
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=Thuan@417
+    depends_on:
+      gateway:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    networks: [ shopee-network ]
+
+  file-storage:
+    build: ./file-storage
+    container_name: file-storage
+    restart: unless-stopped
+    environment:
+      - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+      - EUREKA_URI=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/shopee
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=Thuan@417
+      - FILE_UPLOAD_DIR=/app/uploads
+    volumes:
+      - file_storage_data:/app/uploads
+    depends_on:
+      gateway:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    networks: [ shopee-network ]
+
+  # ============================================
+  # FRONTEND
+  # ============================================
+  my-app:
+    build: ./my-app
+    container_name: my-app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      gateway:
+        condition: service_started
+    networks: [ shopee-network ]
+
 volumes:
   zookeeper_data:
   kafka_data:
   mysql_data:
   redis_data:
+  file_storage_data:
 
 
 networks:

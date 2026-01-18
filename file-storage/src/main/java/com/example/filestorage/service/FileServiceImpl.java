@@ -20,17 +20,21 @@ import java.util.UUID;
 public class FileServiceImpl implements FileService {
 
     private final FileRepository fileRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${file.upload-dir:files}")
     private String FOLDER_PATH;
 
     @Override
     public String uploadImageToFileSystem(MultipartFile file) {
         String uuid = UUID.randomUUID().toString();
-        String filePath = FOLDER_PATH + "/" + uuid;
-        try{
+        // Ensure path uses forward slashes or correct separator
+        String filePath = FOLDER_PATH + java.io.File.separator + uuid;
+        try {
             file.transferTo(new java.io.File(filePath));
         } catch (IOException e) {
+            e.printStackTrace();
             throw GenericErrorResponse.builder()
-                    .message("Unable to save file to storage")
+                    .message("Unable to save file to storage: " + e.getMessage())
                     .httpStatus(HttpStatus.INTERNAL_SERVER_ERROR)
                     .build();
         }
@@ -38,30 +42,39 @@ public class FileServiceImpl implements FileService {
         fileRepository.save(File.builder()
                 .id(uuid)
                 .type(file.getContentType())
-                .filePath(filePath).build()
-        );
+                .filePath(filePath).build());
         return uuid;
     }
 
     @Override
     public List<String> uploadMultipleImagesToFileSystem(List<MultipartFile> files) {
         List<String> uploadedIds = new ArrayList<>();
-        
+
         for (MultipartFile file : files) {
             if (file != null && !file.isEmpty()) {
                 String uuid = uploadImageToFileSystem(file);
                 uploadedIds.add(uuid);
             }
         }
-        
+
         return uploadedIds;
     }
 
     @Override
     public byte[] downloadImageFromFileSystem(String id) {
-        try{
-            return Files.readAllBytes(new java.io.File(findFileById(id).getFilePath()).toPath());
-        }catch (IOException e){
+        try {
+            // Construct path dynamically to avoid issues with absolute paths stored in DB
+            // from different environments
+            String filePath = FOLDER_PATH + java.io.File.separator + id;
+            java.io.File file = new java.io.File(filePath);
+            if (!file.exists()) {
+                throw GenericErrorResponse.builder()
+                        .message("File not found in storage: " + id)
+                        .httpStatus(HttpStatus.NOT_FOUND)
+                        .build();
+            }
+            return Files.readAllBytes(file.toPath());
+        } catch (IOException e) {
             throw GenericErrorResponse.builder()
                     .message("Unable to read file from storage")
                     .httpStatus(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -72,36 +85,39 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public void deleteImageFromFileSystem(String id) {
-        java.io.File file = new java.io.File(findFileById(id).getFilePath());
-        boolean deleted = file.delete();
-        if (deleted) fileRepository.deleteById(id);
-        else
-            throw GenericErrorResponse.builder()
-                    .message("unable to delete file from storage")
-                    .httpStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+        // Construct path dynamically
+        String filePath = FOLDER_PATH + java.io.File.separator + id;
+        java.io.File file = new java.io.File(filePath);
+
+        // Also remove from DB
+        fileRepository.deleteById(id);
+
+        if (file.exists()) {
+            boolean deleted = file.delete();
+            if (!deleted) {
+                // Log warning but don't throw if DB is consistent
+                System.err.println("Warning: Failed to delete physical file: " + filePath);
+            }
+        }
     }
 
     @Override
     public File findFileById(String id) {
         return fileRepository.findById(id)
-                .orElseThrow(()-> GenericErrorResponse.builder()
-                .message("Unable to find file")
-                .httpStatus(HttpStatus.NOT_FOUND).build());
+                .orElseThrow(() -> GenericErrorResponse.builder()
+                        .message("Unable to find file")
+                        .httpStatus(HttpStatus.NOT_FOUND).build());
     }
 
     @PostConstruct
     public void init() {
-        String currentPath = System.getProperty("user.dir");
-        FOLDER_PATH = currentPath + "/file-storage/src/main/resources/attachments";
+        java.io.File targetFolder = new java.io.File(FOLDER_PATH);
 
-        java.io.File targetForder = new java.io.File(FOLDER_PATH);
-
-        if(!targetForder.exists()) {
-            boolean directoryCreated = targetForder.mkdir();
-            if(!directoryCreated) {
+        if (!targetFolder.exists()) {
+            boolean directoryCreated = targetFolder.mkdirs();
+            if (!directoryCreated) {
                 throw GenericErrorResponse.builder()
-                        .message("unable to create directories")
+                        .message("unable to create directories: " + FOLDER_PATH)
                         .httpStatus(HttpStatus.INTERNAL_SERVER_ERROR)
                         .build();
             }
