@@ -15,7 +15,7 @@
       </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="shopee@localhost" uuid="180d45be-d257-4f08-869e-1cc85e511d70">
+    <data-source source="LOCAL" name="shopee@localhost" uuid="e0ae7075-a9bd-412d-8159-62752b92148d">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
