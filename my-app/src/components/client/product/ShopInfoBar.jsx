@@ -114,7 +114,8 @@ export default function ShopInfoBar({
                 border: "2px solid #ee4d2d"
               }}
               onError={(e) => {
-                e.currentTarget.src = "/vite.svg";
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "/assets/admin/img/boy.png";
               }}
             />
           ) : (
